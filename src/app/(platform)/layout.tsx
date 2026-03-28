@@ -1,13 +1,45 @@
 import { Sidebar } from "@/components/layout/sidebar"
 import { Topbar } from "@/components/layout/topbar"
+import {
+  LayoutDashboard,
+  Building2,
+  Bell,
+  ClipboardList,
+  Code2,
+  Wallet,
+} from "lucide-react"
 
 const platformNav = [
-  { label: "Dashboard", href: "/platform" },
-  { label: "Divisions", href: "/platform/divisions" },
-  { label: "Subscriptions", href: "/platform/subscriptions" },
-  { label: "Lookup Data", href: "/platform/lookup-data" },
-  { label: "Announcements", href: "/platform/announcements" },
-  { label: "Audit Logs", href: "/platform/audit-logs" },
+  {
+    label: "Dashboard",
+    href: "/platform",
+    icon: <LayoutDashboard className="h-4 w-4" />,
+  },
+  {
+    label: "Divisions",
+    href: "/platform/divisions",
+    icon: <Building2 className="h-4 w-4" />,
+  },
+  {
+    label: "Account Codes",
+    href: "/platform/lookup-data/account-codes",
+    icon: <Code2 className="h-4 w-4" />,
+  },
+  {
+    label: "Fund Sources",
+    href: "/platform/lookup-data/fund-sources",
+    icon: <Wallet className="h-4 w-4" />,
+  },
+  {
+    label: "Announcements",
+    href: "/platform/announcements",
+    icon: <Bell className="h-4 w-4" />,
+  },
+  {
+    label: "Audit Logs",
+    href: "/platform/audit-logs",
+    icon: <ClipboardList className="h-4 w-4" />,
+  },
 ]
 
 export default function PlatformLayout({
@@ -20,7 +52,12 @@ export default function PlatformLayout({
       <Sidebar
         navItems={platformNav}
         header={
-          <span className="text-sm font-semibold">Super Admin</span>
+          <div className="space-y-0.5">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              DepEd PAS
+            </p>
+            <p className="text-sm font-bold">Super Admin</p>
+          </div>
         }
       />
       <div className="flex flex-1 flex-col overflow-hidden">
