@@ -2,7 +2,8 @@ import Link from "next/link"
 import { getAnnouncements } from "@/lib/actions/announcements"
 import { DataTable } from "@/components/shared/data-table"
 import { StatusBadge } from "@/components/shared/status-badge"
-import { Button } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import type { Announcement } from "@/types/database"
 import type { Column } from "@/components/shared/data-table"
 
@@ -55,14 +56,17 @@ export default async function AnnouncementsPage() {
             Platform-wide announcements for all divisions.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/platform/announcements/new">Create Announcement</Link>
-        </Button>
+        <Link
+          href="/platform/announcements/new"
+          className={cn(buttonVariants())}
+        >
+          Create Announcement
+        </Link>
       </div>
 
       <DataTable
         columns={columns}
-        data={announcements as unknown as Record<string, unknown>[]}
+        data={announcements}
         searchable
         searchPlaceholder="Search by title..."
         emptyMessage="No announcements found."

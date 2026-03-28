@@ -132,7 +132,7 @@ export default function FundSourcesPage() {
 
       <DataTable
         columns={columns}
-        data={fundSources as unknown as Record<string, unknown>[]}
+        data={fundSources}
         isLoading={isLoading}
         searchable
         searchPlaceholder="Search by code or name..."

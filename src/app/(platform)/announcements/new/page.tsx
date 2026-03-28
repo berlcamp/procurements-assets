@@ -32,7 +32,7 @@ const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
   message: z.string().min(1, "Message is required"),
   type: z.enum(["info", "warning", "critical", "maintenance"] as const),
-  is_active: z.boolean().default(true),
+  is_active: z.boolean(),
   published_at: z.string().optional(),
   expires_at: z.string().optional(),
 })

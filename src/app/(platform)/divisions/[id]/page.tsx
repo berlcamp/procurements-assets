@@ -2,7 +2,8 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getDivisionById } from "@/lib/actions/divisions"
 import { StatusBadge } from "@/components/shared/status-badge"
-import { Button } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import {
   Card,
   CardContent,
@@ -37,9 +38,12 @@ export default async function DivisionDetailPage({
           <p className="text-muted-foreground">{division.region}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" asChild>
-            <Link href={`/platform/divisions/${id}/settings`}>Edit</Link>
-          </Button>
+          <Link
+            href={`/platform/divisions/${id}/settings`}
+            className={cn(buttonVariants({ variant: "outline" }))}
+          >
+            Edit
+          </Link>
           <DivisionActions division={division} />
         </div>
       </div>

@@ -29,7 +29,7 @@ interface DataTableProps<T> {
   searchPlaceholder?: string
 }
 
-export function DataTable<T extends Record<string, unknown>>({
+export function DataTable<T extends object>({
   columns,
   data,
   isLoading = false,
@@ -45,7 +45,7 @@ export function DataTable<T extends Record<string, unknown>>({
     const lower = search.toLowerCase()
     return data.filter((row) =>
       columns.some((col) => {
-        const val = row[col.key]
+        const val = (row as Record<string, unknown>)[col.key]
         return typeof val === "string" && val.toLowerCase().includes(lower)
       })
     )
@@ -103,7 +103,7 @@ export function DataTable<T extends Record<string, unknown>>({
                     <TableCell key={col.key} className={col.className}>
                       {col.render
                         ? col.render(row)
-                        : String(row[col.key] ?? "")}
+                        : String((row as Record<string, unknown>)[col.key] ?? "")}
                     </TableCell>
                   ))}
                 </TableRow>

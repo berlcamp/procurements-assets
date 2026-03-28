@@ -83,7 +83,7 @@ export default async function AuditLogsPage() {
 
       <DataTable
         columns={columns}
-        data={logs as unknown as Record<string, unknown>[]}
+        data={logs}
         searchable
         searchPlaceholder="Search by action or division..."
         emptyMessage="No audit log entries found."

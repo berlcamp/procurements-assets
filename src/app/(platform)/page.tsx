@@ -8,8 +8,8 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { StatusBadge } from "@/components/shared/status-badge"
+import { buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import { Building2, Users, AlertCircle, CheckCircle2 } from "lucide-react"
 
 export default async function PlatformPage() {
@@ -52,9 +52,9 @@ export default async function PlatformPage() {
             Manage all DepEd divisions from here.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/platform/divisions/new">Onboard Division</Link>
-        </Button>
+        <Link href="/platform/divisions/new" className={cn(buttonVariants())}>
+          Onboard Division
+        </Link>
       </div>
 
       {/* Stat cards */}
@@ -144,12 +144,18 @@ export default async function PlatformPage() {
 
       {/* Quick actions */}
       <div className="flex gap-3">
-        <Button variant="outline" asChild>
-          <Link href="/platform/divisions">View All Divisions</Link>
-        </Button>
-        <Button variant="outline" asChild>
-          <Link href="/platform/audit-logs">View Audit Logs</Link>
-        </Button>
+        <Link
+          href="/platform/divisions"
+          className={cn(buttonVariants({ variant: "outline" }))}
+        >
+          View All Divisions
+        </Link>
+        <Link
+          href="/platform/audit-logs"
+          className={cn(buttonVariants({ variant: "outline" }))}
+        >
+          View Audit Logs
+        </Link>
       </div>
     </div>
   )

@@ -55,8 +55,8 @@ const formSchema = z.object({
   contact_number: z.string().optional(),
   email: z.string().email("Invalid email format").optional().or(z.literal("")),
   subscription_plan: z.string().min(1),
-  max_users: z.coerce.number().int().min(1),
-  max_schools: z.coerce.number().int().min(1),
+  max_users: z.string().min(1),
+  max_schools: z.string().min(1),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -74,8 +74,8 @@ export default function NewDivisionPage() {
       contact_number: "",
       email: "",
       subscription_plan: "basic",
-      max_users: 50,
-      max_schools: 30,
+      max_users: "50",
+      max_schools: "30",
     },
   })
 
@@ -83,11 +83,15 @@ export default function NewDivisionPage() {
 
   async function onSubmit(values: FormValues) {
     const { error } = await createDivision({
-      ...values,
+      name: values.name,
       code: values.code.toUpperCase(),
-      email: values.email || null,
+      region: values.region,
       address: values.address || null,
       contact_number: values.contact_number || null,
+      email: values.email || null,
+      subscription_plan: values.subscription_plan,
+      max_users: parseInt(values.max_users, 10),
+      max_schools: parseInt(values.max_schools, 10),
     })
 
     if (error) {

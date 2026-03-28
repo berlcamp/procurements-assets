@@ -58,8 +58,8 @@ const formSchema = z.object({
   contact_number: z.string().optional(),
   email: z.string().email("Invalid email format").optional().or(z.literal("")),
   subscription_plan: z.string().min(1),
-  max_users: z.coerce.number().int().min(1),
-  max_schools: z.coerce.number().int().min(1),
+  max_users: z.string().min(1),
+  max_schools: z.string().min(1),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -84,8 +84,8 @@ export default function DivisionSettingsPage({
       contact_number: "",
       email: "",
       subscription_plan: "basic",
-      max_users: 50,
-      max_schools: 30,
+      max_users: "50",
+      max_schools: "30",
     },
   })
 
@@ -104,8 +104,8 @@ export default function DivisionSettingsPage({
         contact_number: div.contact_number ?? "",
         email: div.email ?? "",
         subscription_plan: div.subscription_plan,
-        max_users: div.max_users,
-        max_schools: div.max_schools,
+        max_users: String(div.max_users),
+        max_schools: String(div.max_schools),
       })
     })
   }, [id, form])
@@ -121,8 +121,8 @@ export default function DivisionSettingsPage({
       contact_number: values.contact_number || null,
       email: values.email || null,
       subscription_plan: values.subscription_plan,
-      max_users: values.max_users,
-      max_schools: values.max_schools,
+      max_users: parseInt(values.max_users, 10),
+      max_schools: parseInt(values.max_schools, 10),
     })
 
     if (error) {

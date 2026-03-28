@@ -48,7 +48,7 @@ const formSchema = z.object({
   code: z.string().min(1, "Code is required"),
   name: z.string().min(1, "Name is required"),
   expense_class: z.enum(["PS", "MOOE", "CO", "IG", "Others"] as const),
-  level: z.coerce.number().int().min(1).default(1),
+  level: z.string().min(1),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -65,7 +65,7 @@ export default function AccountCodesPage() {
       code: "",
       name: "",
       expense_class: "MOOE",
-      level: 1,
+      level: "1",
     },
   })
 
@@ -97,7 +97,12 @@ export default function AccountCodesPage() {
   }
 
   async function onSubmit(values: FormValues) {
-    const { error } = await createAccountCode(values)
+    const { error } = await createAccountCode({
+      code: values.code,
+      name: values.name,
+      expense_class: values.expense_class,
+      level: parseInt(values.level, 10),
+    })
     if (error) {
       toast.error("Failed to create account code", { description: error })
       return
@@ -154,7 +159,7 @@ export default function AccountCodesPage() {
           <TabsContent key={tab} value={tab}>
             <DataTable
               columns={columns}
-              data={filteredCodes as unknown as Record<string, unknown>[]}
+              data={filteredCodes}
               isLoading={isLoading}
               searchable
               searchPlaceholder="Search by code or name..."

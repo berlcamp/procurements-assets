@@ -2,7 +2,8 @@ import Link from "next/link"
 import { getDivisions } from "@/lib/actions/divisions"
 import { DataTable } from "@/components/shared/data-table"
 import { StatusBadge } from "@/components/shared/status-badge"
-import { Button } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import type { Division } from "@/types/database"
 import type { Column } from "@/components/shared/data-table"
 
@@ -59,14 +60,14 @@ export default async function DivisionsPage() {
             All onboarded DepEd divisions.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/platform/divisions/new">Onboard Division</Link>
-        </Button>
+        <Link href="/platform/divisions/new" className={cn(buttonVariants())}>
+          Onboard Division
+        </Link>
       </div>
 
       <DataTable
         columns={columns}
-        data={divisions as unknown as Record<string, unknown>[]}
+        data={divisions}
         searchable
         searchPlaceholder="Search by name, code, or region..."
         emptyMessage="No divisions onboarded yet."
