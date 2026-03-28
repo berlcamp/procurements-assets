@@ -536,13 +536,13 @@ End-User acknowledges receipt
 
 The database is organized into these schemas:
 
-| Schema     | Purpose                                                       |
-| ---------- | ------------------------------------------------------------- |
-| `public`   | Core application tables                                       |
-| `platform` | Platform-level tables (divisions, subscriptions, super admin) |
-| `auth`     | Supabase Auth (managed)                                       |
-| `storage`  | Supabase Storage (managed)                                    |
-| `audit`    | Audit log tables                                              |
+| Schema         | Purpose                                                       |
+| -------------- | ------------------------------------------------------------- |
+| `procurements` | Core application tables                                       |
+| `platform`     | Platform-level tables (divisions, subscriptions, super admin) |
+| `auth`         | Supabase Auth (managed)                                       |
+| `storage`      | Supabase Storage (managed)                                    |
+| `audit`        | Audit log tables                                              |
 
 ## 3.2 Core Tables
 

@@ -116,14 +116,14 @@
 
 1. `npx create-next-app@latest procurements-assets --typescript --tailwind --eslint --app --src-dir`
 2. `npx shadcn@latest init` — configure shadcn/ui
-3. Install shadcn components: button, input, table, dialog, select, badge, card, form, dropdown-menu, sheet, separator, skeleton, toast, tabs, command, popover, calendar, checkbox, radio-group, switch, textarea, label, avatar, scroll-area, alert, tooltip
+3. Install shadcn components: button, input, table, dialog, select, badge, card, form, dropdown-menu, sheet, separator, skeleton, sonner (replaces deprecated toast), tabs, command, popover, calendar, checkbox, radio-group, switch, textarea, label, avatar, scroll-area, alert, tooltip
 4. `npm install @supabase/supabase-js @supabase/ssr`
 5. Create `.env.local` with `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 6. Create `src/lib/supabase/client.ts` (browser client)
 7. Create `src/lib/supabase/server.ts` (server component client)
 8. Create `src/lib/supabase/middleware.ts` (auth middleware helper)
 9. Create `src/lib/supabase/admin.ts` (service role client)
-10. Create `src/middleware.ts` (Next.js middleware — auth redirect stub)
+10. Create `src/proxy.ts` (Next.js 16 proxy — replaces middleware.ts; export must be named `proxy`)
 11. Create `src/app/(auth)/login/page.tsx` — placeholder
 12. Create `src/app/(platform)/layout.tsx` — Super Admin shell with sidebar placeholder
 13. Create `src/app/(dashboard)/layout.tsx` — Division user shell with sidebar placeholder
