@@ -6,7 +6,7 @@
 
 INSERT INTO procurements.permissions (code, module, description, scope) VALUES
   ('ppmp.create',        'planning', 'Create PPMP',                                'division'),
-  ('ppmp.edit',          'planning', 'Edit draft PPMP items',                       'division'),
+  ('ppmp.edit',          'planning', 'Edit draft PPMP projects',                    'division'),
   ('ppmp.submit',        'planning', 'Submit PPMP for review',                      'division'),
   ('ppmp.chief_review',  'planning', 'Review PPMP as Section Chief / School Head',  'division'),
   ('ppmp.certify_budget','planning', 'Certify budget availability for PPMP',        'division'),
@@ -17,13 +17,6 @@ ON CONFLICT (code) DO NOTHING;
 
 -- ---------------------------------------------------------------
 -- Assign permissions to roles
--- end_user:       create, edit, submit, amend
--- section_chief:  chief_review, return
--- school_head:    chief_review, return
--- budget_officer: certify_budget, return
--- hope:           approve, return
--- division_admin: all ppmp.* permissions
--- auditor:        read-only via SELECT RLS policy (no explicit permission)
 -- ---------------------------------------------------------------
 
 -- end_user
@@ -93,7 +86,6 @@ ON CONFLICT DO NOTHING;
 -- RLS Policies: procurements.ppmps
 -- ============================================================
 
--- All division members can read PPMPs in their division
 CREATE POLICY "division_read_ppmps" ON procurements.ppmps
   FOR SELECT TO authenticated
   USING (
@@ -101,7 +93,6 @@ CREATE POLICY "division_read_ppmps" ON procurements.ppmps
     AND deleted_at IS NULL
   );
 
--- End users (with ppmp.create) can insert PPMPs for their division
 CREATE POLICY "end_user_create_ppmp" ON procurements.ppmps
   FOR INSERT TO authenticated
   WITH CHECK (
@@ -110,7 +101,6 @@ CREATE POLICY "end_user_create_ppmp" ON procurements.ppmps
     AND procurements.is_division_active()
   );
 
--- Creators can update their own draft PPMPs
 CREATE POLICY "end_user_update_ppmp" ON procurements.ppmps
   FOR UPDATE TO authenticated
   USING (
@@ -121,7 +111,6 @@ CREATE POLICY "end_user_update_ppmp" ON procurements.ppmps
     division_id = procurements.get_user_division_id()
   );
 
--- Division Admin / HOPE: full management within division
 CREATE POLICY "division_admin_manage_ppmps" ON procurements.ppmps
   FOR ALL TO authenticated
   USING (
@@ -136,7 +125,6 @@ CREATE POLICY "division_admin_manage_ppmps" ON procurements.ppmps
 -- RLS Policies: procurements.ppmp_versions
 -- ============================================================
 
--- All division members can read PPMP versions in their division
 CREATE POLICY "division_read_ppmp_versions" ON procurements.ppmp_versions
   FOR SELECT TO authenticated
   USING (
@@ -146,7 +134,6 @@ CREATE POLICY "division_read_ppmp_versions" ON procurements.ppmp_versions
     )
   );
 
--- Versions are managed via SECURITY DEFINER RPCs; office-scoped write access
 CREATE POLICY "system_manage_ppmp_versions" ON procurements.ppmp_versions
   FOR ALL TO authenticated
   USING (
@@ -157,11 +144,10 @@ CREATE POLICY "system_manage_ppmp_versions" ON procurements.ppmp_versions
   );
 
 -- ============================================================
--- RLS Policies: procurements.ppmp_items
+-- RLS Policies: procurements.ppmp_projects
 -- ============================================================
 
--- All division members can read non-deleted PPMP items in their division
-CREATE POLICY "division_read_ppmp_items" ON procurements.ppmp_items
+CREATE POLICY "division_read_ppmp_projects" ON procurements.ppmp_projects
   FOR SELECT TO authenticated
   USING (
     office_id IN (
@@ -171,8 +157,7 @@ CREATE POLICY "division_read_ppmp_items" ON procurements.ppmp_items
     AND deleted_at IS NULL
   );
 
--- Creators or users with ppmp.edit can insert/update/delete items
-CREATE POLICY "end_user_manage_ppmp_items" ON procurements.ppmp_items
+CREATE POLICY "end_user_manage_ppmp_projects" ON procurements.ppmp_projects
   FOR ALL TO authenticated
   USING (
     (
@@ -190,4 +175,74 @@ CREATE POLICY "end_user_manage_ppmp_items" ON procurements.ppmp_items
       WHERE division_id = procurements.get_user_division_id()
     )
     AND procurements.is_division_active()
+  );
+
+-- ============================================================
+-- RLS Policies: procurements.ppmp_lots
+-- Lots inherit access through their parent project.
+-- ============================================================
+
+CREATE POLICY "division_read_ppmp_lots" ON procurements.ppmp_lots
+  FOR SELECT TO authenticated
+  USING (
+    ppmp_project_id IN (
+      SELECT pp.id FROM procurements.ppmp_projects pp
+      WHERE pp.office_id IN (
+        SELECT id FROM procurements.offices
+        WHERE division_id = procurements.get_user_division_id()
+      )
+      AND pp.deleted_at IS NULL
+    )
+  );
+
+CREATE POLICY "end_user_manage_ppmp_lots" ON procurements.ppmp_lots
+  FOR ALL TO authenticated
+  USING (
+    ppmp_project_id IN (
+      SELECT pp.id FROM procurements.ppmp_projects pp
+      WHERE (
+        pp.created_by = auth.uid()
+        OR procurements.has_permission('ppmp.edit')
+      )
+      AND pp.office_id IN (
+        SELECT id FROM procurements.offices
+        WHERE division_id = procurements.get_user_division_id()
+      )
+    )
+  );
+
+-- ============================================================
+-- RLS Policies: procurements.ppmp_lot_items
+-- Items inherit access through their parent lot → project.
+-- ============================================================
+
+CREATE POLICY "division_read_ppmp_lot_items" ON procurements.ppmp_lot_items
+  FOR SELECT TO authenticated
+  USING (
+    ppmp_lot_id IN (
+      SELECT pl.id FROM procurements.ppmp_lots pl
+      JOIN procurements.ppmp_projects pp ON pp.id = pl.ppmp_project_id
+      WHERE pp.office_id IN (
+        SELECT id FROM procurements.offices
+        WHERE division_id = procurements.get_user_division_id()
+      )
+      AND pp.deleted_at IS NULL
+    )
+  );
+
+CREATE POLICY "end_user_manage_ppmp_lot_items" ON procurements.ppmp_lot_items
+  FOR ALL TO authenticated
+  USING (
+    ppmp_lot_id IN (
+      SELECT pl.id FROM procurements.ppmp_lots pl
+      JOIN procurements.ppmp_projects pp ON pp.id = pl.ppmp_project_id
+      WHERE (
+        pp.created_by = auth.uid()
+        OR procurements.has_permission('ppmp.edit')
+      )
+      AND pp.office_id IN (
+        SELECT id FROM procurements.offices
+        WHERE division_id = procurements.get_user_division_id()
+      )
+    )
   );

@@ -6,16 +6,20 @@ import type {
   Ppmp,
   PpmpWithDetails,
   PpmpVersion,
-  PpmpVersionWithItems,
-  PpmpItem,
-  PpmpItemWithAllocation,
+  PpmpVersionWithProjects,
+  PpmpProject,
+  PpmpProjectWithLots,
+  PpmpLot,
+  PpmpLotWithItems,
+  PpmpLotItem,
+  PpmpLotWithAllocation,
   PpmpVersionHistoryRow,
-  FiscalYear,
-  Office,
 } from "@/types/database"
 import type {
   PpmpHeaderInput,
-  PpmpItemInput,
+  PpmpProjectInput,
+  PpmpLotInput,
+  PpmpLotItemInput,
   PpmpAmendmentInput,
   PpmpChiefReviewInput,
   PpmpCertifyInput,
@@ -27,6 +31,12 @@ import type {
 // PPMP queries
 // ============================================================
 
+const PPMP_SELECT = `
+  *,
+  office:offices(id, name, code, office_type),
+  fiscal_year:fiscal_years(id, year, status)
+` as const
+
 export async function getPpmps(
   fiscalYearId?: string
 ): Promise<PpmpWithDetails[]> {
@@ -35,11 +45,7 @@ export async function getPpmps(
   let query = supabase
     .schema("procurements")
     .from("ppmps")
-    .select(`
-      *,
-      office:offices(id, name, code, office_type),
-      fiscal_year:fiscal_years(id, year, status)
-    `)
+    .select(PPMP_SELECT)
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
 
@@ -53,6 +59,157 @@ export async function getPpmps(
     return []
   }
   return (data ?? []) as PpmpWithDetails[]
+}
+
+// user_roles has a many-to-one FK to roles, so Supabase returns role as a single object
+type UserRoleRow = { role: { name: string } | null; office_id: string | null }
+
+async function getUserRoleContext(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const [{ data: profile }, { data: rolesData }] = await Promise.all([
+    supabase.schema("procurements").from("user_profiles")
+      .select("office_id")
+      .eq("id", user.id)
+      .single(),
+    supabase.schema("procurements").from("user_roles")
+      .select("role:roles(name), office_id")
+      .eq("user_id", user.id)
+      .eq("is_active", true)
+      .is("revoked_at", null),
+  ])
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const roles = (rolesData ?? []) as any[] as UserRoleRow[]
+  const roleNames = roles.map(r => r.role?.name).filter((n): n is string => !!n)
+
+  return { user, profile, roles, roleNames }
+}
+
+/**
+ * Returns PPMPs visible to the current user under "My PPMP":
+ * - HOPE / division_admin: all PPMPs in the division
+ * - Section Chief / School Head: all PPMPs in their office
+ * - All other users: only PPMPs they created
+ */
+export async function getMyPpmps(
+  fiscalYearId?: string
+): Promise<PpmpWithDetails[]> {
+  const supabase = await createClient()
+  const ctx = await getUserRoleContext(supabase)
+  if (!ctx) return []
+
+  const { user, profile, roles, roleNames } = ctx
+
+  let query = supabase
+    .schema("procurements")
+    .from("ppmps")
+    .select(PPMP_SELECT)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+
+  if (fiscalYearId) query = query.eq("fiscal_year_id", fiscalYearId)
+
+  if (roleNames.includes("hope") || roleNames.includes("division_admin")) {
+    // RLS already scopes to division — no extra filter needed
+  } else if (roleNames.some(r => ["section_chief", "school_head"].includes(r))) {
+    const chiefRole = roles.find(r => r.role?.name && ["section_chief", "school_head"].includes(r.role.name))
+    const officeId = chiefRole?.office_id ?? profile?.office_id
+    if (officeId) {
+      query = query.eq("office_id", officeId)
+    } else {
+      query = query.eq("created_by", user.id)
+    }
+  } else {
+    query = query.eq("created_by", user.id)
+  }
+
+  const { data, error } = await query
+  if (error) {
+    console.error("getMyPpmps error:", error)
+    return []
+  }
+  return (data ?? []) as PpmpWithDetails[]
+}
+
+/**
+ * Returns PPMPs that require the current user's action:
+ * - Any user: PPMPs they created with status 'revision_required'
+ * - Section Chief / School Head: PPMPs with status 'submitted' in their office
+ * - Budget Officer: PPMPs with status 'chief_reviewed' in the division
+ * - HOPE: PPMPs with status 'budget_certified' in the division
+ */
+export async function getPpmpsRequiringMyAction(
+  fiscalYearId?: string
+): Promise<PpmpWithDetails[]> {
+  const supabase = await createClient()
+  const ctx = await getUserRoleContext(supabase)
+  if (!ctx) return []
+
+  const { user, profile, roles, roleNames } = ctx
+
+  const pending: PromiseLike<PpmpWithDetails[]>[] = []
+
+  // All users: revision_required PPMPs they created
+  {
+    let q = supabase.schema("procurements").from("ppmps")
+      .select(PPMP_SELECT)
+      .is("deleted_at", null)
+      .eq("status", "revision_required")
+      .eq("created_by", user.id)
+    if (fiscalYearId) q = q.eq("fiscal_year_id", fiscalYearId)
+    pending.push(q.then(({ data }) => (data ?? []) as PpmpWithDetails[]))
+  }
+
+  // Section Chief / School Head: submitted PPMPs in their office
+  if (roleNames.some(r => ["section_chief", "school_head"].includes(r))) {
+    const chiefRole = roles.find(r => r.role?.name && ["section_chief", "school_head"].includes(r.role.name))
+    const officeId = chiefRole?.office_id ?? profile?.office_id
+    if (officeId) {
+      let q = supabase.schema("procurements").from("ppmps")
+        .select(PPMP_SELECT)
+        .is("deleted_at", null)
+        .eq("status", "submitted")
+        .eq("office_id", officeId)
+      if (fiscalYearId) q = q.eq("fiscal_year_id", fiscalYearId)
+      pending.push(q.then(({ data }) => (data ?? []) as PpmpWithDetails[]))
+    }
+  }
+
+  // Budget Officer: chief_reviewed PPMPs in division
+  if (roleNames.includes("budget_officer")) {
+    let q = supabase.schema("procurements").from("ppmps")
+      .select(PPMP_SELECT)
+      .is("deleted_at", null)
+      .eq("status", "chief_reviewed")
+    if (fiscalYearId) q = q.eq("fiscal_year_id", fiscalYearId)
+    pending.push(q.then(({ data }) => (data ?? []) as PpmpWithDetails[]))
+  }
+
+  // HOPE: budget_certified PPMPs in division
+  if (roleNames.includes("hope")) {
+    let q = supabase.schema("procurements").from("ppmps")
+      .select(PPMP_SELECT)
+      .is("deleted_at", null)
+      .eq("status", "budget_certified")
+    if (fiscalYearId) q = q.eq("fiscal_year_id", fiscalYearId)
+    pending.push(q.then(({ data }) => (data ?? []) as PpmpWithDetails[]))
+  }
+
+  const results = await Promise.all(pending)
+  const seen = new Set<string>()
+  const merged: PpmpWithDetails[] = []
+  for (const list of results) {
+    for (const ppmp of list) {
+      if (!seen.has(ppmp.id)) {
+        seen.add(ppmp.id)
+        merged.push(ppmp)
+      }
+    }
+  }
+  merged.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+  return merged
 }
 
 export async function getPpmpById(
@@ -77,89 +234,114 @@ export async function getPpmpById(
 
 export async function getCurrentPpmpVersion(
   ppmpId: string
-): Promise<PpmpVersionWithItems | null> {
+): Promise<PpmpVersion | null> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .schema("procurements")
     .from("ppmp_versions")
-    .select(`
-      *,
-      ppmp_items(*)
-    `)
+    .select("*")
     .eq("ppmp_id", ppmpId)
     .order("version_number", { ascending: false })
     .limit(1)
     .single()
 
   if (error) return null
-
-  // Filter out soft-deleted items and sort by item_number
-  if (data?.ppmp_items) {
-    (data as PpmpVersionWithItems).ppmp_items = (
-      (data as PpmpVersionWithItems).ppmp_items ?? []
-    )
-      .filter((item: PpmpItem) => item.deleted_at === null)
-      .sort((a: PpmpItem, b: PpmpItem) => a.item_number - b.item_number)
-  }
-
-  return data as PpmpVersionWithItems
+  return data as PpmpVersion
 }
 
-export async function getPpmpItems(
+export async function getPpmpProjects(
   ppmpVersionId: string
-): Promise<PpmpItemWithAllocation[]> {
+): Promise<PpmpProjectWithLots[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .schema("procurements")
-    .from("ppmp_items")
+    .from("ppmp_projects")
     .select(`
       *,
-      budget_allocation:budget_allocations(
-        id, original_amount, adjusted_amount, obligated_amount, disbursed_amount,
-        fiscal_year_id, status, description,
-        office:offices(id, name, code),
-        fund_source:fund_sources(id, name, code),
-        account_code:account_codes(id, name, code, expense_class),
-        fiscal_year:fiscal_years(id, year, status)
+      ppmp_lots(
+        *,
+        ppmp_lot_items(*),
+        budget_allocation:budget_allocations(
+          id, original_amount, adjusted_amount, obligated_amount, disbursed_amount,
+          fiscal_year_id, status, description,
+          office:offices(id, name, code),
+          fund_source:fund_sources(id, name, code),
+          account_code:account_codes(id, name, code, expense_class),
+          fiscal_year:fiscal_years(id, year, status)
+        )
       )
     `)
     .eq("ppmp_version_id", ppmpVersionId)
     .is("deleted_at", null)
-    .order("item_number", { ascending: true })
+    .order("project_number", { ascending: true })
 
   if (error) {
-    console.error("getPpmpItems error:", error)
+    console.error("getPpmpProjects error:", error)
     return []
   }
-  return (data ?? []) as PpmpItemWithAllocation[]
+
+  // Sort lots and items within each project
+  const projects = (data ?? []) as PpmpProjectWithLots[]
+  for (const project of projects) {
+    if (project.ppmp_lots) {
+      project.ppmp_lots.sort((a, b) => a.lot_number - b.lot_number)
+      for (const lot of project.ppmp_lots) {
+        if ((lot as PpmpLotWithItems).ppmp_lot_items) {
+          (lot as PpmpLotWithItems).ppmp_lot_items!.sort(
+            (a, b) => a.item_number - b.item_number
+          )
+        }
+      }
+    }
+  }
+
+  return projects
 }
 
 export async function getPpmpVersionById(
   versionId: string
-): Promise<PpmpVersionWithItems | null> {
+): Promise<PpmpVersionWithProjects | null> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .schema("procurements")
     .from("ppmp_versions")
     .select(`
       *,
-      ppmp_items(*)
+      ppmp_projects(
+        *,
+        ppmp_lots(
+          *,
+          ppmp_lot_items(*)
+        )
+      )
     `)
     .eq("id", versionId)
     .single()
 
   if (error) return null
 
-  // Filter out soft-deleted items and sort by item_number
-  if (data?.ppmp_items) {
-    (data as PpmpVersionWithItems).ppmp_items = (
-      (data as PpmpVersionWithItems).ppmp_items ?? []
-    )
-      .filter((item: PpmpItem) => item.deleted_at === null)
-      .sort((a: PpmpItem, b: PpmpItem) => a.item_number - b.item_number)
+  const version = data as PpmpVersionWithProjects
+  // Filter deleted projects, sort everything
+  if (version.ppmp_projects) {
+    version.ppmp_projects = version.ppmp_projects
+      .filter((p: PpmpProject) => p.deleted_at === null)
+      .sort((a: PpmpProject, b: PpmpProject) => a.project_number - b.project_number)
+
+    for (const project of version.ppmp_projects) {
+      if (project.ppmp_lots) {
+        project.ppmp_lots.sort((a: PpmpLot, b: PpmpLot) => a.lot_number - b.lot_number)
+        for (const lot of project.ppmp_lots) {
+          if ((lot as PpmpLotWithItems).ppmp_lot_items) {
+            (lot as PpmpLotWithItems).ppmp_lot_items!.sort(
+              (a: PpmpLotItem, b: PpmpLotItem) => a.item_number - b.item_number
+            )
+          }
+        }
+      }
+    }
   }
 
-  return data as PpmpVersionWithItems
+  return version
 }
 
 // ============================================================
@@ -203,7 +385,6 @@ export async function createPpmp(
   if (ppmpError) return { id: null, error: ppmpError.message }
   if (!ppmp?.id) return { id: null, error: "Failed to create PPMP" }
 
-  // Insert initial version
   const { error: versionError } = await supabase
     .schema("procurements")
     .from("ppmp_versions")
@@ -211,7 +392,7 @@ export async function createPpmp(
       ppmp_id: ppmp.id,
       version_number: 1,
       version_type: "original",
-      total_estimated_cost: 0,
+      total_estimated_budget: 0,
       status: "draft",
       indicative_final: "indicative",
       office_id: input.office_id,
@@ -224,122 +405,279 @@ export async function createPpmp(
   return { id: ppmp.id, error: null }
 }
 
-export async function addPpmpItem(
+// ============================================================
+// Project CRUD
+// ============================================================
+
+export async function addPpmpProject(
   ppmpVersionId: string,
   ppmpId: string,
   officeId: string,
-  input: PpmpItemInput
-): Promise<{ error: string | null }> {
+  input: PpmpProjectInput
+): Promise<{ id: string | null; error: string | null }> {
   const supabase = await createClient()
 
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) return { error: "Unauthorized" }
+  if (!user) return { id: null, error: "Unauthorized" }
 
-  // Get next item_number
+  // Get next project_number
   const { count } = await supabase
     .schema("procurements")
-    .from("ppmp_items")
+    .from("ppmp_projects")
     .select("id", { count: "exact", head: true })
     .eq("ppmp_version_id", ppmpVersionId)
     .is("deleted_at", null)
 
-  const nextItemNumber = (count ?? 0) + 1
+  const nextNumber = (count ?? 0) + 1
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .schema("procurements")
-    .from("ppmp_items")
+    .from("ppmp_projects")
     .insert({
       ppmp_version_id: ppmpVersionId,
       ppmp_id: ppmpId,
-      item_number: nextItemNumber,
-      category: input.category,
-      description: input.description,
-      unit: input.unit,
-      quantity: parseFloat(input.quantity),
-      estimated_unit_cost: parseFloat(input.estimated_unit_cost),
-      procurement_method: input.procurement_method,
-      budget_allocation_id: input.budget_allocation_id ?? null,
-      schedule_q1: parseFloat(input.schedule_q1 || "0"),
-      schedule_q2: parseFloat(input.schedule_q2 || "0"),
-      schedule_q3: parseFloat(input.schedule_q3 || "0"),
-      schedule_q4: parseFloat(input.schedule_q4 || "0"),
-      is_cse: input.is_cse,
-      remarks: input.remarks ?? null,
+      project_number: nextNumber,
+      general_description: input.general_description,
+      project_type: input.project_type,
       office_id: officeId,
       created_by: user.id,
     })
+    .select("id")
+    .single()
 
-  if (error) return { error: error.message }
+  if (error) return { id: null, error: error.message }
 
   revalidatePath("/dashboard/planning/ppmp")
   revalidatePath(`/dashboard/planning/ppmp/${ppmpId}`)
-  return { error: null }
+  return { id: data.id, error: null }
 }
 
-export async function updatePpmpItem(
-  itemId: string,
-  input: PpmpItemInput
+export async function updatePpmpProject(
+  projectId: string,
+  input: PpmpProjectInput
 ): Promise<{ error: string | null }> {
   const supabase = await createClient()
 
-  // Validate item belongs to a draft version before updating
-  const { data: item, error: fetchError } = await supabase
+  const { data: project, error: fetchError } = await supabase
     .schema("procurements")
-    .from("ppmp_items")
+    .from("ppmp_projects")
     .select(`
       ppmp_id,
       ppmp_version_id,
       ppmp_versions!inner(status)
     `)
-    .eq("id", itemId)
+    .eq("id", projectId)
     .is("deleted_at", null)
     .single()
 
-  if (fetchError || !item) return { error: "Item not found" }
+  if (fetchError || !project) return { error: "Project not found" }
 
-  const versionStatus = (item as { ppmp_versions: { status: string } }).ppmp_versions?.status
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ppmpVersions = (project as any).ppmp_versions
+  const versionStatus = Array.isArray(ppmpVersions) ? ppmpVersions[0]?.status : ppmpVersions?.status
   if (versionStatus !== "draft") {
-    return { error: "Cannot edit items on a non-draft version" }
+    return { error: "Cannot edit projects on a non-draft version" }
   }
 
   const { error } = await supabase
     .schema("procurements")
-    .from("ppmp_items")
+    .from("ppmp_projects")
     .update({
-      category: input.category,
-      description: input.description,
-      unit: input.unit,
-      quantity: parseFloat(input.quantity),
-      estimated_unit_cost: parseFloat(input.estimated_unit_cost),
-      procurement_method: input.procurement_method,
-      budget_allocation_id: input.budget_allocation_id ?? null,
-      schedule_q1: parseFloat(input.schedule_q1 || "0"),
-      schedule_q2: parseFloat(input.schedule_q2 || "0"),
-      schedule_q3: parseFloat(input.schedule_q3 || "0"),
-      schedule_q4: parseFloat(input.schedule_q4 || "0"),
-      is_cse: input.is_cse,
-      remarks: input.remarks ?? null,
+      general_description: input.general_description,
+      project_type: input.project_type,
     })
-    .eq("id", itemId)
+    .eq("id", projectId)
 
   if (error) return { error: error.message }
 
-  const ppmpId = (item as { ppmp_id: string }).ppmp_id
+  const ppmpId = (project as { ppmp_id: string }).ppmp_id
   revalidatePath("/dashboard/planning/ppmp")
   revalidatePath(`/dashboard/planning/ppmp/${ppmpId}`)
   return { error: null }
 }
 
-export async function deletePpmpItem(
+export async function deletePpmpProject(
+  projectId: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .schema("procurements")
+    .from("ppmp_projects")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", projectId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath("/dashboard/planning/ppmp")
+  return { error: null }
+}
+
+// ============================================================
+// Lot CRUD
+// ============================================================
+
+export async function addPpmpLot(
+  projectId: string,
+  input: PpmpLotInput
+): Promise<{ id: string | null; error: string | null }> {
+  const supabase = await createClient()
+
+  // Get next lot_number
+  const { count } = await supabase
+    .schema("procurements")
+    .from("ppmp_lots")
+    .select("id", { count: "exact", head: true })
+    .eq("ppmp_project_id", projectId)
+
+  const nextLotNumber = (count ?? 0) + 1
+
+  const { data, error } = await supabase
+    .schema("procurements")
+    .from("ppmp_lots")
+    .insert({
+      ppmp_project_id: projectId,
+      lot_number: nextLotNumber,
+      lot_title: input.lot_title ?? null,
+      procurement_mode: input.procurement_mode,
+      pre_procurement_conference: input.pre_procurement_conference,
+      procurement_start: input.procurement_start ?? null,
+      procurement_end: input.procurement_end ?? null,
+      delivery_period: input.delivery_period ?? null,
+      source_of_funds: input.source_of_funds ?? null,
+      estimated_budget: parseFloat(input.estimated_budget),
+      supporting_documents: input.supporting_documents ?? null,
+      remarks: input.remarks ?? null,
+      budget_allocation_id: input.budget_allocation_id ?? null,
+    })
+    .select("id")
+    .single()
+
+  if (error) return { id: null, error: error.message }
+
+  revalidatePath("/dashboard/planning/ppmp")
+  return { id: data.id, error: null }
+}
+
+export async function updatePpmpLot(
+  lotId: string,
+  input: PpmpLotInput
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .schema("procurements")
+    .from("ppmp_lots")
+    .update({
+      lot_title: input.lot_title ?? null,
+      procurement_mode: input.procurement_mode,
+      pre_procurement_conference: input.pre_procurement_conference,
+      procurement_start: input.procurement_start ?? null,
+      procurement_end: input.procurement_end ?? null,
+      delivery_period: input.delivery_period ?? null,
+      source_of_funds: input.source_of_funds ?? null,
+      estimated_budget: parseFloat(input.estimated_budget),
+      supporting_documents: input.supporting_documents ?? null,
+      remarks: input.remarks ?? null,
+      budget_allocation_id: input.budget_allocation_id ?? null,
+    })
+    .eq("id", lotId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath("/dashboard/planning/ppmp")
+  return { error: null }
+}
+
+export async function deletePpmpLot(
+  lotId: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  // CASCADE will delete lot_items too
+  const { error } = await supabase
+    .schema("procurements")
+    .from("ppmp_lots")
+    .delete()
+    .eq("id", lotId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath("/dashboard/planning/ppmp")
+  return { error: null }
+}
+
+// ============================================================
+// Lot Item CRUD
+// ============================================================
+
+export async function addPpmpLotItem(
+  lotId: string,
+  input: PpmpLotItemInput
+): Promise<{ id: string | null; error: string | null }> {
+  const supabase = await createClient()
+
+  const { count } = await supabase
+    .schema("procurements")
+    .from("ppmp_lot_items")
+    .select("id", { count: "exact", head: true })
+    .eq("ppmp_lot_id", lotId)
+
+  const nextItemNumber = (count ?? 0) + 1
+
+  const { data, error } = await supabase
+    .schema("procurements")
+    .from("ppmp_lot_items")
+    .insert({
+      ppmp_lot_id: lotId,
+      item_number: nextItemNumber,
+      description: input.description,
+      quantity: parseFloat(input.quantity),
+      unit: input.unit,
+      specification: input.specification ?? null,
+      estimated_unit_cost: parseFloat(input.estimated_unit_cost),
+    })
+    .select("id")
+    .single()
+
+  if (error) return { id: null, error: error.message }
+
+  revalidatePath("/dashboard/planning/ppmp")
+  return { id: data.id, error: null }
+}
+
+export async function updatePpmpLotItem(
+  itemId: string,
+  input: PpmpLotItemInput
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .schema("procurements")
+    .from("ppmp_lot_items")
+    .update({
+      description: input.description,
+      quantity: parseFloat(input.quantity),
+      unit: input.unit,
+      specification: input.specification ?? null,
+      estimated_unit_cost: parseFloat(input.estimated_unit_cost),
+    })
+    .eq("id", itemId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath("/dashboard/planning/ppmp")
+  return { error: null }
+}
+
+export async function deletePpmpLotItem(
   itemId: string
 ): Promise<{ error: string | null }> {
   const supabase = await createClient()
   const { error } = await supabase
     .schema("procurements")
-    .from("ppmp_items")
-    .update({ deleted_at: new Date().toISOString() })
+    .from("ppmp_lot_items")
+    .delete()
     .eq("id", itemId)
 
   if (error) return { error: error.message }

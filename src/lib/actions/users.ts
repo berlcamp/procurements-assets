@@ -50,26 +50,66 @@ export async function getUserRoles(userId: string): Promise<UserRoleWithRole[]> 
   return (data ?? []) as unknown as UserRoleWithRole[]
 }
 
+async function findAuthUserIdByEmail(email: string): Promise<string | null> {
+  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users?filter=${encodeURIComponent(email)}&per_page=1`
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
+      apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    },
+  })
+  if (!res.ok) return null
+  const json = await res.json()
+  const users: Array<{ id: string; email: string }> = json.users ?? []
+  return users.find((u) => u.email === email)?.id ?? null
+}
+
 export async function inviteUser(
   input: UserProfileInput,
   divisionId: string
 ): Promise<{ data: UserProfile | null; error: string | null }> {
   const adminClient = createAdminClient()
+  const supabase = await createClient()
 
-  // Create the auth user with invite
+  let userId: string
+
   const { data: authData, error: authError } = await adminClient.auth.admin.inviteUserByEmail(
     input.email,
-    {
-      data: { division_id: divisionId },
-    }
+    { data: { division_id: divisionId } }
   )
 
-  if (authError) return { data: null, error: authError.message }
+  if (authError) {
+    const alreadyExists =
+      authError.message.toLowerCase().includes("already been registered") ||
+      authError.message.toLowerCase().includes("already registered") ||
+      (authError as { code?: string }).code === "email_exists"
 
-  const userId = authData.user.id
+    if (!alreadyExists) return { data: null, error: authError.message }
+
+    // Auth user exists — look up their ID via the GoTrue admin API
+    const existingId = await findAuthUserIdByEmail(input.email)
+    if (!existingId) return { data: null, error: "User already exists but could not be located." }
+
+    // Check if they already have a profile in this division
+    const { data: existingProfile } = await supabase
+      .schema("procurements")
+      .from("user_profiles")
+      .select("id")
+      .eq("id", existingId)
+      .eq("division_id", divisionId)
+      .is("deleted_at", null)
+      .maybeSingle()
+
+    if (existingProfile) {
+      return { data: null, error: "This user already belongs to this division." }
+    }
+
+    userId = existingId
+  } else {
+    userId = authData.user.id
+  }
 
   // Create the user profile
-  const supabase = await createClient()
   const { data, error } = await supabase
     .schema("procurements")
     .from("user_profiles")

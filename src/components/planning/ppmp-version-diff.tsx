@@ -7,8 +7,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-import { PPMP_ITEM_CATEGORY_LABELS } from "@/lib/schemas/ppmp"
-import type { PpmpVersionWithItems, PpmpItem, PpmpVersionHistoryRow } from "@/types/database"
+import { PPMP_PROJECT_TYPE_LABELS } from "@/lib/schemas/ppmp"
+import type { PpmpVersionWithProjects, PpmpProject, PpmpLotWithItems, PpmpVersionHistoryRow } from "@/types/database"
 
 interface PpmpVersionDiffProps {
   ppmpId: string
@@ -19,15 +19,15 @@ type DiffStatus = "added" | "removed" | "changed" | "unchanged"
 
 interface DiffRow {
   status: DiffStatus
-  itemNumber: number
-  left: PpmpItem | null
-  right: PpmpItem | null
+  projectNumber: number
+  left: PpmpProject | null
+  right: PpmpProject | null
   changes: string[]
 }
 
-function compareItems(left: PpmpItem[], right: PpmpItem[]): DiffRow[] {
-  const leftMap = new Map(left.map((i) => [i.item_number, i]))
-  const rightMap = new Map(right.map((i) => [i.item_number, i]))
+function compareProjects(left: PpmpProject[], right: PpmpProject[]): DiffRow[] {
+  const leftMap = new Map(left.map((p) => [p.project_number, p]))
+  const rightMap = new Map(right.map((p) => [p.project_number, p]))
   const allNumbers = new Set([...leftMap.keys(), ...rightMap.keys()])
   const rows: DiffRow[] = []
 
@@ -36,22 +36,20 @@ function compareItems(left: PpmpItem[], right: PpmpItem[]): DiffRow[] {
     const r = rightMap.get(num) ?? null
 
     if (!l && r) {
-      rows.push({ status: "added", itemNumber: num, left: null, right: r, changes: [] })
+      rows.push({ status: "added", projectNumber: num, left: null, right: r, changes: [] })
     } else if (l && !r) {
-      rows.push({ status: "removed", itemNumber: num, left: l, right: null, changes: [] })
+      rows.push({ status: "removed", projectNumber: num, left: l, right: null, changes: [] })
     } else if (l && r) {
       const changes: string[] = []
-      if (l.description !== r.description) changes.push("description")
-      if (l.quantity !== r.quantity) changes.push("quantity")
-      if (l.estimated_unit_cost !== r.estimated_unit_cost) changes.push("unit cost")
-      if (l.category !== r.category) changes.push("category")
-      if (l.procurement_method !== r.procurement_method) changes.push("method")
-      if (l.unit !== r.unit) changes.push("unit")
-      if (l.schedule_q1 !== r.schedule_q1 || l.schedule_q2 !== r.schedule_q2 ||
-          l.schedule_q3 !== r.schedule_q3 || l.schedule_q4 !== r.schedule_q4) changes.push("schedule")
+      if (l.general_description !== r.general_description) changes.push("description")
+      if (l.project_type !== r.project_type) changes.push("project type")
+      // Compare lot counts
+      const lLots = ((l as PpmpProject & { ppmp_lots?: PpmpLotWithItems[] }).ppmp_lots ?? []).length
+      const rLots = ((r as PpmpProject & { ppmp_lots?: PpmpLotWithItems[] }).ppmp_lots ?? []).length
+      if (lLots !== rLots) changes.push("lots")
       rows.push({
         status: changes.length > 0 ? "changed" : "unchanged",
-        itemNumber: num,
+        projectNumber: num,
         left: l,
         right: r,
         changes,
@@ -72,18 +70,18 @@ function DiffBadge({ status }: { status: DiffStatus }) {
   return <Badge variant={c.variant} className="text-xs">{c.label}</Badge>
 }
 
-function ItemCell({ item, highlight }: { item: PpmpItem | null; highlight?: boolean }) {
-  if (!item) return <td className="px-3 py-2 text-sm text-muted-foreground italic">—</td>
+function ProjectCell({ project }: { project: PpmpProject | null }) {
+  if (!project) return <td className="px-3 py-2 text-sm text-muted-foreground italic">—</td>
+  const lots = ((project as PpmpProject & { ppmp_lots?: PpmpLotWithItems[] }).ppmp_lots ?? [])
+  const totalBudget = lots.reduce((s, l) => s + parseFloat(l.estimated_budget || "0"), 0)
   return (
-    <td className={cn("px-3 py-2 text-sm", highlight && "bg-amber-50")}>
-      <p className="font-medium truncate max-w-[200px]">{item.description}</p>
+    <td className="px-3 py-2 text-sm">
+      <p className="font-medium truncate max-w-[200px]">{project.general_description}</p>
       <p className="text-xs text-muted-foreground">
-        {PPMP_ITEM_CATEGORY_LABELS[item.category] ?? item.category} · {item.unit} ·{" "}
-        {parseFloat(item.quantity).toLocaleString("en-PH")} @{" "}
-        <AmountDisplay amount={item.estimated_unit_cost} className="text-xs inline" />
+        {PPMP_PROJECT_TYPE_LABELS[project.project_type] ?? project.project_type} · {lots.length} lot{lots.length !== 1 ? "s" : ""}
       </p>
       <p className="text-xs font-mono">
-        Total: <AmountDisplay amount={item.estimated_total_cost} className="text-xs inline" />
+        Budget: <AmountDisplay amount={totalBudget} className="text-xs inline" />
       </p>
     </td>
   )
@@ -92,11 +90,10 @@ function ItemCell({ item, highlight }: { item: PpmpItem | null; highlight?: bool
 export function PpmpVersionDiff({ ppmpId, versions }: PpmpVersionDiffProps) {
   const [leftVer, setLeftVer] = useState<number | null>(null)
   const [rightVer, setRightVer] = useState<number | null>(null)
-  const [leftData, setLeftData] = useState<PpmpVersionWithItems | null>(null)
-  const [rightData, setRightData] = useState<PpmpVersionWithItems | null>(null)
+  const [leftData, setLeftData] = useState<PpmpVersionWithProjects | null>(null)
+  const [rightData, setRightData] = useState<PpmpVersionWithProjects | null>(null)
   const [loading, setLoading] = useState(false)
 
-  // Default: compare the two most recent versions
   useEffect(() => {
     if (versions.length >= 2) {
       setLeftVer(versions[1].version_number)
@@ -111,10 +108,7 @@ export function PpmpVersionDiff({ ppmpId, versions }: PpmpVersionDiffProps) {
     let cancelled = false
     setLoading(true)
 
-    // Use getPpmpVersionById — but we need the version UUIDs.
-    // We'll fetch all versions and pick by version_number
-    import("@/lib/actions/ppmp").then(async ({ getCurrentPpmpVersion, getPpmpVersionById: getById }) => {
-      // Fetch all version UUIDs for this ppmp
+    import("@/lib/actions/ppmp").then(async ({ getPpmpVersionById: getById }) => {
       const { createClient } = await import("@/lib/supabase/client")
       const supabase = createClient()
       const { data: versionRows } = await supabase
@@ -159,9 +153,9 @@ export function PpmpVersionDiff({ ppmpId, versions }: PpmpVersionDiffProps) {
     )
   }
 
-  const leftItems = (leftData?.ppmp_items ?? []).filter((i) => !i.deleted_at)
-  const rightItems = (rightData?.ppmp_items ?? []).filter((i) => !i.deleted_at)
-  const diffRows = leftData && rightData ? compareItems(leftItems, rightItems) : []
+  const leftProjects = (leftData?.ppmp_projects ?? []).filter((p) => !p.deleted_at)
+  const rightProjects = (rightData?.ppmp_projects ?? []).filter((p) => !p.deleted_at)
+  const diffRows = leftData && rightData ? compareProjects(leftProjects, rightProjects) : []
 
   const addedCount = diffRows.filter((r) => r.status === "added").length
   const removedCount = diffRows.filter((r) => r.status === "removed").length
@@ -169,7 +163,6 @@ export function PpmpVersionDiff({ ppmpId, versions }: PpmpVersionDiffProps) {
 
   return (
     <div className="space-y-4">
-      {/* Version selectors */}
       <div className="flex items-center gap-4">
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Base Version</label>
@@ -212,7 +205,6 @@ export function PpmpVersionDiff({ ppmpId, versions }: PpmpVersionDiffProps) {
 
       {!loading && diffRows.length > 0 && (
         <>
-          {/* Summary */}
           <div className="flex gap-3 text-xs">
             {addedCount > 0 && <Badge variant="default">{addedCount} added</Badge>}
             {removedCount > 0 && <Badge variant="destructive">{removedCount} removed</Badge>}
@@ -222,7 +214,6 @@ export function PpmpVersionDiff({ ppmpId, versions }: PpmpVersionDiffProps) {
             )}
           </div>
 
-          {/* Diff table */}
           <div className="rounded-md border overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -237,17 +228,17 @@ export function PpmpVersionDiff({ ppmpId, versions }: PpmpVersionDiffProps) {
               <tbody className="divide-y">
                 {diffRows.map((row) => (
                   <tr
-                    key={row.itemNumber}
+                    key={row.projectNumber}
                     className={cn(
                       row.status === "added" && "bg-green-50/50",
                       row.status === "removed" && "bg-red-50/50",
                       row.status === "changed" && "bg-amber-50/30",
                     )}
                   >
-                    <td className="px-3 py-2 font-mono text-xs">{row.itemNumber}</td>
+                    <td className="px-3 py-2 font-mono text-xs">{row.projectNumber}</td>
                     <td className="px-3 py-2"><DiffBadge status={row.status} /></td>
-                    <ItemCell item={row.left} highlight={row.status === "changed"} />
-                    <ItemCell item={row.right} highlight={row.status === "changed"} />
+                    <ProjectCell project={row.left} />
+                    <ProjectCell project={row.right} />
                     <td className="px-3 py-2 text-xs text-muted-foreground">
                       {row.changes.length > 0 ? row.changes.join(", ") : "—"}
                     </td>
@@ -257,21 +248,20 @@ export function PpmpVersionDiff({ ppmpId, versions }: PpmpVersionDiffProps) {
             </table>
           </div>
 
-          {/* Cost comparison */}
           {leftData && rightData && (
             <div className="flex gap-6 rounded-md border px-4 py-3 text-sm">
               <div>
                 <span className="text-muted-foreground">v{leftVer} Total: </span>
-                <AmountDisplay amount={leftData.total_estimated_cost} className="font-semibold" />
+                <AmountDisplay amount={leftData.total_estimated_budget} className="font-semibold" />
               </div>
               <div>
                 <span className="text-muted-foreground">v{rightVer} Total: </span>
-                <AmountDisplay amount={rightData.total_estimated_cost} className="font-semibold" />
+                <AmountDisplay amount={rightData.total_estimated_budget} className="font-semibold" />
               </div>
               <div>
                 <span className="text-muted-foreground">Difference: </span>
                 <AmountDisplay
-                  amount={parseFloat(rightData.total_estimated_cost) - parseFloat(leftData.total_estimated_cost)}
+                  amount={parseFloat(rightData.total_estimated_budget) - parseFloat(leftData.total_estimated_budget)}
                   showSign
                   className="font-semibold"
                 />

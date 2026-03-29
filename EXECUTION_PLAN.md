@@ -14,7 +14,7 @@
 | [x]    | 2     | **Platform Layer (Super Admin)**                | Sonnet   | Division onboarding, subscription management, shared lookups              | Tenancy must exist before any division data                      |
 | [x]    | 3     | **Organization & Auth Foundation**              | **Opus** | Offices, users, roles, permissions, RLS, login/logout                     | All modules need users and access control                        |
 | [x]    | 4     | **Budget Management**                           | Sonnet   | Fiscal years, budget allocations, adjustments, utilization                | Planning and procurement require budget to validate against      |
-| [ ]    | 5     | **Planning Module (PPMP)**                      | **Opus** | PPMP creation by End User, multi-step approval (Chief→Budget Officer→HOPE), INDICATIVE/FINAL versioning, auto-population to APP | PPMP feeds into APP; must be done before APP                     |
+| [x]    | 5     | **Planning Module (PPMP)**                      | **Opus** | PPMP creation by End User, multi-step approval (Chief→Budget Officer→HOPE), INDICATIVE/FINAL versioning, auto-population to APP | PPMP feeds into APP; must be done before APP                     |
 | [ ]    | 6     | **Planning Module (APP)**                       | **Opus** | APP auto-populated from approved PPMPs, HOPE row-level review, BAC lot finalization, INDICATIVE/FINAL, PR enablement | APP must exist before procurement can reference it               |
 | [ ]    | 7     | **Procurement Core (PR + Suppliers)**           | Sonnet   | Purchase Requests, supplier registry, budget certification                | PR is the entry point for all procurement methods                |
 | [ ]    | 8     | **Procurement Workflows (SVP + Shopping)**      | **Opus** | Small Value Procurement and Shopping workflows end-to-end                 | Most common methods in DepEd; quickest to deliver value          |
@@ -548,7 +548,7 @@ budget_adjustments (id, division_id, budget_allocation_id, adjustment_type, amou
 
 ---
 
-## [ ] PHASE 5: Planning Module (PPMP)
+## [x] PHASE 5: Planning Module (PPMP)
 
 ### A. Scope
 

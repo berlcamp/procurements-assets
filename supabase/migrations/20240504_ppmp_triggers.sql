@@ -1,8 +1,7 @@
--- Phase 5: PPMP triggers
+-- Phase 5: PPMP triggers (Project → Lot → Item hierarchy)
 
 -- ============================================================
 -- Trigger 1: Block UPDATE on approved ppmp_versions
--- Approved versions are immutable; amendments create new versions.
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION procurements.prevent_approved_ppmp_version_update()
@@ -24,10 +23,7 @@ CREATE TRIGGER trg_prevent_approved_ppmp_version_update
 
 -- ============================================================
 -- Trigger 2: Snapshot approved ppmp_version
--- Fires BEFORE UPDATE on ppmp_versions when status transitions
--- to 'approved'. Captures the version row + all its items.
--- Runs before trg_prevent_approved_ppmp_version_update because
--- the snapshot is written in the same UPDATE that sets approved.
+-- Captures projects → lots → items hierarchy as JSONB.
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION procurements.snapshot_approved_ppmp_version()
@@ -37,18 +33,36 @@ SECURITY DEFINER
 SET search_path = procurements, platform, auth, public
 AS $$
 DECLARE
-  v_items JSONB;
+  v_projects JSONB;
 BEGIN
   IF NEW.status = 'approved' AND OLD.status <> 'approved' THEN
-    SELECT jsonb_agg(row_to_json(pi.*))
-      INTO v_items
-      FROM procurements.ppmp_items pi
-     WHERE pi.ppmp_version_id = NEW.id
-       AND pi.deleted_at      IS NULL;
+    SELECT jsonb_agg(
+      jsonb_build_object(
+        'project', row_to_json(pp.*),
+        'lots', (
+          SELECT COALESCE(jsonb_agg(
+            jsonb_build_object(
+              'lot', row_to_json(pl.*),
+              'items', (
+                SELECT COALESCE(jsonb_agg(row_to_json(pli.*)), '[]'::jsonb)
+                  FROM procurements.ppmp_lot_items pli
+                 WHERE pli.ppmp_lot_id = pl.id
+              )
+            )
+          ), '[]'::jsonb)
+          FROM procurements.ppmp_lots pl
+          WHERE pl.ppmp_project_id = pp.id
+        )
+      )
+    )
+    INTO v_projects
+    FROM procurements.ppmp_projects pp
+    WHERE pp.ppmp_version_id = NEW.id
+      AND pp.deleted_at      IS NULL;
 
     NEW.snapshot_data = jsonb_build_object(
       'version',        row_to_json(NEW.*),
-      'items',          COALESCE(v_items, '[]'::jsonb),
+      'projects',       COALESCE(v_projects, '[]'::jsonb),
       'snapshotted_at', NOW()
     );
   END IF;
@@ -56,7 +70,6 @@ BEGIN
 END;
 $$;
 
--- snapshot runs first (BEFORE, fires before the immutability guard)
 CREATE TRIGGER trg_snapshot_approved_ppmp_version
   BEFORE UPDATE ON procurements.ppmp_versions
   FOR EACH ROW
@@ -64,8 +77,6 @@ CREATE TRIGGER trg_snapshot_approved_ppmp_version
 
 -- ============================================================
 -- Trigger 3: Sync parent ppmps when a version is approved
--- Sets indicative_final = 'final' and current_version on the
--- parent ppmps row after a version transitions to 'approved'.
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION procurements.sync_ppmp_on_version_approve()
@@ -92,9 +103,9 @@ CREATE TRIGGER trg_sync_ppmp_on_version_approve
   EXECUTE FUNCTION procurements.sync_ppmp_on_version_approve();
 
 -- ============================================================
--- Trigger 4: Auto-populate APP items when PPMP is approved
+-- Trigger 4: Auto-populate APP from approved PPMP projects/lots
 -- Fires AFTER UPDATE on ppmps when status → 'approved'.
--- Inserts approved PPMP items into the APP's current draft
+-- Inserts approved PPMP lots into the APP's current draft
 -- version. If the app_items table (Phase 6) does not yet
 -- exist, the trigger returns gracefully without error.
 -- ============================================================
@@ -109,7 +120,6 @@ DECLARE
   v_app_id         UUID;
   v_app_version_id UUID;
 BEGIN
-  -- Only fire on PPMP status transition to 'approved'
   IF NEW.status <> 'approved' OR OLD.status = 'approved' THEN
     RETURN NEW;
   END IF;
@@ -132,12 +142,10 @@ BEGIN
      AND deleted_at     IS NULL
    LIMIT 1;
 
-  -- APP not created yet — skip gracefully (Phase 6 will wire this)
   IF v_app_id IS NULL THEN
     RETURN NEW;
   END IF;
 
-  -- Find the current open APP version (not yet final/approved)
   SELECT id INTO v_app_version_id
     FROM procurements.app_versions
    WHERE app_id  = v_app_id
@@ -149,26 +157,24 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- Insert approved PPMP items into app_items
+  -- Insert approved PPMP projects/lots into app_items
+  -- Each lot becomes an APP item row
   INSERT INTO procurements.app_items (
     app_version_id,
     app_id,
-    source_ppmp_item_id,
+    source_ppmp_project_id,
+    source_ppmp_lot_id,
     source_ppmp_id,
     item_number,
-    category,
-    description,
-    unit,
-    quantity,
-    estimated_unit_cost,
-    estimated_total_cost,
-    procurement_method,
+    general_description,
+    project_type,
+    procurement_mode,
+    estimated_budget,
+    source_of_funds,
+    procurement_start,
+    procurement_end,
+    delivery_period,
     budget_allocation_id,
-    schedule_q1,
-    schedule_q2,
-    schedule_q3,
-    schedule_q4,
-    is_cse,
     source_office_id,
     remarks,
     hope_review_status,
@@ -177,31 +183,29 @@ BEGIN
   SELECT
     v_app_version_id,
     v_app_id,
-    pi.id,
-    pi.ppmp_id,
-    pi.item_number,
-    pi.category,
-    pi.description,
-    pi.unit,
-    pi.quantity,
-    pi.estimated_unit_cost,
-    pi.estimated_total_cost,
-    pi.procurement_method,
-    pi.budget_allocation_id,
-    pi.schedule_q1,
-    pi.schedule_q2,
-    pi.schedule_q3,
-    pi.schedule_q4,
-    pi.is_cse,
-    pi.office_id,
-    pi.remarks,
+    pp.id,
+    pl.id,
+    pp.ppmp_id,
+    ROW_NUMBER() OVER (ORDER BY pp.project_number, pl.lot_number),
+    pp.general_description,
+    pp.project_type,
+    pl.procurement_mode,
+    pl.estimated_budget,
+    pl.source_of_funds,
+    pl.procurement_start,
+    pl.procurement_end,
+    pl.delivery_period,
+    pl.budget_allocation_id,
+    pp.office_id,
+    pl.remarks,
     'pending',
-    pi.created_by
-  FROM procurements.ppmp_items pi
-  JOIN procurements.ppmp_versions pv ON pv.id = pi.ppmp_version_id
+    pp.created_by
+  FROM procurements.ppmp_projects pp
+  JOIN procurements.ppmp_versions pv ON pv.id = pp.ppmp_version_id
+  JOIN procurements.ppmp_lots pl ON pl.ppmp_project_id = pp.id
   WHERE pv.ppmp_id   = NEW.id
     AND pv.status    = 'approved'
-    AND pi.deleted_at IS NULL;
+    AND pp.deleted_at IS NULL;
 
   RETURN NEW;
 END;
@@ -214,7 +218,6 @@ CREATE TRIGGER trg_auto_populate_app_from_ppmp
 
 -- ============================================================
 -- Constraint: only one draft ppmp_version per ppmp at a time
--- Enforced via partial unique index.
 -- ============================================================
 
 CREATE UNIQUE INDEX idx_ppmp_versions_one_draft_per_ppmp

@@ -12,53 +12,67 @@ export const ppmpHeaderSchema = z.object({
 export type PpmpHeaderInput = z.infer<typeof ppmpHeaderSchema>
 
 // ============================================================
-// PPMP Item
+// PPMP Project (GPPB Columns 1-2)
 // ============================================================
 
-export const ppmpItemSchema = z.object({
-  category: z.enum(
-    ['common_use_supplies', 'non_common_supplies', 'equipment', 'services', 'infrastructure'],
-    { error: "Category is required" }
+export const ppmpProjectSchema = z.object({
+  general_description: z.string().min(10, "Description must be at least 10 characters"),
+  project_type: z.enum(
+    ['goods', 'infrastructure', 'consulting_services'],
+    { error: "Project type is required" }
   ),
+})
+
+export type PpmpProjectInput = z.infer<typeof ppmpProjectSchema>
+
+// ============================================================
+// PPMP Lot (GPPB Columns 3-12)
+// ============================================================
+
+export const ppmpLotSchema = z.object({
+  lot_title: z.string().nullable().optional(),
+  procurement_mode: z.string().min(1, "Procurement mode is required"),
+  pre_procurement_conference: z.boolean().default(false),
+  procurement_start: z.string().nullable().optional(),
+  procurement_end: z.string().nullable().optional(),
+  delivery_period: z.string().nullable().optional(),
+  source_of_funds: z.string().nullable().optional(),
+  estimated_budget: z
+    .string()
+    .min(1, "Estimated budget is required")
+    .refine((v) => !isNaN(parseFloat(v)) && parseFloat(v) >= 0, {
+      message: "Budget must be a non-negative number",
+    }),
+  supporting_documents: z.string().nullable().optional(),
+  remarks: z.string().nullable().optional(),
+  budget_allocation_id: z.string().uuid().nullable().optional(),
+})
+
+export type PpmpLotInput = z.infer<typeof ppmpLotSchema>
+
+// ============================================================
+// PPMP Lot Item (items within Column 3)
+// ============================================================
+
+export const ppmpLotItemSchema = z.object({
   description: z.string().min(3, "Description must be at least 3 characters"),
-  unit: z.string().min(1, "Unit is required"),
   quantity: z
     .string()
     .min(1, "Quantity is required")
     .refine((v) => !isNaN(parseFloat(v)) && parseFloat(v) > 0, {
       message: "Quantity must be greater than zero",
     }),
+  unit: z.string().min(1, "Unit is required"),
+  specification: z.string().nullable().optional(),
   estimated_unit_cost: z
     .string()
     .min(1, "Unit cost is required")
     .refine((v) => !isNaN(parseFloat(v)) && parseFloat(v) >= 0, {
       message: "Unit cost must be a non-negative number",
     }),
-  procurement_method: z.string().min(1, "Procurement method is required"),
-  budget_allocation_id: z.string().uuid().nullable().optional(),
-  schedule_q1: z.string().default("0"),
-  schedule_q2: z.string().default("0"),
-  schedule_q3: z.string().default("0"),
-  schedule_q4: z.string().default("0"),
-  is_cse: z.boolean().default(false),
-  remarks: z.string().nullable().optional(),
-}).refine(
-  (data) => {
-    const total = parseFloat(data.quantity)
-    const sum =
-      parseFloat(data.schedule_q1 || "0") +
-      parseFloat(data.schedule_q2 || "0") +
-      parseFloat(data.schedule_q3 || "0") +
-      parseFloat(data.schedule_q4 || "0")
-    return Math.abs(total - sum) < 0.0001
-  },
-  {
-    message: "Q1 + Q2 + Q3 + Q4 must equal total quantity",
-    path: ["schedule_q4"],
-  }
-)
+})
 
-export type PpmpItemInput = z.infer<typeof ppmpItemSchema>
+export type PpmpLotItemInput = z.infer<typeof ppmpLotItemSchema>
 
 // ============================================================
 // Amendment
@@ -120,21 +134,20 @@ export const PPMP_VERSION_TYPE_LABELS: Record<string, string> = {
   supplemental:  "Supplemental",
 }
 
-export const PPMP_ITEM_CATEGORY_LABELS: Record<string, string> = {
-  common_use_supplies:  "Common Use Supplies (DBM-PS)",
-  non_common_supplies:  "Non-Common Supplies",
-  equipment:            "Equipment",
-  services:             "Services",
+export const PPMP_PROJECT_TYPE_LABELS: Record<string, string> = {
+  goods:                "Goods",
   infrastructure:       "Infrastructure",
+  consulting_services:  "Consulting Services",
 }
 
-export const PROCUREMENT_METHODS = [
-  { value: "shopping",                   label: "Shopping" },
-  { value: "small_value",                label: "Small Value Procurement" },
-  { value: "negotiated",                 label: "Negotiated Procurement" },
-  { value: "public_bidding",             label: "Competitive Bidding" },
+export const PROCUREMENT_MODES = [
+  { value: "competitive_bidding",        label: "Competitive Bidding" },
+  { value: "limited_source_bidding",     label: "Limited Source Bidding" },
   { value: "direct_contracting",         label: "Direct Contracting" },
   { value: "repeat_order",               label: "Repeat Order" },
-  { value: "limited_source_bidding",     label: "Limited Source Bidding" },
+  { value: "shopping",                   label: "Shopping" },
+  { value: "negotiated_procurement",     label: "Negotiated Procurement" },
+  { value: "small_value",                label: "Small Value Procurement" },
   { value: "two_stage_bidding",          label: "Two-Stage Bidding" },
+  { value: "by_administration",          label: "By Administration" },
 ]

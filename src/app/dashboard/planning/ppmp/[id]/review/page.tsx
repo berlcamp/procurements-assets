@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { getPpmpById, getCurrentPpmpVersion, getPpmpItems } from "@/lib/actions/ppmp"
+import { getPpmpById, getCurrentPpmpVersion, getPpmpProjects } from "@/lib/actions/ppmp"
 import {
   Card, CardContent, CardHeader, CardTitle,
 } from "@/components/ui/card"
@@ -8,11 +8,10 @@ import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { PpmpApprovalChain } from "@/components/planning/ppmp-approval-chain"
 import { PpmpIndicativeFinalBadge } from "@/components/planning/ppmp-indicative-final-badge"
-import { PpmpItemTable } from "@/components/planning/ppmp-item-table"
+import { PpmpProjectTable } from "@/components/planning/ppmp-item-table"
 import { PpmpReviewActions } from "@/components/planning/ppmp-review-actions"
 import { AmountDisplay } from "@/components/shared/amount-display"
 import { Separator } from "@/components/ui/separator"
-import type { PpmpItemWithAllocation } from "@/types/database"
 
 interface Props {
   params: Promise<{ id: string }>
@@ -26,14 +25,14 @@ export default async function PpmpReviewPage({ params }: Props) {
   ])
   if (!ppmp) notFound()
 
-  const items = version ? await getPpmpItems(version.id) : []
+  const projects = version ? await getPpmpProjects(version.id) : []
   const office = ppmp.office as { name: string; code: string } | undefined
   const fy = ppmp.fiscal_year as { year: number } | undefined
 
   const reviewable = ["submitted","chief_reviewed","budget_certified"].includes(ppmp.status)
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex items-start justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -44,17 +43,17 @@ export default async function PpmpReviewPage({ params }: Props) {
             FY {fy?.year} · <StatusBadge status={ppmp.status} />
           </p>
         </div>
-        <Link href={`/dashboard/planning/ppmp/${id}`}>
-          <Button size="sm" variant="outline">Back to Detail</Button>
-        </Link>
+        <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/dashboard/planning/ppmp/${id}`} />}>
+          Back to Detail
+        </Button>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
           <Card>
-            <CardHeader><CardTitle className="text-base">Procurement Items</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">Procurement Projects</CardTitle></CardHeader>
             <CardContent>
-              <PpmpItemTable items={items as PpmpItemWithAllocation[]} editable={false} />
+              <PpmpProjectTable projects={projects} editable={false} />
             </CardContent>
           </Card>
 
@@ -98,12 +97,12 @@ export default async function PpmpReviewPage({ params }: Props) {
                 </div>
                 <Separator />
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Items</span>
-                  <span>{items.length}</span>
+                  <span className="text-muted-foreground">Projects</span>
+                  <span>{projects.length}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Total</span>
-                  <AmountDisplay amount={version.total_estimated_cost} className="font-semibold" />
+                  <span className="text-muted-foreground">Total Budget</span>
+                  <AmountDisplay amount={version.total_estimated_budget} className="font-semibold" />
                 </div>
               </CardContent>
             </Card>

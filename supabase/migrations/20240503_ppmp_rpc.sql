@@ -1,9 +1,8 @@
--- Phase 5: PPMP RPC functions
+-- Phase 5: PPMP RPC functions (Project → Lot → Item hierarchy)
 
 -- ============================================================
 -- submit_ppmp(p_ppmp_id)
 -- Validates and advances PPMP from 'draft' → 'submitted'.
--- Called by: end_user or anyone with ppmp.submit permission.
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION procurements.submit_ppmp(
@@ -16,7 +15,7 @@ SET search_path = procurements, platform, auth, public
 AS $$
 DECLARE
   v_ppmp          RECORD;
-  v_item_count    INTEGER;
+  v_project_count INTEGER;
   v_version_id    UUID;
   v_alloc_rec     RECORD;
 BEGIN
@@ -32,14 +31,12 @@ BEGIN
     RAISE EXCEPTION 'PPMP % not found or access denied', p_ppmp_id;
   END IF;
 
-  -- Only creator or someone with ppmp.submit may submit
   IF v_ppmp.created_by <> auth.uid()
     AND NOT procurements.has_permission('ppmp.submit')
   THEN
     RAISE EXCEPTION 'Insufficient permissions to submit PPMP %', p_ppmp_id;
   END IF;
 
-  -- Must be in draft status
   IF v_ppmp.status <> 'draft' THEN
     RAISE EXCEPTION 'Only draft PPMPs can be submitted (current status: %)', v_ppmp.status;
   END IF;
@@ -54,45 +51,62 @@ BEGIN
     RAISE EXCEPTION 'No version found for PPMP % (version %)', p_ppmp_id, v_ppmp.current_version;
   END IF;
 
-  -- At least one item must exist
-  SELECT COUNT(*) INTO v_item_count
-    FROM procurements.ppmp_items
+  -- At least one project must exist
+  SELECT COUNT(*) INTO v_project_count
+    FROM procurements.ppmp_projects
    WHERE ppmp_version_id = v_version_id
      AND deleted_at      IS NULL;
 
-  IF v_item_count = 0 THEN
-    RAISE EXCEPTION 'Cannot submit PPMP % — it has no items', p_ppmp_id;
+  IF v_project_count = 0 THEN
+    RAISE EXCEPTION 'Cannot submit PPMP % — it has no procurement projects', p_ppmp_id;
   END IF;
 
-  -- All items: Q1+Q2+Q3+Q4 must equal quantity (defensive re-check)
+  -- Every project must have at least one lot with at least one item
   IF EXISTS (
     SELECT 1
-      FROM procurements.ppmp_items
-     WHERE ppmp_version_id = v_version_id
-       AND deleted_at      IS NULL
-       AND ROUND(schedule_q1 + schedule_q2 + schedule_q3 + schedule_q4, 4)
-           <> ROUND(quantity, 4)
+      FROM procurements.ppmp_projects pp
+     WHERE pp.ppmp_version_id = v_version_id
+       AND pp.deleted_at      IS NULL
+       AND NOT EXISTS (
+         SELECT 1
+           FROM procurements.ppmp_lots pl
+           JOIN procurements.ppmp_lot_items pli ON pli.ppmp_lot_id = pl.id
+          WHERE pl.ppmp_project_id = pp.id
+       )
   ) THEN
-    RAISE EXCEPTION 'One or more PPMP items have quarterly schedules that do not sum to the total quantity';
+    RAISE EXCEPTION 'All procurement projects must have at least one lot with items';
   END IF;
 
-  -- Budget availability check: sum of item costs per allocation must not exceed available balance
+  -- Every lot must have estimated_budget > 0
+  IF EXISTS (
+    SELECT 1
+      FROM procurements.ppmp_lots pl
+      JOIN procurements.ppmp_projects pp ON pp.id = pl.ppmp_project_id
+     WHERE pp.ppmp_version_id = v_version_id
+       AND pp.deleted_at      IS NULL
+       AND pl.estimated_budget <= 0
+  ) THEN
+    RAISE EXCEPTION 'All lots must have an estimated budget greater than zero';
+  END IF;
+
+  -- Budget availability check: sum of lot budgets per allocation must not exceed available balance
   FOR v_alloc_rec IN
     SELECT
-      pi.budget_allocation_id,
-      SUM(pi.estimated_total_cost) AS ppmp_total,
+      pl.budget_allocation_id,
+      SUM(pl.estimated_budget) AS ppmp_total,
       ba.adjusted_amount,
       ba.obligated_amount
-    FROM procurements.ppmp_items pi
-    JOIN procurements.budget_allocations ba ON ba.id = pi.budget_allocation_id
-   WHERE pi.ppmp_version_id   = v_version_id
-     AND pi.deleted_at        IS NULL
-     AND pi.budget_allocation_id IS NOT NULL
-   GROUP BY pi.budget_allocation_id, ba.adjusted_amount, ba.obligated_amount
+    FROM procurements.ppmp_lots pl
+    JOIN procurements.ppmp_projects pp ON pp.id = pl.ppmp_project_id
+    JOIN procurements.budget_allocations ba ON ba.id = pl.budget_allocation_id
+   WHERE pp.ppmp_version_id   = v_version_id
+     AND pp.deleted_at        IS NULL
+     AND pl.budget_allocation_id IS NOT NULL
+   GROUP BY pl.budget_allocation_id, ba.adjusted_amount, ba.obligated_amount
   LOOP
     IF v_alloc_rec.ppmp_total > (v_alloc_rec.adjusted_amount - v_alloc_rec.obligated_amount) THEN
       RAISE EXCEPTION
-        'PPMP items for allocation % exceed available budget (PPMP total: %, available: %)',
+        'PPMP lots for allocation % exceed available budget (PPMP total: %, available: %)',
         v_alloc_rec.budget_allocation_id,
         v_alloc_rec.ppmp_total,
         (v_alloc_rec.adjusted_amount - v_alloc_rec.obligated_amount);
@@ -296,9 +310,7 @@ BEGIN
          approved_at      = NOW()
    WHERE id = v_version_id;
 
-  -- Snapshot is populated by trg_snapshot_approved_ppmp_version (BEFORE UPDATE trigger)
-
-  -- Supersede all other non-approved, non-superseded versions for this PPMP
+  -- Supersede all other non-approved, non-superseded versions
   UPDATE procurements.ppmp_versions
      SET status = 'superseded'
    WHERE ppmp_id = p_ppmp_id
@@ -356,7 +368,6 @@ BEGIN
     RAISE EXCEPTION 'Insufficient permissions to return PPMP %', p_ppmp_id;
   END IF;
 
-  -- Map step to target status
   v_new_status := CASE p_step
     WHEN 'to_end_user' THEN 'revision_required'
     WHEN 'to_chief'    THEN 'submitted'
@@ -370,14 +381,12 @@ BEGIN
 
   UPDATE procurements.ppmps
      SET status     = v_new_status,
-         -- Store return notes in the most appropriate notes field based on direction
          chief_review_notes        = CASE WHEN p_step = 'to_end_user' THEN p_notes ELSE chief_review_notes END,
          budget_certification_notes = CASE WHEN p_step = 'to_chief'   THEN p_notes ELSE budget_certification_notes END,
          approval_notes            = CASE WHEN p_step = 'to_budget'   THEN p_notes ELSE approval_notes END,
          updated_at = NOW()
    WHERE id = p_ppmp_id;
 
-  -- Revert the version status to align with the target step
   UPDATE procurements.ppmp_versions
      SET status = CASE v_new_status
        WHEN 'revision_required' THEN 'draft'
@@ -390,8 +399,8 @@ $$;
 
 -- ============================================================
 -- create_ppmp_amendment(p_ppmp_id, p_justification)
--- Creates a new amendment version cloning all items from the
--- currently approved version.
+-- Creates a new amendment version cloning all projects, lots,
+-- and items from the currently approved version.
 -- Returns: new ppmp_version_id
 -- ============================================================
 
@@ -409,6 +418,10 @@ DECLARE
   v_approved_ver    RECORD;
   v_next_version    INTEGER;
   v_new_version_id  UUID;
+  v_proj_rec        RECORD;
+  v_new_project_id  UUID;
+  v_lot_rec         RECORD;
+  v_new_lot_id      UUID;
 BEGIN
   SELECT *
     INTO v_ppmp
@@ -421,7 +434,6 @@ BEGIN
     RAISE EXCEPTION 'PPMP % not found or access denied', p_ppmp_id;
   END IF;
 
-  -- Only creator or someone with ppmp.amend may initiate amendment
   IF v_ppmp.created_by <> auth.uid()
     AND NOT procurements.has_permission('ppmp.amend')
   THEN
@@ -432,7 +444,6 @@ BEGIN
     RAISE EXCEPTION 'Only approved or locked PPMPs can be amended (current status: %)', v_ppmp.status;
   END IF;
 
-  -- Prevent multiple simultaneous draft versions
   IF EXISTS (
     SELECT 1
       FROM procurements.ppmp_versions
@@ -442,7 +453,7 @@ BEGIN
     RAISE EXCEPTION 'An amendment is already in progress for PPMP %. Finish or discard it first.', p_ppmp_id;
   END IF;
 
-  -- Find the currently approved version to clone from
+  -- Find the currently approved version
   SELECT *
     INTO v_approved_ver
     FROM procurements.ppmp_versions
@@ -459,73 +470,63 @@ BEGIN
 
   -- Create the new amendment version
   INSERT INTO procurements.ppmp_versions (
-    ppmp_id,
-    version_number,
-    version_type,
-    amendment_justification,
-    total_estimated_cost,
-    status,
-    indicative_final,
-    office_id,
-    created_by
+    ppmp_id, version_number, version_type, amendment_justification,
+    total_estimated_budget, status, indicative_final, office_id, created_by
   ) VALUES (
-    p_ppmp_id,
-    v_next_version,
-    'amendment',
-    p_justification,
-    v_approved_ver.total_estimated_cost,
-    'draft',
-    'indicative',
-    v_approved_ver.office_id,
-    auth.uid()
+    p_ppmp_id, v_next_version, 'amendment', p_justification,
+    v_approved_ver.total_estimated_budget, 'draft', 'indicative',
+    v_approved_ver.office_id, auth.uid()
   )
   RETURNING id INTO v_new_version_id;
 
-  -- Clone all non-deleted items from the approved version
-  INSERT INTO procurements.ppmp_items (
-    ppmp_version_id,
-    ppmp_id,
-    item_number,
-    category,
-    description,
-    unit,
-    quantity,
-    estimated_unit_cost,
-    procurement_method,
-    budget_allocation_id,
-    schedule_q1,
-    schedule_q2,
-    schedule_q3,
-    schedule_q4,
-    is_cse,
-    remarks,
-    office_id,
-    created_by
-  )
-  SELECT
-    v_new_version_id,
-    pi.ppmp_id,
-    pi.item_number,
-    pi.category,
-    pi.description,
-    pi.unit,
-    pi.quantity,
-    pi.estimated_unit_cost,
-    pi.procurement_method,
-    pi.budget_allocation_id,
-    pi.schedule_q1,
-    pi.schedule_q2,
-    pi.schedule_q3,
-    pi.schedule_q4,
-    pi.is_cse,
-    pi.remarks,
-    pi.office_id,
-    auth.uid()
-  FROM procurements.ppmp_items pi
-  WHERE pi.ppmp_version_id = v_approved_ver.id
-    AND pi.deleted_at      IS NULL;
+  -- Clone projects → lots → items
+  FOR v_proj_rec IN
+    SELECT * FROM procurements.ppmp_projects
+     WHERE ppmp_version_id = v_approved_ver.id
+       AND deleted_at      IS NULL
+  LOOP
+    INSERT INTO procurements.ppmp_projects (
+      ppmp_version_id, ppmp_id, project_number,
+      general_description, project_type, office_id, created_by
+    ) VALUES (
+      v_new_version_id, v_proj_rec.ppmp_id, v_proj_rec.project_number,
+      v_proj_rec.general_description, v_proj_rec.project_type,
+      v_proj_rec.office_id, auth.uid()
+    )
+    RETURNING id INTO v_new_project_id;
 
-  -- Advance the PPMP to the new draft version
+    FOR v_lot_rec IN
+      SELECT * FROM procurements.ppmp_lots
+       WHERE ppmp_project_id = v_proj_rec.id
+    LOOP
+      INSERT INTO procurements.ppmp_lots (
+        ppmp_project_id, lot_number, lot_title, procurement_mode,
+        pre_procurement_conference, procurement_start, procurement_end,
+        delivery_period, source_of_funds, estimated_budget,
+        supporting_documents, remarks, budget_allocation_id
+      ) VALUES (
+        v_new_project_id, v_lot_rec.lot_number, v_lot_rec.lot_title,
+        v_lot_rec.procurement_mode, v_lot_rec.pre_procurement_conference,
+        v_lot_rec.procurement_start, v_lot_rec.procurement_end,
+        v_lot_rec.delivery_period, v_lot_rec.source_of_funds,
+        v_lot_rec.estimated_budget, v_lot_rec.supporting_documents,
+        v_lot_rec.remarks, v_lot_rec.budget_allocation_id
+      )
+      RETURNING id INTO v_new_lot_id;
+
+      INSERT INTO procurements.ppmp_lot_items (
+        ppmp_lot_id, item_number, description, quantity, unit,
+        specification, estimated_unit_cost
+      )
+      SELECT
+        v_new_lot_id, item_number, description, quantity, unit,
+        specification, estimated_unit_cost
+      FROM procurements.ppmp_lot_items
+      WHERE ppmp_lot_id = v_lot_rec.id;
+    END LOOP;
+  END LOOP;
+
+  -- Advance PPMP to the new draft version
   UPDATE procurements.ppmps
      SET current_version = v_next_version,
          status          = 'draft',
@@ -538,8 +539,7 @@ $$;
 
 -- ============================================================
 -- get_ppmp_version_history(p_ppmp_id)
--- Returns version history with item counts, ordered newest first.
--- Division isolation enforced.
+-- Returns version history with project/lot counts.
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION procurements.get_ppmp_version_history(
@@ -550,12 +550,12 @@ RETURNS TABLE (
   version_type            TEXT,
   status                  TEXT,
   indicative_final        TEXT,
-  total_estimated_cost    NUMERIC(15,2),
+  total_estimated_budget  NUMERIC(15,2),
   amendment_justification TEXT,
   approved_by             UUID,
   approved_at             TIMESTAMPTZ,
   created_at              TIMESTAMPTZ,
-  item_count              BIGINT
+  project_count           BIGINT
 )
 LANGUAGE plpgsql
 STABLE
@@ -563,7 +563,6 @@ SECURITY DEFINER
 SET search_path = procurements, platform, auth, public
 AS $$
 BEGIN
-  -- Division isolation: caller must belong to the same division as the PPMP
   IF NOT EXISTS (
     SELECT 1
       FROM procurements.ppmps
@@ -580,23 +579,23 @@ BEGIN
     pv.version_type,
     pv.status,
     pv.indicative_final,
-    pv.total_estimated_cost,
+    pv.total_estimated_budget,
     pv.amendment_justification,
     pv.approved_by,
     pv.approved_at,
     pv.created_at,
-    COUNT(pi.id) AS item_count
+    COUNT(pp.id) AS project_count
   FROM procurements.ppmp_versions pv
-  LEFT JOIN procurements.ppmp_items pi
-         ON pi.ppmp_version_id = pv.id
-        AND pi.deleted_at      IS NULL
+  LEFT JOIN procurements.ppmp_projects pp
+         ON pp.ppmp_version_id = pv.id
+        AND pp.deleted_at      IS NULL
   WHERE pv.ppmp_id = p_ppmp_id
   GROUP BY
     pv.version_number,
     pv.version_type,
     pv.status,
     pv.indicative_final,
-    pv.total_estimated_cost,
+    pv.total_estimated_budget,
     pv.amendment_justification,
     pv.approved_by,
     pv.approved_at,

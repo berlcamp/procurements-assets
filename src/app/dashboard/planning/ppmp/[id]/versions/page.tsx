@@ -27,15 +27,15 @@ export default async function PpmpVersionsPage({ params }: Props) {
   const office = ppmp.office as { name: string } | undefined
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Version History</h1>
           <p className="text-sm text-muted-foreground">{office?.name}</p>
         </div>
-        <Link href={`/dashboard/planning/ppmp/${id}`}>
-          <Button variant="outline" size="sm">Back to PPMP</Button>
-        </Link>
+        <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/dashboard/planning/ppmp/${id}`} />}>
+          Back to PPMP
+        </Button>
       </div>
 
       <div className="rounded-md border">
@@ -46,8 +46,8 @@ export default async function PpmpVersionsPage({ params }: Props) {
               <TableHead>Type</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>INDICATIVE / FINAL</TableHead>
-              <TableHead className="text-right">Total Cost</TableHead>
-              <TableHead className="text-right">Items</TableHead>
+              <TableHead className="text-right">Total Budget</TableHead>
+              <TableHead className="text-right">Projects</TableHead>
               <TableHead>Approved</TableHead>
               <TableHead>Created</TableHead>
             </TableRow>
@@ -71,9 +71,9 @@ export default async function PpmpVersionsPage({ params }: Props) {
                 <TableCell><StatusBadge status={v.status} /></TableCell>
                 <TableCell><PpmpIndicativeFinalBadge value={v.indicative_final} /></TableCell>
                 <TableCell className="text-right">
-                  <AmountDisplay amount={v.total_estimated_cost} />
+                  <AmountDisplay amount={v.total_estimated_budget} />
                 </TableCell>
-                <TableCell className="text-right font-mono">{v.item_count}</TableCell>
+                <TableCell className="text-right font-mono">{v.project_count}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   {v.approved_at ? new Date(v.approved_at).toLocaleDateString("en-PH") : "—"}
                 </TableCell>

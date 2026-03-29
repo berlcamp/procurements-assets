@@ -388,12 +388,7 @@ export type PpmpVersionStatus =
 
 export type PpmpVersionType = 'original' | 'amendment' | 'supplemental'
 
-export type PpmpItemCategory =
-  | 'common_use_supplies'
-  | 'non_common_supplies'
-  | 'equipment'
-  | 'services'
-  | 'infrastructure'
+export type PpmpProjectType = 'goods' | 'infrastructure' | 'consulting_services'
 
 export type IndicativeFinal = 'indicative' | 'final'
 
@@ -428,7 +423,7 @@ export interface PpmpVersion {
   version_number: number
   version_type: PpmpVersionType
   amendment_justification: string | null
-  total_estimated_cost: string
+  total_estimated_budget: string
   snapshot_data: Record<string, unknown> | null
   status: PpmpVersionStatus
   indicative_final: IndicativeFinal
@@ -439,30 +434,54 @@ export interface PpmpVersion {
   created_by: string | null
 }
 
-export interface PpmpItem {
+// GPPB Form Columns 1-2 (project-level)
+export interface PpmpProject {
   id: string
   ppmp_version_id: string
   ppmp_id: string
-  item_number: number
-  category: PpmpItemCategory
-  description: string
-  unit: string
-  quantity: string
-  estimated_unit_cost: string
-  estimated_total_cost: string
-  procurement_method: string
-  budget_allocation_id: string | null
-  schedule_q1: string
-  schedule_q2: string
-  schedule_q3: string
-  schedule_q4: string
-  is_cse: boolean
-  remarks: string | null
+  project_number: number
+  general_description: string
+  project_type: PpmpProjectType
   office_id: string
   deleted_at: string | null
   created_at: string
   updated_at: string
   created_by: string | null
+}
+
+// GPPB Form Columns 3-12 (lot-level row)
+export interface PpmpLot {
+  id: string
+  ppmp_project_id: string
+  lot_number: number
+  lot_title: string | null
+  procurement_mode: string
+  pre_procurement_conference: boolean
+  procurement_start: string | null
+  procurement_end: string | null
+  delivery_period: string | null
+  source_of_funds: string | null
+  estimated_budget: string
+  supporting_documents: string | null
+  remarks: string | null
+  budget_allocation_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+// GPPB Form Column 3 detail items (within a lot)
+export interface PpmpLotItem {
+  id: string
+  ppmp_lot_id: string
+  item_number: number
+  description: string
+  quantity: string
+  unit: string
+  specification: string | null
+  estimated_unit_cost: string
+  estimated_total_cost: string
+  created_at: string
+  updated_at: string
 }
 
 // Joined types for UI display
@@ -471,11 +490,19 @@ export interface PpmpWithDetails extends Ppmp {
   fiscal_year?: Pick<FiscalYear, 'id' | 'year' | 'status'>
 }
 
-export interface PpmpVersionWithItems extends PpmpVersion {
-  ppmp_items?: PpmpItem[]
+export interface PpmpLotWithItems extends PpmpLot {
+  ppmp_lot_items?: PpmpLotItem[]
 }
 
-export interface PpmpItemWithAllocation extends PpmpItem {
+export interface PpmpProjectWithLots extends PpmpProject {
+  ppmp_lots?: PpmpLotWithItems[]
+}
+
+export interface PpmpVersionWithProjects extends PpmpVersion {
+  ppmp_projects?: PpmpProjectWithLots[]
+}
+
+export interface PpmpLotWithAllocation extends PpmpLot {
   budget_allocation?: BudgetAllocationWithDetails
 }
 
@@ -485,10 +512,10 @@ export interface PpmpVersionHistoryRow {
   version_type: PpmpVersionType
   status: PpmpVersionStatus
   indicative_final: IndicativeFinal
-  total_estimated_cost: string
+  total_estimated_budget: string
   amendment_justification: string | null
   approved_by: string | null
   approved_at: string | null
   created_at: string
-  item_count: number
+  project_count: number
 }

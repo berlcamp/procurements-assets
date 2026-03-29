@@ -1,19 +1,16 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { getPpmpById, getCurrentPpmpVersion, getPpmpItems } from "@/lib/actions/ppmp"
-import {
-  Card, CardContent, CardHeader, CardTitle,
-} from "@/components/ui/card"
+import { getPpmpById, getCurrentPpmpVersion, getPpmpProjects } from "@/lib/actions/ppmp"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { AmountDisplay } from "@/components/shared/amount-display"
 import { Separator } from "@/components/ui/separator"
 import { PpmpApprovalChain } from "@/components/planning/ppmp-approval-chain"
 import { PpmpIndicativeFinalBadge } from "@/components/planning/ppmp-indicative-final-badge"
-import { PpmpItemTable } from "@/components/planning/ppmp-item-table"
+import { PpmpProjectTable } from "@/components/planning/ppmp-item-table"
 import { PpmpReviewActions } from "@/components/planning/ppmp-review-actions"
 import { EditIcon, HistoryIcon } from "lucide-react"
-import type { PpmpWithDetails, PpmpItemWithAllocation } from "@/types/database"
+import type { PpmpLotWithItems } from "@/types/database"
 
 interface Props {
   params: Promise<{ id: string }>
@@ -27,14 +24,23 @@ export default async function PpmpDetailPage({ params }: Props) {
   ])
   if (!ppmp) notFound()
 
-  const items = version ? await getPpmpItems(version.id) : []
+  const projects = version ? await getPpmpProjects(version.id) : []
   const office = ppmp.office as { name: string; code: string } | undefined
   const fy = ppmp.fiscal_year as { year: number } | undefined
 
-  const isDraft = ppmp.status === "draft"
+  const isDraft = ppmp.status === "draft" || ppmp.status === "revision_required"
+
+  // Count projects and total lots
+  const projectCount = projects.length
+  const lotCount = projects.reduce((sum, p) => sum + (p.ppmp_lots?.length ?? 0), 0)
+  const itemCount = projects.reduce((sum, p) => {
+    return sum + (p.ppmp_lots ?? []).reduce(
+      (s, l) => s + ((l as PpmpLotWithItems).ppmp_lot_items?.length ?? 0), 0
+    )
+  }, 0)
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="space-y-1">
@@ -42,49 +48,44 @@ export default async function PpmpDetailPage({ params }: Props) {
             <h1 className="text-2xl font-bold">{office?.name ?? "PPMP"}</h1>
             <PpmpIndicativeFinalBadge value={ppmp.indicative_final} />
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             FY {fy?.year} · Version {ppmp.current_version} · <StatusBadge status={ppmp.status} />
           </p>
         </div>
         <div className="flex gap-2">
           {isDraft && (
-            <Link href={`/dashboard/planning/ppmp/${ppmp.id}/edit`}>
-              <Button size="sm" variant="outline">
-                <EditIcon className="mr-1.5 h-3.5 w-3.5" />
-                Edit
-              </Button>
-            </Link>
-          )}
-          <Link href={`/dashboard/planning/ppmp/${ppmp.id}/versions`}>
-            <Button size="sm" variant="ghost">
-              <HistoryIcon className="mr-1.5 h-3.5 w-3.5" />
-              History
+            <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/dashboard/planning/ppmp/${ppmp.id}/edit`} />}>
+              <EditIcon className="mr-1.5 h-3.5 w-3.5" />
+              Edit
             </Button>
-          </Link>
-          <Link href="/dashboard/planning/ppmp">
-            <Button size="sm" variant="ghost">Back</Button>
-          </Link>
+          )}
+          <Button size="sm" variant="ghost" nativeButton={false} render={<Link href={`/dashboard/planning/ppmp/${ppmp.id}/versions`} />}>
+            <HistoryIcon className="mr-1.5 h-3.5 w-3.5" />
+            History
+          </Button>
+          <Button size="sm" variant="ghost" nativeButton={false} render={<Link href="/dashboard/planning/ppmp" />}>
+            Back
+          </Button>
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Main — items */}
+        {/* Main — projects */}
         <div className="lg:col-span-2 space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Procurement Items</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PpmpItemTable items={items as PpmpItemWithAllocation[]} editable={false} />
-            </CardContent>
-          </Card>
+          <div className="rounded-lg border bg-card overflow-hidden">
+            <div className="px-5 py-4 border-b">
+              <h2 className="text-lg font-semibold">Procurement Projects</h2>
+            </div>
+            <div className="p-5">
+              <PpmpProjectTable projects={projects} editable={false} />
+            </div>
+          </div>
 
-          {/* Review actions — always render, component handles role visibility */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Review Actions</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <div className="rounded-lg border bg-card overflow-hidden">
+            <div className="px-5 py-4 border-b">
+              <h2 className="text-lg font-semibold">Review Actions</h2>
+            </div>
+            <div className="p-5">
               <PpmpReviewActions
                 ppmpId={ppmp.id}
                 ppmpStatus={ppmp.status}
@@ -96,26 +97,26 @@ export default async function PpmpDetailPage({ params }: Props) {
               <p className="text-xs text-muted-foreground mt-2">
                 Actions are available to authorized roles when PPMP is at the relevant stage.
               </p>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
 
-        {/* Sidebar — approval chain */}
+        {/* Sidebar */}
         <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Approval Chain</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <div className="rounded-lg border bg-card overflow-hidden">
+            <div className="px-5 py-4 border-b">
+              <h2 className="text-lg font-semibold">Approval Chain</h2>
+            </div>
+            <div className="p-5">
               <PpmpApprovalChain ppmp={ppmp} />
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
+          <div className="rounded-lg border bg-card overflow-hidden">
+            <div className="px-5 py-4 border-b">
+              <h2 className="text-lg font-semibold">Summary</h2>
+            </div>
+            <div className="p-5 space-y-2 text-base">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Office</span>
                 <span className="font-medium">{office?.name ?? "—"}</span>
@@ -129,20 +130,28 @@ export default async function PpmpDetailPage({ params }: Props) {
                 <span className="font-mono font-medium">v{ppmp.current_version}</span>
               </div>
               <div className="flex justify-between">
+                <span className="text-muted-foreground">Projects</span>
+                <span className="font-medium">{projectCount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Lots</span>
+                <span className="font-medium">{lotCount}</span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-muted-foreground">Items</span>
-                <span className="font-medium">{items.length}</span>
+                <span className="font-medium">{itemCount}</span>
               </div>
               {version && (
                 <>
                   <Separator />
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Total</span>
-                    <AmountDisplay amount={version.total_estimated_cost} className="font-semibold" />
+                    <span className="text-muted-foreground">Total Budget</span>
+                    <AmountDisplay amount={version.total_estimated_budget} className="font-semibold" />
                   </div>
                 </>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
     </div>

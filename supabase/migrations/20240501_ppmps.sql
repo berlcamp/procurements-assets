@@ -1,4 +1,6 @@
--- Phase 5: PPMP core tables (ppmps, ppmp_versions, ppmp_items)
+-- Phase 5: PPMP core tables
+-- Structure: ppmps → ppmp_versions → ppmp_projects → ppmp_lots → ppmp_lot_items
+-- Matches GPPB PPMP Form (RA 12009 IRR)
 
 -- ============================================================
 -- procurements.ppmps
@@ -51,7 +53,7 @@ CREATE TABLE IF NOT EXISTS procurements.ppmp_versions (
   version_type            TEXT          NOT NULL DEFAULT 'original'
                             CHECK (version_type IN ('original','amendment','supplemental')),
   amendment_justification TEXT,
-  total_estimated_cost    NUMERIC(15,2) NOT NULL DEFAULT 0,
+  total_estimated_budget  NUMERIC(15,2) NOT NULL DEFAULT 0,
   snapshot_data           JSONB,
   status                  TEXT          NOT NULL DEFAULT 'draft'
                             CHECK (status IN ('draft','submitted','chief_reviewed','budget_certified','approved','superseded')),
@@ -70,48 +72,93 @@ CREATE INDEX idx_ppmp_versions_office_id  ON procurements.ppmp_versions(office_i
 CREATE INDEX idx_ppmp_versions_created_by ON procurements.ppmp_versions(created_by);
 
 -- ============================================================
--- procurements.ppmp_items
--- Individual line items within a PPMP version.
+-- procurements.ppmp_projects
+-- Each row = one procurement project in the PPMP form.
+-- Maps to GPPB Columns 1-2 (description, type).
+-- A project groups one or more lots.
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS procurements.ppmp_items (
-  id                    UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
-  ppmp_version_id       UUID            NOT NULL REFERENCES procurements.ppmp_versions(id) ON DELETE CASCADE,
-  ppmp_id               UUID            NOT NULL REFERENCES procurements.ppmps(id),
-  item_number           INTEGER         NOT NULL,
-  category              TEXT            NOT NULL
-                          CHECK (category IN ('common_use_supplies','non_common_supplies','equipment','services','infrastructure')),
-  description           TEXT            NOT NULL,
-  unit                  TEXT            NOT NULL,
-  quantity              NUMERIC(15,4)   NOT NULL CHECK (quantity > 0),
-  estimated_unit_cost   NUMERIC(15,2)   NOT NULL CHECK (estimated_unit_cost >= 0),
-  estimated_total_cost  NUMERIC(15,2)   GENERATED ALWAYS AS (quantity * estimated_unit_cost) STORED,
-  procurement_method    TEXT            NOT NULL DEFAULT 'shopping',
-  budget_allocation_id  UUID            REFERENCES procurements.budget_allocations(id),
-  schedule_q1           NUMERIC(15,4)   NOT NULL DEFAULT 0,
-  schedule_q2           NUMERIC(15,4)   NOT NULL DEFAULT 0,
-  schedule_q3           NUMERIC(15,4)   NOT NULL DEFAULT 0,
-  schedule_q4           NUMERIC(15,4)   NOT NULL DEFAULT 0,
-  is_cse                BOOLEAN         NOT NULL DEFAULT false,
-  remarks               TEXT,
-  office_id             UUID            NOT NULL REFERENCES procurements.offices(id),
+CREATE TABLE IF NOT EXISTS procurements.ppmp_projects (
+  id                    UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  ppmp_version_id       UUID          NOT NULL REFERENCES procurements.ppmp_versions(id) ON DELETE CASCADE,
+  ppmp_id               UUID          NOT NULL REFERENCES procurements.ppmps(id),
+  project_number        INTEGER       NOT NULL,
+  -- Column 1: General Description and Objective
+  general_description   TEXT          NOT NULL,
+  -- Column 2: Type of Project (Goods, Infrastructure, Consulting Services)
+  project_type          TEXT          NOT NULL
+                          CHECK (project_type IN ('goods','infrastructure','consulting_services')),
+  office_id             UUID          NOT NULL REFERENCES procurements.offices(id),
   deleted_at            TIMESTAMPTZ,
-  created_at            TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-  updated_at            TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-  created_by            UUID            REFERENCES auth.users(id)
+  created_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  created_by            UUID          REFERENCES auth.users(id)
 );
 
--- Q1+Q2+Q3+Q4 must equal quantity (rounded to avoid floating-point drift)
-ALTER TABLE procurements.ppmp_items
-  ADD CONSTRAINT chk_ppmp_items_schedule_sum
-    CHECK (ROUND(schedule_q1 + schedule_q2 + schedule_q3 + schedule_q4, 4) = ROUND(quantity, 4));
+CREATE INDEX idx_ppmp_projects_version_id  ON procurements.ppmp_projects(ppmp_version_id);
+CREATE INDEX idx_ppmp_projects_ppmp_id     ON procurements.ppmp_projects(ppmp_id);
+CREATE INDEX idx_ppmp_projects_office_id   ON procurements.ppmp_projects(office_id);
+CREATE INDEX idx_ppmp_projects_deleted_at  ON procurements.ppmp_projects(deleted_at) WHERE deleted_at IS NULL;
 
-CREATE INDEX idx_ppmp_items_ppmp_version_id     ON procurements.ppmp_items(ppmp_version_id);
-CREATE INDEX idx_ppmp_items_ppmp_id             ON procurements.ppmp_items(ppmp_id);
-CREATE INDEX idx_ppmp_items_office_id           ON procurements.ppmp_items(office_id);
-CREATE INDEX idx_ppmp_items_budget_alloc_id     ON procurements.ppmp_items(budget_allocation_id);
-CREATE INDEX idx_ppmp_items_created_by          ON procurements.ppmp_items(created_by);
-CREATE INDEX idx_ppmp_items_deleted_at          ON procurements.ppmp_items(deleted_at) WHERE deleted_at IS NULL;
+-- ============================================================
+-- procurements.ppmp_lots
+-- Each lot = one row in the PPMP form (or the only row if no lots).
+-- Maps to GPPB Columns 3-12.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS procurements.ppmp_lots (
+  id                          UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  ppmp_project_id             UUID          NOT NULL REFERENCES procurements.ppmp_projects(id) ON DELETE CASCADE,
+  lot_number                  INTEGER       NOT NULL DEFAULT 1,
+  lot_title                   TEXT,
+  -- Column 4: Recommended Mode of Procurement
+  procurement_mode            TEXT          NOT NULL DEFAULT 'competitive_bidding',
+  -- Column 5: Pre-Procurement Conference
+  pre_procurement_conference  BOOLEAN       NOT NULL DEFAULT false,
+  -- Column 6: Start of Procurement Activity (MM/YYYY)
+  procurement_start           TEXT,
+  -- Column 7: End of Procurement Activity (MM/YYYY)
+  procurement_end             TEXT,
+  -- Column 8: Expected Delivery/Implementation Period
+  delivery_period             TEXT,
+  -- Column 9: Source of Funds
+  source_of_funds             TEXT,
+  -- Column 10: Estimated Budget / ABC
+  estimated_budget            NUMERIC(15,2) NOT NULL DEFAULT 0 CHECK (estimated_budget >= 0),
+  -- Column 11: Attached Supporting Documents
+  supporting_documents        TEXT,
+  -- Column 12: Remarks
+  remarks                     TEXT,
+  -- Budget linkage
+  budget_allocation_id        UUID          REFERENCES procurements.budget_allocations(id),
+  created_at                  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  updated_at                  TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_ppmp_lots_project_id ON procurements.ppmp_lots(ppmp_project_id);
+CREATE INDEX idx_ppmp_lots_budget_id  ON procurements.ppmp_lots(budget_allocation_id);
+
+-- ============================================================
+-- procurements.ppmp_lot_items
+-- Individual items within a lot (Column 3: Quantity and Size).
+-- Multiple items per lot.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS procurements.ppmp_lot_items (
+  id                    UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  ppmp_lot_id           UUID          NOT NULL REFERENCES procurements.ppmp_lots(id) ON DELETE CASCADE,
+  item_number           INTEGER       NOT NULL DEFAULT 1,
+  description           TEXT          NOT NULL,
+  quantity              NUMERIC(15,4) NOT NULL CHECK (quantity > 0),
+  unit                  TEXT          NOT NULL,
+  specification         TEXT,
+  estimated_unit_cost   NUMERIC(15,2) NOT NULL DEFAULT 0 CHECK (estimated_unit_cost >= 0),
+  estimated_total_cost  NUMERIC(15,2) GENERATED ALWAYS AS (quantity * estimated_unit_cost) STORED,
+  created_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_ppmp_lot_items_lot_id ON procurements.ppmp_lot_items(ppmp_lot_id);
 
 -- ============================================================
 -- updated_at triggers
@@ -121,8 +168,16 @@ CREATE TRIGGER trg_ppmps_updated_at
   BEFORE UPDATE ON procurements.ppmps
   FOR EACH ROW EXECUTE FUNCTION procurements.set_updated_at();
 
-CREATE TRIGGER trg_ppmp_items_updated_at
-  BEFORE UPDATE ON procurements.ppmp_items
+CREATE TRIGGER trg_ppmp_projects_updated_at
+  BEFORE UPDATE ON procurements.ppmp_projects
+  FOR EACH ROW EXECUTE FUNCTION procurements.set_updated_at();
+
+CREATE TRIGGER trg_ppmp_lots_updated_at
+  BEFORE UPDATE ON procurements.ppmp_lots
+  FOR EACH ROW EXECUTE FUNCTION procurements.set_updated_at();
+
+CREATE TRIGGER trg_ppmp_lot_items_updated_at
+  BEFORE UPDATE ON procurements.ppmp_lot_items
   FOR EACH ROW EXECUTE FUNCTION procurements.set_updated_at();
 
 -- ============================================================
@@ -137,8 +192,16 @@ CREATE TRIGGER trg_ppmp_versions_audit
   AFTER INSERT OR UPDATE OR DELETE ON procurements.ppmp_versions
   FOR EACH ROW EXECUTE FUNCTION procurements.audit_trigger();
 
-CREATE TRIGGER trg_ppmp_items_audit
-  AFTER INSERT OR UPDATE OR DELETE ON procurements.ppmp_items
+CREATE TRIGGER trg_ppmp_projects_audit
+  AFTER INSERT OR UPDATE OR DELETE ON procurements.ppmp_projects
+  FOR EACH ROW EXECUTE FUNCTION procurements.audit_trigger();
+
+CREATE TRIGGER trg_ppmp_lots_audit
+  AFTER INSERT OR UPDATE OR DELETE ON procurements.ppmp_lots
+  FOR EACH ROW EXECUTE FUNCTION procurements.audit_trigger();
+
+CREATE TRIGGER trg_ppmp_lot_items_audit
+  AFTER INSERT OR UPDATE OR DELETE ON procurements.ppmp_lot_items
   FOR EACH ROW EXECUTE FUNCTION procurements.audit_trigger();
 
 -- ============================================================
@@ -147,4 +210,6 @@ CREATE TRIGGER trg_ppmp_items_audit
 
 ALTER TABLE procurements.ppmps          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE procurements.ppmp_versions  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE procurements.ppmp_items     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE procurements.ppmp_projects  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE procurements.ppmp_lots      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE procurements.ppmp_lot_items ENABLE ROW LEVEL SECURITY;
