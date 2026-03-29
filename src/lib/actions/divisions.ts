@@ -133,7 +133,7 @@ export async function suspendDivision(
   reason?: string
 ): Promise<{ error: string | null }> {
   const supabase = await createClient()
-  const { error } = await supabase.rpc("suspend_division", {
+  const { error } = await supabase.schema("platform").rpc("suspend_division", {
     p_division_id: id,
     p_reason: reason ?? null,
   })
@@ -150,7 +150,7 @@ export async function reactivateDivision(
   id: string
 ): Promise<{ error: string | null }> {
   const supabase = await createClient()
-  const { error } = await supabase.rpc("reactivate_division", {
+  const { error } = await supabase.schema("platform").rpc("reactivate_division", {
     p_division_id: id,
   })
 

@@ -162,25 +162,65 @@ Platform (Super Admin)
 
 ### A.1 PPMP (Project Procurement Management Plan)
 
-**Purpose:** Each office/school creates a PPMP listing all items/services needed for the fiscal year.
+**Purpose:** Each office/school creates a PPMP listing all items/services needed for the fiscal year. The PPMP is created by the End User and goes through a multi-step approval chain before reaching the HOPE (SDS) for final approval.
 
 **Key Features:**
 
-- Create PPMP per office per fiscal year
+- Create PPMP per office per fiscal year (multiple rows/line items per PPMP)
 - Line items with: description, quantity, unit, estimated unit cost, total cost, mode of procurement, schedule/quarter
 - Item categorization (common-use supplies, non-common supplies, equipment, services)
 - Link items to budget line items (MOOE, Capital Outlay, etc.)
-- PPMP versioning (see Section 8)
+- PPMP versioning with **INDICATIVE / FINAL** status (see Section 8)
 - Bulk import from previous year's PPMP
 - Excel/CSV import capability
+
+**Approval Flow — Division Offices:**
+
+```
+End User creates PPMP (multiple rows)
+    ↓
+End User submits to Section Chief
+    ↓
+Section Chief reviews & submits to Budget Officer
+    ↓
+Budget Officer certifies (fund availability) & submits to HOPE
+    ↓
+HOPE approves the PPMP
+    ↓
+PPMP rows appear in APP
+```
+
+**Approval Flow — Schools:**
+
+```
+End User (Administrative Officer) creates PPMP (multiple rows)
+    ↓
+End User submits to School Head
+    ↓
+School Head reviews & submits to Budget Officer
+    ↓
+Budget Officer certifies (fund availability) & submits to HOPE
+    ↓
+HOPE approves the PPMP
+    ↓
+PPMP rows appear in APP
+```
 
 **Status Workflow:**
 
 ```
-Draft → Submitted → Under Review → Revision Required → Approved → Locked
-                                        ↑                    │
-                                        └────────────────────┘
-                                        (Amendment triggers new version)
+Draft → Submitted → Section Chief Reviewed → Budget Certified → HOPE Approved → Locked
+                          ↑                                           │
+                          └───────────────────────────────────────────┘
+                          (Amendment triggers new version)
+```
+
+**Versioning Status:**
+
+```
+INDICATIVE (initial submission — estimates, subject to change)
+    ↓
+FINAL (locked after HOPE approval — basis for APP and procurement)
 ```
 
 **Business Rules:**
@@ -191,41 +231,97 @@ Draft → Submitted → Under Review → Revision Required → Approved → Lock
 - Items flagged as "common-use" auto-route to PS-DBM catalog pricing
 - Quarterly schedule is mandatory for each line item
 - PPMP must be submitted before APP consolidation deadline
+- Budget Officer must certify fund availability before PPMP reaches HOPE
+- PPMP starts as INDICATIVE; becomes FINAL only after HOPE approval
+- End User is the creator in both Division Offices and Schools (as Administrative Officer in schools)
 
 ### A.2 APP (Annual Procurement Plan)
 
-**Purpose:** The Division Office consolidates all PPMPs into a single APP.
+**Purpose:** The APP is automatically populated from HOPE-approved PPMPs across all offices/schools in the division. The APP serves as the consolidated procurement plan for the fiscal year.
 
 **Key Features:**
 
-- Auto-consolidation of approved PPMPs from all offices/schools
-- APP-level adjustments (grouping, re-categorization)
-- APP versioning (independent of PPMP versions)
-- Approval workflow (Division Supply Officer → Division Chief → SDS)
+- **Auto-population:** When HOPE approves a PPMP, its rows automatically appear in the APP
+- APP versioning with **INDICATIVE / FINAL** status (independent of PPMP versions)
+- Row-level review by HOPE: approve or add remarks on each PPMP row within APP
+- BAC finalizes individual PPMP rows into **Lots / Lot Items** for procurement grouping
 - Indicator columns: CSE (Common Supplies Equipment) vs. non-CSE
 - Procurement method assignment per line item/group
 - Quarterly breakdown with indicative budget
 - Export to GPPB-prescribed APP format
+- PhilGEPS posting tracking
+
+**APP Population Flow:**
+
+```
+HOPE approves PPMP(s)
+    ↓
+Approved PPMP rows auto-populate into APP (INDICATIVE)
+    ↓
+HOPE reviews each PPMP row in APP (approve / add remarks)
+    ↓
+BAC finalizes approved rows into Lots / Lot Items
+    ↓
+APP status moves to FINAL
+    ↓
+HOPE gives final APP approval
+    ↓
+APP posted to PhilGEPS
+    ↓
+End Users can now create PRs for their PPMP rows
+```
 
 **Status Workflow:**
 
 ```
-Consolidating → Draft → Submitted → Reviewed → Approved → Posted (PhilGEPS)
-                                                    │
-                                                    ├── Amendment v2, v3...
-                                                    └── Supplemental APP
+Populating (auto from approved PPMPs) → INDICATIVE → Under Review (HOPE row-level) → BAC Finalization → FINAL → Approved → Posted (PhilGEPS)
+                                                                                                          │
+                                                                                                          ├── Amendment v2, v3...
+                                                                                                          └── Supplemental APP
+```
+
+**Row-Level Statuses (within APP):**
+
+```
+Each PPMP row in APP:
+    Pending Review → HOPE Approved → BAC Finalized (assigned to Lot) → Ready for PR
+                   → HOPE Remarked (returned with remarks for revision)
+```
+
+**Lot / Lot Items (BAC Finalization):**
+
+```
+BAC groups approved PPMP rows into Lots:
+    Lot 1: Office Supplies (multiple PPMP rows from different offices)
+    Lot 2: IT Equipment (multiple PPMP rows)
+    Lot 3: Services (multiple PPMP rows)
+    ...
+Each Lot becomes the basis for a procurement activity.
 ```
 
 **Business Rules:**
 
-- Cannot be approved until all constituent PPMPs are approved
+- APP is auto-populated — no manual consolidation needed
+- Cannot be marked FINAL until all constituent PPMP rows are reviewed by HOPE
+- HOPE can approve or add remarks on individual PPMP rows within APP
+- BAC must finalize (assign to Lots) all HOPE-approved rows before APP can be marked FINAL
 - APP total must reconcile with approved budget
 - Supplemental APPs allowed mid-year with justification
 - PhilGEPS posting flag tracked per APP version
+- INDICATIVE APP exists as soon as first PPMP is approved; FINAL only after full HOPE review + BAC lot assignment
+- Once APP is FINAL and approved, End Users can create PRs for their own PPMP rows
 
-### A.3 Linking to Budget
+### A.3 PR Creation (Post-APP Approval)
+
+- Once APP is approved (FINAL), End Users can create Purchase Requests (PRs) for their own PPMP rows
+- PR is linked to the specific PPMP item and its assigned Lot
+- System validates: item must be in an approved FINAL APP before PR creation is allowed
+- End User can only create PRs for PPMP rows they originally submitted
+
+### A.4 Linking to Budget
 
 - Each PPMP line item maps to a `budget_line_item_id`
+- Budget Officer certifies fund availability as part of the PPMP approval chain (before HOPE)
 - System validates that total PPMP cost per budget line does not exceed allocation
 - Real-time budget utilization display during PPMP creation
 - Warning when PPMP total approaches 80% of budget allocation
@@ -778,7 +874,7 @@ CREATE TABLE budget_adjustments (
 );
 ```
 
-### PLANNING TABLES (PPMP/APP with Versioning)
+### PLANNING TABLES (PPMP/APP with Versioning + INDICATIVE/FINAL + Lots)
 
 ```sql
 -- PPMP header (parent record, never deleted)
@@ -789,19 +885,32 @@ CREATE TABLE ppmps (
     fiscal_year_id UUID NOT NULL REFERENCES fiscal_years(id) ON DELETE RESTRICT,
     current_version INTEGER NOT NULL DEFAULT 1,
     status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN (
-        'draft', 'submitted', 'under_review', 'revision_required', 'approved', 'locked'
+        'draft', 'submitted', 'chief_reviewed', 'budget_certified',
+        'approved', 'revision_required', 'locked'
     )),
+    indicative_final TEXT NOT NULL DEFAULT 'indicative' CHECK (indicative_final IN (
+        'indicative', 'final'
+    )),
+    -- Submission tracking
     submitted_at TIMESTAMPTZ,
     submitted_by UUID REFERENCES auth.users(id),
-    reviewed_by UUID REFERENCES auth.users(id),
-    reviewed_at TIMESTAMPTZ,
+    -- Section Chief / School Head review
+    chief_reviewed_by UUID REFERENCES auth.users(id),
+    chief_reviewed_at TIMESTAMPTZ,
+    chief_review_notes TEXT,
+    -- Budget Officer certification
+    budget_certified_by UUID REFERENCES auth.users(id),
+    budget_certified_at TIMESTAMPTZ,
+    budget_certification_notes TEXT,
+    -- HOPE approval
     approved_by UUID REFERENCES auth.users(id),
     approved_at TIMESTAMPTZ,
-    review_notes TEXT,
+    approval_notes TEXT,
+    --
     deleted_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now(),
-    created_by UUID REFERENCES auth.users(id),
+    created_by UUID REFERENCES auth.users(id),              -- The End User who created it
     UNIQUE(office_id, fiscal_year_id)
 );
 
@@ -816,6 +925,9 @@ CREATE TABLE ppmp_versions (
     snapshot_data JSONB,                    -- Full snapshot for archival
     status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN (
         'draft', 'submitted', 'approved', 'superseded'
+    )),
+    indicative_final TEXT NOT NULL DEFAULT 'indicative' CHECK (indicative_final IN (
+        'indicative', 'final'
     )),
     approved_by UUID REFERENCES auth.users(id),
     approved_at TIMESTAMPTZ,
@@ -857,15 +969,18 @@ CREATE TABLE ppmp_items (
     created_by UUID REFERENCES auth.users(id)
 );
 
--- APP header
+-- APP header (one per division per fiscal year)
 CREATE TABLE apps (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     division_id UUID NOT NULL REFERENCES platform.divisions(id) ON DELETE RESTRICT,
-    office_id UUID NOT NULL REFERENCES offices(id) ON DELETE RESTRICT, -- Division office
     fiscal_year_id UUID NOT NULL REFERENCES fiscal_years(id) ON DELETE RESTRICT,
     current_version INTEGER NOT NULL DEFAULT 1,
-    status TEXT NOT NULL DEFAULT 'consolidating' CHECK (status IN (
-        'consolidating', 'draft', 'submitted', 'reviewed', 'approved', 'posted'
+    status TEXT NOT NULL DEFAULT 'populating' CHECK (status IN (
+        'populating', 'indicative', 'under_review', 'bac_finalization',
+        'final', 'approved', 'posted'
+    )),
+    indicative_final TEXT NOT NULL DEFAULT 'indicative' CHECK (indicative_final IN (
+        'indicative', 'final'
     )),
     philgeps_reference TEXT,               -- PhilGEPS posting reference
     approved_by UUID REFERENCES auth.users(id),
@@ -874,7 +989,7 @@ CREATE TABLE apps (
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now(),
     created_by UUID REFERENCES auth.users(id),
-    UNIQUE(office_id, fiscal_year_id)
+    UNIQUE(division_id, fiscal_year_id)
 );
 
 -- APP versions
@@ -887,20 +1002,23 @@ CREATE TABLE app_versions (
     total_estimated_cost NUMERIC(15,2) NOT NULL DEFAULT 0,
     snapshot_data JSONB,
     status TEXT NOT NULL DEFAULT 'draft',
+    indicative_final TEXT NOT NULL DEFAULT 'indicative' CHECK (indicative_final IN (
+        'indicative', 'final'
+    )),
     approved_by UUID REFERENCES auth.users(id),
     approved_at TIMESTAMPTZ,
-    office_id UUID NOT NULL REFERENCES offices(id) ON DELETE RESTRICT,
     created_at TIMESTAMPTZ DEFAULT now(),
     created_by UUID REFERENCES auth.users(id),
     UNIQUE(app_id, version_number)
 );
 
--- APP line items (consolidated from PPMPs)
+-- APP line items (auto-populated from approved PPMPs)
 CREATE TABLE app_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     app_version_id UUID NOT NULL REFERENCES app_versions(id) ON DELETE RESTRICT,
     app_id UUID NOT NULL REFERENCES apps(id) ON DELETE RESTRICT,
-    source_ppmp_item_id UUID REFERENCES ppmp_items(id) ON DELETE RESTRICT,
+    source_ppmp_item_id UUID NOT NULL REFERENCES ppmp_items(id) ON DELETE RESTRICT,
+    source_ppmp_id UUID NOT NULL REFERENCES ppmps(id) ON DELETE RESTRICT,
     item_number INTEGER NOT NULL,
     category TEXT NOT NULL,
     description TEXT NOT NULL,
@@ -915,13 +1033,49 @@ CREATE TABLE app_items (
     schedule_q3 INTEGER DEFAULT 0,
     schedule_q4 INTEGER DEFAULT 0,
     is_cse BOOLEAN DEFAULT false,
-    source_office_id UUID REFERENCES offices(id) ON DELETE RESTRICT,
+    source_office_id UUID NOT NULL REFERENCES offices(id) ON DELETE RESTRICT,
+    -- Row-level HOPE review
+    hope_review_status TEXT NOT NULL DEFAULT 'pending' CHECK (hope_review_status IN (
+        'pending', 'approved', 'remarked'
+    )),
+    hope_reviewed_by UUID REFERENCES auth.users(id),
+    hope_reviewed_at TIMESTAMPTZ,
+    hope_remarks TEXT,                      -- Remarks if HOPE returns for revision
+    -- BAC lot assignment
+    lot_id UUID REFERENCES app_lots(id) ON DELETE SET NULL,
+    lot_item_number INTEGER,                -- Item sequence within the lot
+    --
     remarks TEXT,
-    office_id UUID NOT NULL REFERENCES offices(id) ON DELETE RESTRICT,
     deleted_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now(),
     created_by UUID REFERENCES auth.users(id)
+);
+
+-- APP Lots (BAC groups approved PPMP rows into procurement lots)
+CREATE TABLE app_lots (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    app_id UUID NOT NULL REFERENCES apps(id) ON DELETE RESTRICT,
+    app_version_id UUID NOT NULL REFERENCES app_versions(id) ON DELETE RESTRICT,
+    lot_number INTEGER NOT NULL,
+    lot_name TEXT NOT NULL,                 -- e.g., "Office Supplies", "IT Equipment"
+    description TEXT,
+    procurement_method TEXT CHECK (procurement_method IN (
+        'competitive_bidding', 'svp', 'direct_contracting', 'repeat_order',
+        'shopping', 'emergency', 'negotiated', 'agency_to_agency'
+    )),
+    total_estimated_cost NUMERIC(15,2) NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN (
+        'draft', 'finalized', 'in_procurement'
+    )),
+    finalized_by UUID REFERENCES auth.users(id),
+    finalized_at TIMESTAMPTZ,
+    division_id UUID NOT NULL REFERENCES platform.divisions(id) ON DELETE RESTRICT,
+    deleted_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    created_by UUID REFERENCES auth.users(id),
+    UNIQUE(app_version_id, lot_number)
 );
 ```
 
@@ -971,7 +1125,9 @@ CREATE TABLE purchase_requests (
     requested_at TIMESTAMPTZ DEFAULT now(),
     fund_source_id UUID REFERENCES fund_sources(id) ON DELETE RESTRICT,
     budget_allocation_id UUID REFERENCES budget_allocations(id) ON DELETE RESTRICT,
-    app_item_id UUID REFERENCES app_items(id) ON DELETE RESTRICT, -- Link to APP
+    ppmp_item_id UUID REFERENCES ppmp_items(id) ON DELETE RESTRICT, -- Link to source PPMP item
+    app_item_id UUID REFERENCES app_items(id) ON DELETE RESTRICT,  -- Link to APP row
+    lot_id UUID REFERENCES app_lots(id) ON DELETE RESTRICT,        -- Link to assigned Lot
     total_estimated_cost NUMERIC(15,2) NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN (
         'draft', 'submitted', 'budget_certified', 'approved',
@@ -1001,7 +1157,8 @@ CREATE TABLE pr_items (
     quantity INTEGER NOT NULL,
     estimated_unit_cost NUMERIC(15,2) NOT NULL,
     estimated_total_cost NUMERIC(15,2) NOT NULL,
-    ppmp_item_id UUID REFERENCES ppmp_items(id),  -- Trace back to PPMP
+    ppmp_item_id UUID REFERENCES ppmp_items(id) ON DELETE RESTRICT,  -- Trace back to PPMP row
+    app_item_id UUID REFERENCES app_items(id) ON DELETE RESTRICT,   -- Trace to APP row
     remarks TEXT,
     office_id UUID NOT NULL REFERENCES offices(id) ON DELETE RESTRICT,
     deleted_at TIMESTAMPTZ,
@@ -1533,14 +1690,15 @@ Shared lookups (platform-managed): fund_sources, account_codes
 
 | Role                           | Code                 | Scope         | Description                                          |
 | ------------------------------ | -------------------- | ------------- | ---------------------------------------------------- |
-| **Budget Officer**             | `budget_officer`     | Office-scoped | Budget creation, certification, monitoring           |
-| **Supply Officer**             | `supply_officer`     | Office-scoped | PPMP/APP, procurement processing, inventory          |
+| **Section Chief**              | `section_chief`      | Office-scoped | Reviews PPMPs submitted by End Users in Division Offices, forwards to Budget Officer |
+| **Budget Officer**             | `budget_officer`     | Office-scoped | Budget creation, certification, monitoring, PPMP fund certification |
+| **Supply Officer**             | `supply_officer`     | Office-scoped | Procurement processing, inventory management         |
 | **BAC Chairperson**            | `bac_chair`          | Office-scoped | Leads BAC proceedings, signs resolutions             |
 | **BAC Member**                 | `bac_member`         | Office-scoped | Evaluates bids, participates in BAC                  |
 | **BAC Secretariat**            | `bac_secretariat`    | Office-scoped | Prepares bid documents, manages procurement timeline |
 | **Inspection Committee (IAC)** | `iac_member`         | Office-scoped | Inspects deliveries, signs inspection reports        |
 | **Property Custodian**         | `property_custodian` | Office-scoped | Manages assigned assets, reports condition           |
-| **End User**                   | `end_user`           | Office-scoped | Creates requests, views own requests/assets          |
+| **End User**                   | `end_user`           | Office-scoped | Creates PPMP, creates PRs for own PPMP rows, creates requests, views own requests/assets. In schools, the Administrative Officer acts as End User for PPMP. |
 | **School Head**                | `school_head`        | School-scoped | Approves school-level requests, PPMPs                |
 | **Accountant**                 | `accountant`         | Office-scoped | Certifies disbursements, financial reports           |
 
@@ -1564,51 +1722,53 @@ Shared lookups (platform-managed): fund_sources, account_codes
 
 ### Division-Level Permissions
 
-| Permission          | Div Admin | HOPE | Div Chief | Budget Off. | Supply Off. | BAC Chair | BAC Mem | BAC Sec | IAC | End User | School Head | Auditor | Accountant |
-| ------------------- | :-------: | :--: | :-------: | :---------: | :---------: | :-------: | :-----: | :-----: | :-: | :------: | :---------: | :-----: | :--------: |
+| Permission          | Div Admin | HOPE | Div Chief | Sect. Chief | Budget Off. | Supply Off. | BAC Chair | BAC Mem | BAC Sec | IAC | End User | School Head | Auditor | Accountant |
+| ------------------- | :-------: | :--: | :-------: | :---------: | :---------: | :---------: | :-------: | :-----: | :-----: | :-: | :------: | :---------: | :-----: | :--------: |
 | **PLANNING**        |
-| ppmp.create         |    ✅     |      |           |             |     ✅      |           |         |         |     |          |     ✅      |         |            |
-| ppmp.edit           |    ✅     |      |           |             |     ✅      |           |         |         |     |          |     ✅      |         |            |
-| ppmp.submit         |    ✅     |      |           |             |     ✅      |           |         |         |     |          |     ✅      |         |            |
-| ppmp.review         |    ✅     |      |    ✅     |             |  ✅ (div)   |           |         |         |     |          |             |         |            |
-| ppmp.approve        |    ✅     |  ✅  |    ✅     |             |             |           |         |         |     |          |             |         |            |
-| ppmp.view_all       |    ✅     |  ✅  |    ✅     |     ✅      |     ✅      |           |         |         |     |          |             |   ✅    |            |
-| app.manage          |    ✅     |      |           |             |  ✅ (div)   |           |         |         |     |          |             |         |            |
-| app.approve         |    ✅     |  ✅  |           |             |             |           |         |         |     |          |             |         |            |
+| ppmp.create         |    ✅     |      |           |             |             |             |           |         |         |     |    ✅    |             |         |            |
+| ppmp.edit           |    ✅     |      |           |             |             |             |           |         |         |     |    ✅    |             |         |            |
+| ppmp.submit         |    ✅     |      |           |             |             |             |           |         |         |     |    ✅    |             |         |            |
+| ppmp.review_chief   |    ✅     |      |           |     ✅      |             |             |           |         |         |     |          |     ✅      |         |            |
+| ppmp.certify        |    ✅     |      |           |             |     ✅      |             |           |         |         |     |          |             |         |            |
+| ppmp.approve        |    ✅     |  ✅  |           |             |             |             |           |         |         |     |          |             |         |            |
+| ppmp.view_all       |    ✅     |  ✅  |    ✅     |     ✅      |     ✅      |     ✅      |           |         |         |     |          |     ✅      |   ✅    |            |
+| app.review_rows     |    ✅     |  ✅  |           |             |             |             |           |         |         |     |          |             |         |            |
+| app.finalize_lots   |    ✅     |      |           |             |             |             |    ✅     |   ✅    |   ✅    |     |          |             |         |            |
+| app.approve         |    ✅     |  ✅  |           |             |             |             |           |         |         |     |          |             |         |            |
 | **BUDGET**          |
-| budget.create       |    ✅     |      |           |     ✅      |             |           |         |         |     |          |             |         |            |
-| budget.adjust       |    ✅     |      |           |     ✅      |             |           |         |         |     |          |             |         |            |
-| budget.certify      |    ✅     |      |           |     ✅      |             |           |         |         |     |          |             |         |            |
-| budget.approve_adj  |    ✅     |  ✅  |    ✅     |             |             |           |         |         |     |          |             |         |            |
-| budget.view_all     |    ✅     |  ✅  |    ✅     |     ✅      |     ✅      |           |         |         |     |          |             |   ✅    |     ✅     |
+| budget.create       |    ✅     |      |           |             |     ✅      |             |           |         |         |     |          |             |         |            |
+| budget.adjust       |    ✅     |      |           |             |     ✅      |             |           |         |         |     |          |             |         |            |
+| budget.certify      |    ✅     |      |           |             |     ✅      |             |           |         |         |     |          |             |         |            |
+| budget.approve_adj  |    ✅     |  ✅  |    ✅     |             |             |             |           |         |         |     |          |             |         |            |
+| budget.view_all     |    ✅     |  ✅  |    ✅     |     ✅      |     ✅      |     ✅      |           |         |         |     |          |             |   ✅    |     ✅     |
 | **PROCUREMENT**     |
-| pr.create           |    ✅     |      |           |             |     ✅      |           |         |   ✅    |     |    ✅    |     ✅      |         |            |
-| pr.approve          |    ✅     |  ✅  |    ✅     |             |             |           |         |         |     |          |     ✅      |         |            |
-| proc.manage         |    ✅     |      |           |             |     ✅      |           |         |   ✅    |     |          |             |         |            |
-| bid.evaluate        |    ✅     |      |           |             |             |    ✅     |   ✅    |         |     |          |             |         |            |
-| bid.award           |    ✅     |  ✅  |           |             |             |    ✅     |         |         |     |          |             |         |            |
-| po.create           |    ✅     |      |           |             |     ✅      |           |         |   ✅    |     |          |             |         |            |
-| po.approve          |    ✅     |  ✅  |    ✅     |             |             |           |         |         |     |          |             |         |            |
-| delivery.inspect    |    ✅     |      |           |             |     ✅      |           |         |         | ✅  |          |             |         |            |
+| pr.create           |    ✅     |      |           |             |             |     ✅      |           |         |   ✅    |     |    ✅    |     ✅      |         |            |
+| pr.approve          |    ✅     |  ✅  |    ✅     |             |             |             |           |         |         |     |          |     ✅      |         |            |
+| proc.manage         |    ✅     |      |           |             |             |     ✅      |           |         |   ✅    |     |          |             |         |            |
+| bid.evaluate        |    ✅     |      |           |             |             |             |    ✅     |   ✅    |         |     |          |             |         |            |
+| bid.award           |    ✅     |  ✅  |           |             |             |             |    ✅     |         |         |     |          |             |         |            |
+| po.create           |    ✅     |      |           |             |             |     ✅      |           |         |   ✅    |     |          |             |         |            |
+| po.approve          |    ✅     |  ✅  |    ✅     |             |             |             |           |         |         |     |          |             |         |            |
+| delivery.inspect    |    ✅     |      |           |             |             |     ✅      |           |         |         | ✅  |          |             |         |            |
 | **ASSETS**          |
-| asset.manage        |    ✅     |      |           |             |     ✅      |           |         |         |     |          |             |         |            |
-| asset.assign        |    ✅     |      |           |             |     ✅      |           |         |         |     |          |     ✅      |         |            |
-| asset.view_own      |    ✅     |  ✅  |    ✅     |     ✅      |     ✅      |    ✅     |   ✅    |   ✅    | ✅  |    ✅    |     ✅      |   ✅    |     ✅     |
-| asset.dispose       |    ✅     |  ✅  |           |             |     ✅      |           |         |         |     |          |             |         |            |
-| inventory.manage    |    ✅     |      |           |             |     ✅      |           |         |         |     |          |             |         |            |
+| asset.manage        |    ✅     |      |           |             |             |     ✅      |           |         |         |     |          |             |         |            |
+| asset.assign        |    ✅     |      |           |             |             |     ✅      |           |         |         |     |          |     ✅      |         |            |
+| asset.view_own      |    ✅     |  ✅  |    ✅     |     ✅      |     ✅      |     ✅      |    ✅     |   ✅    |   ✅    | ✅  |    ✅    |     ✅      |   ✅    |     ✅     |
+| asset.dispose       |    ✅     |  ✅  |           |             |             |     ✅      |           |         |         |     |          |             |         |            |
+| inventory.manage    |    ✅     |      |           |             |             |     ✅      |           |         |         |     |          |             |         |            |
 | **REQUESTS**        |
-| request.create      |    ✅     |      |           |             |             |           |         |         |     |    ✅    |     ✅      |         |            |
-| request.approve     |    ✅     |      |    ✅     |             |             |           |         |         |     |          |     ✅      |         |            |
-| request.process     |    ✅     |      |           |             |     ✅      |           |         |         |     |          |             |         |            |
+| request.create      |    ✅     |      |           |             |             |             |           |         |         |     |    ✅    |     ✅      |         |            |
+| request.approve     |    ✅     |      |    ✅     |     ✅      |             |             |           |         |         |     |          |     ✅      |         |            |
+| request.process     |    ✅     |      |           |             |             |     ✅      |           |         |         |     |          |             |         |            |
 | **REPORTS**         |
-| reports.all         |    ✅     |  ✅  |    ✅     |             |             |           |         |         |     |          |             |   ✅    |     ✅     |
-| reports.office      |    ✅     |  ✅  |    ✅     |     ✅      |     ✅      |    ✅     |         |         |     |          |     ✅      |   ✅    |     ✅     |
+| reports.all         |    ✅     |  ✅  |    ✅     |             |             |             |           |         |         |     |          |             |   ✅    |     ✅     |
+| reports.office      |    ✅     |  ✅  |    ✅     |     ✅      |     ✅      |     ✅      |    ✅     |         |         |     |          |     ✅      |   ✅    |     ✅     |
 | **DIVISION ADMIN**  |
-| users.manage        |    ✅     |      |           |             |             |           |         |         |     |          |             |         |            |
-| roles.assign        |    ✅     |      |           |             |             |           |         |         |     |          |             |         |            |
-| offices.manage      |    ✅     |  ✅  |           |             |             |           |         |         |     |          |             |         |            |
-| division.settings   |    ✅     |      |           |             |             |           |         |         |     |          |             |         |            |
-| division.audit_logs |    ✅     |      |           |             |             |           |         |         |     |          |             |   ✅    |            |
+| users.manage        |    ✅     |      |           |             |             |             |           |         |         |     |          |             |         |            |
+| roles.assign        |    ✅     |      |           |             |             |             |           |         |         |     |          |             |         |            |
+| offices.manage      |    ✅     |  ✅  |           |             |             |             |           |         |         |     |          |             |         |            |
+| division.settings   |    ✅     |      |           |             |             |             |           |         |         |     |          |             |         |            |
+| division.audit_logs |    ✅     |      |           |             |             |             |           |         |         |     |          |             |   ✅    |            |
 
 ---
 
@@ -1623,24 +1783,37 @@ Shared lookups (platform-managed): fund_sources, account_codes
     ├── Allocations broken down by fund source and UACS
     └── Budget approved by HOPE
           │
-[2] PLANNING
+[2] PLANNING (PPMP)
     │
-    ├── Each office creates PPMP (linked to budget line items)
+    ├── End User creates PPMP with line items (linked to budget line items)
     ├── System validates: PPMP total ≤ budget allocation
-    ├── School Head / Office Head submits PPMP
-    ├── Division Supply Officer reviews
-    ├── PPMP approved
+    │
+    ├── [Division Office Flow]
+    │     ├── End User submits to Section Chief
+    │     ├── Section Chief reviews & forwards to Budget Officer
+    │     └── Budget Officer certifies fund availability & forwards to HOPE
+    │
+    ├── [School Flow]
+    │     ├── End User (Admin Officer) submits to School Head
+    │     ├── School Head reviews & forwards to Budget Officer
+    │     └── Budget Officer certifies fund availability & forwards to HOPE
+    │
+    ├── HOPE approves PPMP → Status becomes FINAL
     │     │
-    ├── Division Supply Officer consolidates into APP
-    ├── APP reviewed by Division Chief
-    ├── APP approved by SDS (HOPE)
+[2b] PLANNING (APP)
+    │
+    ├── Approved PPMP rows auto-populate into APP (INDICATIVE)
+    ├── HOPE reviews each PPMP row in APP (approve / add remarks)
+    ├── BAC finalizes approved rows into Lots / Lot Items
+    ├── APP marked FINAL
+    ├── HOPE gives final APP approval
     └── APP posted to PhilGEPS
           │
 [3] PROCUREMENT (Per APP line item or group)
     │
-    ├── End-User or Supply Officer creates Purchase Request (PR)
-    │     ├── PR linked to APP line item
-    │     └── System validates: item is in approved APP
+    ├── End User creates Purchase Request (PR) for their own PPMP rows
+    │     ├── PR linked to PPMP item and its assigned Lot in APP
+    │     └── System validates: item is in approved FINAL APP
     │
     ├── Budget Officer certifies fund availability
     │     └── Obligation Request (OBR) created

@@ -14,8 +14,8 @@
 | 2     | **Platform Layer (Super Admin)**                | Sonnet   | Division onboarding, subscription management, shared lookups              | Tenancy must exist before any division data                      |
 | 3     | **Organization & Auth Foundation**              | **Opus** | Offices, users, roles, permissions, RLS, login/logout                     | All modules need users and access control                        |
 | 4     | **Budget Management**                           | Sonnet   | Fiscal years, budget allocations, adjustments, utilization                | Planning and procurement require budget to validate against      |
-| 5     | **Planning Module (PPMP)**                      | **Opus** | PPMP creation, versioning, approval workflow                              | PPMP feeds into APP; must be done before APP                     |
-| 6     | **Planning Module (APP)**                       | Sonnet   | APP consolidation from PPMPs, approval, versioning                        | APP must exist before procurement can reference it               |
+| 5     | **Planning Module (PPMP)**                      | **Opus** | PPMP creation by End User, multi-step approval (Chief→Budget Officer→HOPE), INDICATIVE/FINAL versioning, auto-population to APP | PPMP feeds into APP; must be done before APP                     |
+| 6     | **Planning Module (APP)**                       | **Opus** | APP auto-populated from approved PPMPs, HOPE row-level review, BAC lot finalization, INDICATIVE/FINAL, PR enablement | APP must exist before procurement can reference it               |
 | 7     | **Procurement Core (PR + Suppliers)**           | Sonnet   | Purchase Requests, supplier registry, budget certification                | PR is the entry point for all procurement methods                |
 | 8     | **Procurement Workflows (SVP + Shopping)**      | **Opus** | Small Value Procurement and Shopping workflows end-to-end                 | Most common methods in DepEd; quickest to deliver value          |
 | 9     | **Procurement Workflows (Competitive Bidding)** | **Opus** | Full competitive bidding with BAC evaluation                              | Most complex method; requires all procurement infrastructure     |
@@ -42,7 +42,8 @@
 | Opus Phases                          | Reason                                                                                                                                                                                                                                    |
 | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Phase 3 (Auth/RLS)**               | RLS is the security backbone. Misconfigured policies = data leaks between divisions. Requires careful SQL with nested policy logic, two-layer isolation, and subscription enforcement. One mistake here is catastrophic.                  |
-| **Phase 5 (PPMP Versioning)**        | Immutable version snapshots, amendment cloning, version state machines, concurrent draft prevention, and budget cross-validation. The versioning pattern sets the standard reused by APP. Getting this wrong corrupts historical records. |
+| **Phase 5 (PPMP Versioning)**        | Immutable version snapshots, amendment cloning, version state machines, concurrent draft prevention, budget cross-validation, AND multi-step approval chain (End User → Section Chief/School Head → Budget Officer → HOPE) with INDICATIVE/FINAL status. The versioning + approval pattern sets the standard reused by APP. Getting this wrong corrupts historical records. |
+| **Phase 6 (APP + BAC Lots)**         | Auto-population from approved PPMPs, HOPE row-level review with approve/remark, BAC lot finalization, INDICATIVE/FINAL status management, and the critical trigger enabling PR creation. Complex orchestration across multiple roles (HOPE, BAC, End User) with row-level state tracking. |
 | **Phase 8 (SVP/Shopping)**           | First real procurement workflow. Establishes the procurement engine pattern (stage tracking, bid recording, evaluation, award) that all other methods extend. Must get the architecture right.                                            |
 | **Phase 9 (Competitive Bidding)**    | Most complex single feature: 17-step workflow with BAC quorum rules, publication timelines, post-qualification, and strict RA 12009 compliance. Highest risk of compliance violations.                                                    |
 | **Phase 13 (Property/Depreciation)** | Depreciation math (straight-line, residual value, monthly batch), property numbering, custody chain with PAR/ICS, and disposal workflow. Financial calculations must be exact for COA audit.                                              |
@@ -551,12 +552,15 @@ budget_adjustments (id, division_id, budget_allocation_id, adjustment_type, amou
 
 ### A. Scope
 
-- PPMP creation per office per fiscal year
+- PPMP creation by End User per office per fiscal year (multiple rows/line items)
 - PPMP line items with budget linkage
-- PPMP versioning (original, amendment, supplemental)
-- PPMP approval workflow (Draft → Submitted → Under Review → Approved)
+- PPMP versioning (original, amendment, supplemental) with **INDICATIVE / FINAL** status
+- Multi-step approval workflow:
+  - **Division Offices:** End User → Section Chief → Budget Officer (certifies) → HOPE (approves)
+  - **Schools:** End User (Admin Officer) → School Head → Budget Officer (certifies) → HOPE (approves)
 - PPMP amendment flow (creates new version)
 - Budget validation during PPMP creation
+- Budget Officer fund certification as part of approval chain
 - Version history and comparison
 
 ### B. Database (Supabase)
@@ -564,13 +568,15 @@ budget_adjustments (id, division_id, budget_allocation_id, adjustment_type, amou
 **Tables to create:**
 
 ```
-ppmps (id, division_id, office_id, fiscal_year_id, current_version, status, submitted_at, submitted_by, reviewed_by, reviewed_at, approved_by, approved_at, review_notes, deleted_at, created_at, updated_at, created_by)
+ppmps (id, division_id, office_id, fiscal_year_id, current_version, status, indicative_final, submitted_at, submitted_by, chief_reviewed_by, chief_reviewed_at, chief_review_notes, budget_certified_by, budget_certified_at, budget_certification_notes, approved_by, approved_at, approval_notes, deleted_at, created_at, updated_at, created_by)
   - UNIQUE(office_id, fiscal_year_id)
-  - status CHECK IN ('draft','submitted','under_review','revision_required','approved','locked')
+  - status CHECK IN ('draft','submitted','chief_reviewed','budget_certified','approved','revision_required','locked')
+  - indicative_final CHECK IN ('indicative','final')
 
-ppmp_versions (id, ppmp_id, version_number, version_type, amendment_justification, total_estimated_cost, snapshot_data, status, approved_by, approved_at, office_id, created_at, created_by)
+ppmp_versions (id, ppmp_id, version_number, version_type, amendment_justification, total_estimated_cost, snapshot_data, status, indicative_final, approved_by, approved_at, office_id, created_at, created_by)
   - UNIQUE(ppmp_id, version_number)
   - version_type CHECK IN ('original','amendment','supplemental')
+  - indicative_final CHECK IN ('indicative','final')
 
 ppmp_items (id, ppmp_version_id, ppmp_id, item_number, category, description, unit, quantity, estimated_unit_cost, estimated_total_cost, procurement_method, budget_allocation_id, schedule_q1-q4, is_cse, remarks, office_id, deleted_at, created_at, updated_at, created_by)
   - category CHECK IN ('common_use_supplies','non_common_supplies','equipment','services','infrastructure')
@@ -581,19 +587,28 @@ ppmp_items (id, ppmp_version_id, ppmp_id, item_number, category, description, un
 - `ppmps` → `offices`, `fiscal_years`, `platform.divisions`
 - `ppmp_versions` → `ppmps`
 - `ppmp_items` → `ppmp_versions`, `budget_allocations`
+- `ppmps.created_by` — the End User who created the PPMP
+- `ppmps.chief_reviewed_by` — Section Chief (div office) or School Head (school)
+- `ppmps.budget_certified_by` — Budget Officer
+- `ppmps.approved_by` — HOPE
 
 ### C. Backend Logic
 
 - RPC: `create_ppmp_amendment(ppmp_id, justification)` — clones current version items into new version
-- RPC: `submit_ppmp(ppmp_id)` — validates completeness, changes status
-- RPC: `approve_ppmp(ppmp_id)` — marks current version approved, updates parent
+- RPC: `submit_ppmp(ppmp_id)` — End User submits; validates completeness, changes status to 'submitted'
+- RPC: `chief_review_ppmp(ppmp_id, action, notes)` — Section Chief (div) or School Head (school) reviews; action = 'forward' or 'return'
+- RPC: `certify_ppmp_budget(ppmp_id, notes)` — Budget Officer certifies fund availability; changes status to 'budget_certified'
+- RPC: `approve_ppmp(ppmp_id, notes)` — HOPE approves; marks FINAL, locks, triggers APP population
+- RPC: `return_ppmp(ppmp_id, step, notes)` — Returns PPMP to previous step with remarks
 - RPC: `get_ppmp_version_history(ppmp_id)` — returns all versions with summary
-- Trigger: On version approval → supersede previous version, update parent `current_version`
+- Trigger: On HOPE approval → set `indicative_final` to 'final', supersede previous version, update parent `current_version`
+- Trigger: On HOPE approval → auto-populate approved PPMP items into APP (insert into `app_items`)
 - Trigger: Block UPDATE on approved ppmp_versions
 - Trigger: Populate `snapshot_data` JSONB on approval
 - Validation: PPMP total per budget line must not exceed allocation
 - Validation: Q1+Q2+Q3+Q4 quantities must equal total quantity
 - Validation: Only one draft version at a time
+- Validation: Enforce approval chain order (cannot skip steps)
 
 ### D. Frontend (Next.js)
 
@@ -601,17 +616,21 @@ ppmp_items (id, ppmp_version_id, ppmp_id, item_number, category, description, un
 
 - `(dashboard)/planning/page.tsx` — Planning overview (PPMP count by status, APP status)
 - `(dashboard)/planning/ppmp/page.tsx` — PPMP list (filterable by office, year, status)
-- `(dashboard)/planning/ppmp/new/page.tsx` — Create PPMP form
-- `(dashboard)/planning/ppmp/[id]/page.tsx` — PPMP detail (current version items, status)
-- `(dashboard)/planning/ppmp/[id]/edit/page.tsx` — Edit PPMP (draft only)
+- `(dashboard)/planning/ppmp/new/page.tsx` — Create PPMP form (End User)
+- `(dashboard)/planning/ppmp/[id]/page.tsx` — PPMP detail (current version items, status, approval chain tracker)
+- `(dashboard)/planning/ppmp/[id]/edit/page.tsx` — Edit PPMP (draft only, End User)
+- `(dashboard)/planning/ppmp/[id]/review/page.tsx` — Review PPMP (Section Chief / School Head / Budget Officer / HOPE — role-aware actions)
 - `(dashboard)/planning/ppmp/[id]/versions/page.tsx` — Version history with diff view
 - `(dashboard)/planning/ppmp/import/page.tsx` — Bulk import placeholder (CSV/Excel)
 
 **Components:**
 
-- `components/planning/ppmp-form.tsx` — PPMP header + line items editor
+- `components/planning/ppmp-form.tsx` — PPMP header + line items editor (End User)
 - `components/planning/ppmp-item-table.tsx` — Editable line items table
+- `components/planning/ppmp-approval-chain.tsx` — Shows multi-step approval progress (submitted → chief → budget → HOPE)
+- `components/planning/ppmp-review-actions.tsx` — Role-aware review/certify/approve/return buttons
 - `components/planning/ppmp-version-diff.tsx` — Side-by-side version comparison
+- `components/planning/ppmp-indicative-final-badge.tsx` — Shows INDICATIVE/FINAL status badge
 - `components/planning/budget-linkage-widget.tsx` — Shows available budget per line item in real-time
 - `components/shared/workflow-tracker.tsx` — Status progress indicator (reusable)
 
@@ -621,50 +640,64 @@ ppmp_items (id, ppmp_version_id, ppmp_id, item_number, category, description, un
 
 ### E. User Roles Involved
 
-- **Supply Officer** — creates/edits PPMP, submits, initiates amendments
-- **School Head** — creates/submits PPMP for their school
-- **Division Chief** — reviews
-- **HOPE (SDS)** — final approval
+- **End User** — creates/edits PPMP, submits (in schools, the Administrative Officer acts as End User)
+- **Section Chief** — reviews PPMP in Division Offices, forwards to Budget Officer
+- **School Head** — reviews PPMP in Schools, forwards to Budget Officer
+- **Budget Officer** — certifies fund availability, forwards to HOPE
+- **HOPE (SDS)** — final approval (sets PPMP to FINAL)
 - **Division Admin** — full access
 - **Auditor** — read-only
 
 ### F. Workflows Implemented
 
-1. **PPMP Creation:** Supply Officer/School Head creates PPMP → Adds line items linked to budget → System validates budget → Submit
-2. **PPMP Approval:** Submitted → Supply Officer (div) reviews → Division Chief reviews → HOPE approves → Status locked
-3. **PPMP Amendment:** Supply Officer initiates amendment → System clones current version → Edit items → Submit for approval → If approved, old version superseded
-4. **Budget Validation:** Real-time check during item entry — PPMP total per budget line vs. available allocation
+1. **PPMP Creation (Division Office):** End User creates PPMP → Adds line items linked to budget → System validates budget → Submits to Section Chief → Section Chief reviews & forwards to Budget Officer → Budget Officer certifies & forwards to HOPE → HOPE approves → PPMP becomes FINAL → Items auto-populate into APP
+2. **PPMP Creation (School):** End User (Admin Officer) creates PPMP → Adds line items linked to budget → System validates budget → Submits to School Head → School Head reviews & forwards to Budget Officer → Budget Officer certifies & forwards to HOPE → HOPE approves → PPMP becomes FINAL → Items auto-populate into APP
+3. **PPMP Return:** Any reviewer can return PPMP with remarks → Status reverts to previous step → End User or previous reviewer addresses remarks → Re-submits
+4. **PPMP Amendment:** End User initiates amendment → System clones current version → Edit items → Re-submit through approval chain → If approved, old version superseded
+5. **Budget Validation:** Real-time check during item entry — PPMP total per budget line vs. available allocation
+6. **INDICATIVE/FINAL:** PPMP starts as INDICATIVE (estimates); becomes FINAL only after HOPE approval
 
 ### G. Deliverable Outcome
 
-- Offices can create PPMPs linked to budget
-- Full approval workflow functional
+- End Users can create PPMPs linked to budget
+- Full multi-step approval chain functional (End User → Chief → Budget Officer → HOPE)
+- Different approval paths for Division Offices vs Schools
+- Budget Officer certification integrated into approval flow
+- INDICATIVE/FINAL versioning status working
 - Amendment versioning working
 - Version history with diff viewable
 - Budget validation prevents over-planning
+- Approved PPMP items auto-populate into APP
 
 ### H. Build Tasks
 
-1. Create migration: `ppmps` table
-2. Create migration: `ppmp_versions` table
+1. Create migration: `ppmps` table (with chief_reviewed_by, budget_certified_by, indicative_final columns)
+2. Create migration: `ppmp_versions` table (with indicative_final column)
 3. Create migration: `ppmp_items` table
-4. Apply RLS policies
+4. Apply RLS policies (End User creates, Section Chief/School Head reviews, Budget Officer certifies, HOPE approves)
 5. Create RPC: `create_ppmp_amendment()`
-6. Create RPC: `submit_ppmp()`
-7. Create RPC: `approve_ppmp()`
-8. Create RPC: `get_ppmp_version_history()`
-9. Create trigger: block UPDATE on approved versions
-10. Create trigger: on approval → supersede old version, update parent
-11. Create trigger: populate snapshot_data on approval
-12. Create Zod schema: `lib/schemas/ppmp.ts`
-13. Build page: Planning overview
-14. Build page: PPMP list with filters
-15. Build page: Create PPMP form with line items editor
-16. Build page: PPMP detail (view mode)
-17. Build page: Edit PPMP (draft only, with budget validation widget)
-18. Build page: Version history with diff view
-19. Build components: ppmp-form, ppmp-item-table, ppmp-version-diff, budget-linkage-widget, workflow-tracker
-20. Test: Create PPMP → Add items → Submit → Approve → Initiate amendment → Approve v2 → Verify v1 is superseded
+6. Create RPC: `submit_ppmp()` — End User submits
+7. Create RPC: `chief_review_ppmp()` — Section Chief / School Head forwards or returns
+8. Create RPC: `certify_ppmp_budget()` — Budget Officer certifies fund availability
+9. Create RPC: `approve_ppmp()` — HOPE approves, sets FINAL, triggers APP population
+10. Create RPC: `return_ppmp()` — Return to previous step with remarks
+11. Create RPC: `get_ppmp_version_history()`
+12. Create trigger: block UPDATE on approved versions
+13. Create trigger: on HOPE approval → set FINAL, supersede old version, update parent
+14. Create trigger: on HOPE approval → auto-insert PPMP items into APP (app_items)
+15. Create trigger: populate snapshot_data on approval
+16. Create Zod schema: `lib/schemas/ppmp.ts`
+17. Build page: Planning overview
+18. Build page: PPMP list with filters
+19. Build page: Create PPMP form with line items editor (End User)
+20. Build page: PPMP detail with approval chain tracker
+21. Build page: Edit PPMP (draft only, with budget validation widget)
+22. Build page: PPMP review page (role-aware: chief review, budget certify, HOPE approve)
+23. Build page: Version history with diff view
+24. Build components: ppmp-form, ppmp-item-table, ppmp-approval-chain, ppmp-review-actions, ppmp-version-diff, ppmp-indicative-final-badge, budget-linkage-widget, workflow-tracker
+25. Test: End User creates PPMP → Submit → Section Chief reviews → Budget Officer certifies → HOPE approves → Verify FINAL status → Verify items appear in APP
+26. Test: PPMP return flow — HOPE returns → Budget Officer returns → End User edits → Re-submit through chain
+27. Test: Amendment flow — Initiate amendment → Approve v2 → Verify v1 is superseded
 
 ---
 
@@ -672,11 +705,12 @@ ppmp_items (id, ppmp_version_id, ppmp_id, item_number, category, description, un
 
 ### A. Scope
 
-- APP creation (one per division per fiscal year)
-- Auto-consolidation of approved PPMPs
-- APP line items linked to source PPMPs
-- APP versioning (original, amendment, supplemental)
-- APP approval workflow
+- APP auto-populated from HOPE-approved PPMPs (one APP per division per fiscal year)
+- APP versioning (original, amendment, supplemental) with **INDICATIVE / FINAL** status
+- Row-level HOPE review: approve or add remarks on each PPMP row within APP
+- BAC finalizes approved PPMP rows into **Lots / Lot Items** for procurement grouping
+- HOPE final APP approval
+- Once APP is approved (FINAL), End Users can create PRs for their own PPMP rows
 - PhilGEPS posting tracking
 
 ### B. Database (Supabase)
@@ -684,78 +718,120 @@ ppmp_items (id, ppmp_version_id, ppmp_id, item_number, category, description, un
 **Tables to create:**
 
 ```
-apps (id, division_id, office_id, fiscal_year_id, current_version, status, philgeps_reference, approved_by, approved_at, deleted_at, created_at, updated_at, created_by)
-  - UNIQUE(office_id, fiscal_year_id)
-  - status CHECK IN ('consolidating','draft','submitted','reviewed','approved','posted')
+apps (id, division_id, fiscal_year_id, current_version, status, indicative_final, philgeps_reference, approved_by, approved_at, deleted_at, created_at, updated_at, created_by)
+  - UNIQUE(division_id, fiscal_year_id)
+  - status CHECK IN ('populating','indicative','under_review','bac_finalization','final','approved','posted')
+  - indicative_final CHECK IN ('indicative','final')
 
-app_versions (id, app_id, version_number, version_type, amendment_justification, total_estimated_cost, snapshot_data, status, approved_by, approved_at, office_id, created_at, created_by)
+app_versions (id, app_id, version_number, version_type, amendment_justification, total_estimated_cost, snapshot_data, status, indicative_final, approved_by, approved_at, created_at, created_by)
   - UNIQUE(app_id, version_number)
 
-app_items (id, app_version_id, app_id, source_ppmp_item_id, item_number, category, description, unit, quantity, estimated_unit_cost, estimated_total_cost, procurement_method, budget_allocation_id, schedule_q1-q4, is_cse, source_office_id, remarks, office_id, deleted_at, created_at, updated_at, created_by)
+app_items (id, app_version_id, app_id, source_ppmp_item_id, source_ppmp_id, item_number, category, description, unit, quantity, estimated_unit_cost, estimated_total_cost, procurement_method, budget_allocation_id, schedule_q1-q4, is_cse, source_office_id, hope_review_status, hope_reviewed_by, hope_reviewed_at, hope_remarks, lot_id, lot_item_number, remarks, deleted_at, created_at, updated_at, created_by)
+  - hope_review_status CHECK IN ('pending','approved','remarked')
+
+app_lots (id, app_id, app_version_id, lot_number, lot_name, description, procurement_method, total_estimated_cost, status, finalized_by, finalized_at, division_id, deleted_at, created_at, updated_at, created_by)
+  - UNIQUE(app_version_id, lot_number)
+  - status CHECK IN ('draft','finalized','in_procurement')
 ```
 
 **Relationships:**
 
-- `app_items.source_ppmp_item_id` → `ppmp_items(id)` — traceability back to source PPMP
+- `app_items.source_ppmp_item_id` → `ppmp_items(id)` — traceability back to source PPMP row
+- `app_items.source_ppmp_id` → `ppmps(id)` — traceability to parent PPMP
+- `app_items.lot_id` → `app_lots(id)` — BAC lot assignment
+- `app_lots` → `apps`, `app_versions`, `platform.divisions`
 
 ### C. Backend Logic
 
-- RPC: `consolidate_app(division_id, fiscal_year_id)` — aggregates all approved PPMP items into APP draft
-- RPC: `approve_app(app_id)` — marks approved, triggers posting readiness
-- Validation: APP cannot be approved until all constituent PPMPs are approved
+- Trigger (from Phase 5): On PPMP HOPE approval → auto-insert approved PPMP items into `app_items` (creates APP if not exists)
+- RPC: `hope_review_app_item(app_item_id, action, remarks)` — HOPE approves or remarks on individual PPMP row in APP
+- RPC: `create_app_lot(app_id, lot_name, description, procurement_method)` — BAC creates a new Lot
+- RPC: `assign_items_to_lot(lot_id, app_item_ids[])` — BAC assigns approved PPMP rows to a Lot
+- RPC: `finalize_lot(lot_id)` — BAC marks Lot as finalized (ready for procurement)
+- RPC: `finalize_app(app_id)` — Marks APP as FINAL when all rows reviewed + all lots finalized
+- RPC: `approve_app(app_id)` — HOPE gives final APP approval, enables PR creation
+- RPC: `get_app_summary(division_id, fiscal_year_id)` — Returns APP with all items, lots, and statuses
+- Validation: APP cannot be marked FINAL until all rows are HOPE-reviewed (no 'pending' rows)
+- Validation: APP cannot be marked FINAL until all HOPE-approved rows are assigned to lots
 - Validation: APP total must reconcile with approved budget
+- Validation: Only HOPE-approved rows can be assigned to lots (not 'remarked' rows)
 - Trigger: same versioning triggers as PPMP
+- Trigger: On APP approval → enable PR creation for End Users' PPMP rows
 
 ### D. Frontend (Next.js)
 
 **Pages:**
 
-- `(dashboard)/planning/app/page.tsx` — APP list
-- `(dashboard)/planning/app/new/page.tsx` — Create/initiate APP
-- `(dashboard)/planning/app/[id]/page.tsx` — APP detail
-- `(dashboard)/planning/app/[id]/consolidate/page.tsx` — Consolidation view (shows all incoming PPMP items, grouping options)
+- `(dashboard)/planning/app/page.tsx` — APP list (one per division per fiscal year)
+- `(dashboard)/planning/app/[id]/page.tsx` — APP detail (shows all PPMP rows, their HOPE review status, lot assignments)
+- `(dashboard)/planning/app/[id]/review/page.tsx` — HOPE row-level review (approve/remark each PPMP row)
+- `(dashboard)/planning/app/[id]/lots/page.tsx` — BAC Lot management (create lots, assign items, finalize)
+- `(dashboard)/planning/app/[id]/lots/[lotId]/page.tsx` — Lot detail (items in this lot, status)
 - `(dashboard)/planning/app/[id]/versions/page.tsx` — Version history
 
 **Components:**
 
-- `components/planning/app-consolidation-view.tsx` — Shows PPMP items being consolidated, allows grouping/re-categorization
+- `components/planning/app-items-table.tsx` — Shows all PPMP rows in APP with source office, HOPE review status, lot assignment
+- `components/planning/app-hope-review.tsx` — HOPE row-level approve/remark interface
+- `components/planning/app-lot-manager.tsx` — BAC lot creation, item assignment drag-and-drop/selection
+- `components/planning/app-lot-card.tsx` — Individual lot summary card
+- `components/planning/app-indicative-final-badge.tsx` — Shows INDICATIVE/FINAL status badge
+- `components/planning/app-status-dashboard.tsx` — Overview: total rows, reviewed, remarked, lotted, pending
 
 ### E. User Roles Involved
 
-- **Supply Officer (Division)** — initiates consolidation, manages APP
-- **Division Chief** — reviews
-- **HOPE (SDS)** — approves
+- **HOPE (SDS)** — reviews individual PPMP rows (approve/remark), gives final APP approval
+- **BAC (Chair, Members, Secretariat)** — creates Lots, assigns approved rows to Lots, finalizes Lots
+- **End User** — views their PPMP rows in APP, creates PRs after APP approval
+- **Budget Officer** — views APP for budget reconciliation
 - **Division Admin** — full access
+- **Auditor** — read-only
 
 ### F. Workflows Implemented
 
-1. **APP Consolidation:** Supply Officer triggers consolidation → System pulls all approved PPMP items → Creates draft APP → Supply Officer reviews/adjusts → Submit
-2. **APP Approval:** Submitted → Division Chief reviews → HOPE approves → Marked for PhilGEPS posting
-3. **APP Amendment:** Triggered by PPMP amendments or supplemental needs → New APP version → Approval flow
+1. **APP Auto-Population:** PPMP approved by HOPE → PPMP rows auto-inserted into APP → APP status = INDICATIVE/populating
+2. **HOPE Row-Level Review:** HOPE opens APP → Reviews each PPMP row → Approves or adds remarks → Remarked rows return to originator for revision
+3. **BAC Lot Finalization:** BAC views HOPE-approved rows → Creates Lots (e.g., "Office Supplies", "IT Equipment") → Assigns rows to Lots → Finalizes each Lot
+4. **APP Finalization:** All rows reviewed + all lots finalized → APP can be marked FINAL
+5. **APP Approval:** HOPE gives final approval → APP status = approved → PR creation enabled
+6. **PR Enablement:** End User sees their PPMP rows are in an approved FINAL APP → Can create Purchase Requests for their rows → Procurement execution begins
+7. **APP Amendment:** Triggered by PPMP amendments or supplemental needs → New APP version → Re-review flow
 
 ### G. Deliverable Outcome
 
-- One-click consolidation of PPMPs into APP
-- Full APP approval workflow
-- APP versioning with amendment support
-- Complete planning cycle from budget → PPMP → APP
+- APP auto-populated from approved PPMPs (no manual consolidation)
+- HOPE can review/remark individual PPMP rows within APP
+- BAC creates and manages Lots from approved rows
+- INDICATIVE/FINAL versioning status working
+- Full APP approval workflow (row review → lot finalization → HOPE final approval)
+- End Users can create PRs for their PPMP rows after APP approval
+- Complete planning cycle: Budget → PPMP (End User → Chief → Budget Officer → HOPE) → APP (auto-populate → HOPE review → BAC lots → approval) → PR
 
 ### H. Build Tasks
 
-1. Create migration: `apps` table
-2. Create migration: `app_versions` table
-3. Create migration: `app_items` table
-4. Apply RLS policies
-5. Create RPC: `consolidate_app()` — pulls approved PPMP items, creates APP items
-6. Create RPC: `approve_app()`
-7. Create validation: check all PPMPs approved before APP approval
-8. Build page: APP list
-9. Build page: Create/initiate APP
-10. Build page: APP detail
-11. Build page: Consolidation view with PPMP source tracking
-12. Build page: APP version history
-13. Build component: app-consolidation-view
-14. Test: Have 3 approved PPMPs → Consolidate into APP → Verify all items present with source tracking → Approve APP
+1. Create migration: `apps` table (with indicative_final, division-scoped unique)
+2. Create migration: `app_versions` table (with indicative_final)
+3. Create migration: `app_items` table (with hope_review_status, hope_remarks, lot_id columns)
+4. Create migration: `app_lots` table (BAC lot management)
+5. Apply RLS policies (HOPE reviews rows, BAC manages lots, End User views own rows)
+6. Create RPC: `hope_review_app_item()` — HOPE approves/remarks individual rows
+7. Create RPC: `create_app_lot()` — BAC creates Lots
+8. Create RPC: `assign_items_to_lot()` — BAC assigns rows to Lots
+9. Create RPC: `finalize_lot()` — BAC finalizes a Lot
+10. Create RPC: `finalize_app()` — Mark APP as FINAL
+11. Create RPC: `approve_app()` — HOPE final approval, enables PR creation
+12. Create RPC: `get_app_summary()` — Returns APP with items, lots, statuses
+13. Create validation: all rows must be HOPE-reviewed before APP finalization
+14. Create validation: all approved rows must be assigned to lots before APP finalization
+15. Build page: APP list (division-scoped)
+16. Build page: APP detail (all PPMP rows with review status and lot assignments)
+17. Build page: HOPE row-level review interface
+18. Build page: BAC Lot management (create lots, assign items, finalize)
+19. Build page: Lot detail
+20. Build page: APP version history
+21. Build components: app-items-table, app-hope-review, app-lot-manager, app-lot-card, app-indicative-final-badge, app-status-dashboard
+22. Test: Approve 3 PPMPs → Verify rows auto-populate in APP → HOPE reviews rows → BAC creates Lots → Assigns items → Finalize APP → HOPE approves → Verify End User can create PR
+23. Test: HOPE remarks on a row → Verify row returns to originator → Re-submit → Re-approve → Row re-appears in APP
 
 ---
 
@@ -764,12 +840,13 @@ app_items (id, app_version_id, app_id, source_ppmp_item_id, item_number, categor
 ### A. Scope
 
 - Supplier registry (per division)
-- Purchase Request (PR) creation linked to APP
+- Purchase Request (PR) creation by End User for their own PPMP rows (linked to PPMP item, APP item, and Lot)
 - PR line items
 - Budget certification on PR (Budget Officer)
 - PR approval workflow
 - OBR/ORS creation
 - Auto-numbering for PR and OBR
+- System enforces: PR can only be created after APP is approved (FINAL)
 
 ### B. Database (Supabase)
 
@@ -780,11 +857,14 @@ suppliers (id, division_id, name, trade_name, tin, philgeps_number, address, cit
   - UNIQUE(division_id, tin)
   - status CHECK IN ('active','blacklisted','suspended','inactive')
 
-purchase_requests (id, division_id, pr_number, office_id, fiscal_year_id, purpose, requested_by, requested_at, fund_source_id, budget_allocation_id, app_item_id, total_estimated_cost, status, budget_certified_by, budget_certified_at, approved_by, approved_at, cancellation_reason, cancelled_by, cancelled_at, deleted_at, created_at, updated_at, created_by)
+purchase_requests (id, division_id, pr_number, office_id, fiscal_year_id, purpose, requested_by, requested_at, fund_source_id, budget_allocation_id, ppmp_item_id, app_item_id, lot_id, total_estimated_cost, status, budget_certified_by, budget_certified_at, approved_by, approved_at, cancellation_reason, cancelled_by, cancelled_at, deleted_at, created_at, updated_at, created_by)
   - UNIQUE(division_id, pr_number)
   - status CHECK IN ('draft','submitted','budget_certified','approved','in_procurement','completed','cancelled')
+  - ppmp_item_id REFERENCES ppmp_items(id) — links PR to the End User's original PPMP row
+  - app_item_id REFERENCES app_items(id) — links to the corresponding APP row
+  - lot_id REFERENCES app_lots(id) — links to the BAC-assigned Lot
 
-pr_items (id, purchase_request_id, item_number, description, unit, quantity, estimated_unit_cost, estimated_total_cost, ppmp_item_id, remarks, office_id, deleted_at, created_at, updated_at)
+pr_items (id, purchase_request_id, item_number, description, unit, quantity, estimated_unit_cost, estimated_total_cost, ppmp_item_id, app_item_id, remarks, office_id, deleted_at, created_at, updated_at)
 
 obligation_requests (id, division_id, obr_number, purchase_request_id, procurement_id, budget_allocation_id, office_id, amount, status, certified_by, certified_at, obligated_at, remarks, deleted_at, created_at, updated_at, created_by)
   - UNIQUE(division_id, obr_number)
@@ -797,7 +877,8 @@ obligation_requests (id, division_id, obr_number, purchase_request_id, procureme
 - RPC: `approve_purchase_request(pr_id)` — HOPE/authorized approves
 - RPC: `check_split_contract(office_id, category, amount)` — warns if cumulative suggests splitting
 - Auto-number generation for PR and OBR using `generate_sequence_number()`
-- Validation: PR must reference an approved APP item
+- Validation: PR must reference an approved FINAL APP item (and its source PPMP item)
+- Validation: End User can only create PR for PPMP rows they originally submitted
 - Validation: PR amount must not exceed available budget
 - Trigger: On OBR certification → update `budget_allocations.obligated_amount`
 
@@ -824,14 +905,14 @@ obligation_requests (id, division_id, obr_number, purchase_request_id, procureme
 
 ### E. User Roles Involved
 
-- **Supply Officer / BAC Secretariat / End User / School Head** — create PR
+- **End User** — creates PR for their own PPMP rows (primary creator after APP approval)
 - **Budget Officer** — certifies fund availability
 - **HOPE / Division Chief / School Head** — approves PR
 - **Supply Officer** — manages supplier registry
 
 ### F. Workflows Implemented
 
-1. **PR Creation:** User creates PR → Links to APP item → Adds line items → Submits
+1. **PR Creation:** End User creates PR for their PPMP row → Links to APP item + Lot → Adds line items → Submits (only available after APP is approved FINAL)
 2. **Budget Certification:** Budget Officer reviews PR → Certifies fund availability → OBR created → Budget debited
 3. **PR Approval:** Certified PR → HOPE/authorized approves → PR ready for procurement
 4. **Supplier Management:** Supply Officer adds/edits suppliers → Tracks TIN, PhilGEPS, classification, blacklist status

@@ -41,7 +41,11 @@ CREATE POLICY "authenticated_read_active_announcements" ON platform.announcement
     AND (expires_at IS NULL OR expires_at > NOW())
     AND (
       target_divisions IS NULL
-      OR (raw_user_meta_data->>'division_id')::UUID = ANY(target_divisions)
+      OR (
+        SELECT (raw_user_meta_data->>'division_id')::UUID
+        FROM auth.users
+        WHERE id = auth.uid()
+      ) = ANY(target_divisions)
     )
   );
 
