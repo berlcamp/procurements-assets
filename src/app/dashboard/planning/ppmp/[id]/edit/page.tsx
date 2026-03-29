@@ -38,6 +38,7 @@ export default async function EditPpmpPage({ params }: Props) {
         ppmpId={ppmp.id}
         ppmpVersionId={version.id}
         officeId={office?.id ?? ""}
+        fiscalYearId={ppmp.fiscal_year_id}
         items={items as PpmpItemWithAllocation[]}
       />
     </div>

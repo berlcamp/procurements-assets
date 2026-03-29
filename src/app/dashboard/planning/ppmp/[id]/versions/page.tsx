@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { AmountDisplay } from "@/components/shared/amount-display"
 import { PpmpIndicativeFinalBadge } from "@/components/planning/ppmp-indicative-final-badge"
+import { PpmpVersionDiff } from "@/components/planning/ppmp-version-diff"
 import { PPMP_VERSION_TYPE_LABELS } from "@/lib/schemas/ppmp"
 
 interface Props {
@@ -85,10 +86,11 @@ export default async function PpmpVersionsPage({ params }: Props) {
         </Table>
       </div>
 
-      {history.some(v => v.version_type === "amendment") && (
-        <p className="text-xs text-muted-foreground">
-          Amendment justifications are recorded in the amendment version. Side-by-side diff view coming in a future release.
-        </p>
+      {history.length >= 2 && (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold">Version Comparison</h2>
+          <PpmpVersionDiff ppmpId={id} versions={history} />
+        </div>
       )}
     </div>
   )

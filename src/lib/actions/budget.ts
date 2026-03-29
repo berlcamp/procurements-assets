@@ -76,6 +76,33 @@ export async function getBudgetAllocations(
   return (data ?? []) as BudgetAllocationWithDetails[]
 }
 
+export async function getBudgetAllocationsByOffice(
+  officeId: string,
+  fiscalYearId: string
+): Promise<BudgetAllocationWithDetails[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .schema("procurements")
+    .from("budget_allocations")
+    .select(`
+      *,
+      office:offices(id, name, code),
+      fund_source:fund_sources(id, name, code),
+      account_code:account_codes(id, name, code, expense_class),
+      fiscal_year:fiscal_years(id, year, status)
+    `)
+    .eq("office_id", officeId)
+    .eq("fiscal_year_id", fiscalYearId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    console.error("getBudgetAllocationsByOffice error:", error)
+    return []
+  }
+  return (data ?? []) as BudgetAllocationWithDetails[]
+}
+
 export async function getBudgetAllocationById(
   id: string
 ): Promise<BudgetAllocationWithDetails | null> {
