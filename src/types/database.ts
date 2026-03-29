@@ -255,3 +255,112 @@ export interface AuditLog {
 export interface AuditLogWithUser extends AuditLog {
   user_profile?: Pick<UserProfile, 'first_name' | 'last_name' | 'employee_id'> | null
 }
+
+// ============================================================
+// Budget types (Phase 4)
+// ============================================================
+export type FiscalYearStatus = 'planning' | 'open' | 'closing' | 'closed'
+export type BudgetAllocationStatus = 'active' | 'inactive' | 'closed'
+export type BudgetAdjustmentType = 'realignment' | 'augmentation' | 'reduction' | 'transfer_in' | 'transfer_out'
+export type BudgetAdjustmentStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
+
+export interface FiscalYear {
+  id: string
+  division_id: string
+  year: number
+  is_active: boolean
+  start_date: string | null
+  end_date: string | null
+  status: FiscalYearStatus
+  created_at: string
+  updated_at: string
+}
+
+export interface BudgetAllocation {
+  id: string
+  division_id: string
+  fiscal_year_id: string
+  office_id: string
+  fund_source_id: string
+  account_code_id: string
+  original_amount: string
+  adjusted_amount: string
+  obligated_amount: string
+  disbursed_amount: string
+  description: string | null
+  status: BudgetAllocationStatus
+  created_by: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface BudgetAllocationWithDetails extends BudgetAllocation {
+  office?: Pick<Office, 'id' | 'name' | 'code'>
+  fund_source?: Pick<FundSource, 'id' | 'name' | 'code'>
+  account_code?: Pick<AccountCode, 'id' | 'name' | 'code' | 'expense_class'>
+  fiscal_year?: Pick<FiscalYear, 'id' | 'year' | 'status'>
+}
+
+export interface BudgetAdjustment {
+  id: string
+  division_id: string
+  budget_allocation_id: string
+  office_id: string
+  adjustment_type: BudgetAdjustmentType
+  amount: string
+  justification: string
+  reference_number: string | null
+  status: BudgetAdjustmentStatus
+  approved_by: string | null
+  approved_at: string | null
+  remarks: string | null
+  created_by: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface BudgetAdjustmentWithDetails extends BudgetAdjustment {
+  budget_allocation?: BudgetAllocationWithDetails
+  office?: Pick<Office, 'id' | 'name' | 'code'>
+}
+
+export interface BudgetSummaryRow {
+  allocation_id: string
+  fund_source_id: string
+  fund_source_name: string
+  account_code_id: string
+  account_code: string
+  account_name: string
+  expense_class: ExpenseClass
+  original_amount: string
+  adjusted_amount: string
+  obligated_amount: string
+  disbursed_amount: string
+  available_amount: string
+  utilization_pct: string
+  status: BudgetAllocationStatus
+}
+
+export interface BudgetUtilizationByOffice {
+  office_id: string
+  office_name: string
+  office_code: string
+  total_adjusted: string
+  total_obligated: string
+  total_disbursed: string
+  total_available: string
+  utilization_pct: string
+}
+
+export interface BudgetUtilizationByFundSource {
+  fund_source_id: string
+  fund_source_name: string
+  fund_source_code: string
+  total_adjusted: string
+  total_obligated: string
+  total_disbursed: string
+  total_available: string
+  utilization_pct: string
+}

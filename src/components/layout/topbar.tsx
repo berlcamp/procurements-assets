@@ -25,6 +25,9 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 import { useSidebar, type NavItem } from "./sidebar"
+import { useAuth } from "@/lib/hooks/use-auth"
+import { createClient } from "@/lib/supabase/client"
+import { useRouter } from "next/navigation"
 
 // ─── Breadcrumb generation ────────────────────────────────────────────────────
 
@@ -78,16 +81,34 @@ function useBreadcrumbs(): Crumb[] {
 // ─── User Dropdown ────────────────────────────────────────────────────────────
 
 function UserDropdown() {
+  const { user } = useAuth()
+  const router = useRouter()
+
+  const displayName = user?.user_metadata?.full_name ?? user?.email ?? "User"
+  const email = user?.email ?? ""
+  const initials = displayName
+    .split(" ")
+    .map((n: string) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase()
+
+  async function handleSignOut() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push("/login")
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2 outline-none hover:bg-accent transition-colors">
         <Avatar className="h-7 w-7 shrink-0">
           <AvatarFallback className="text-[10px] font-bold bg-primary text-primary-foreground">
-            JD
+            {initials}
           </AvatarFallback>
         </Avatar>
         <span className="hidden sm:block text-sm font-medium text-foreground max-w-[120px] truncate">
-          John Doe
+          {displayName}
         </span>
         <ChevronDown className="hidden sm:block h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       </DropdownMenuTrigger>
@@ -95,9 +116,9 @@ function UserDropdown() {
         <DropdownMenuGroup>
           <DropdownMenuLabel className="font-normal py-2">
             <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-semibold leading-none">John Doe</span>
+              <span className="text-sm font-semibold leading-none">{displayName}</span>
               <span className="text-xs text-muted-foreground mt-1">
-                admin@deped.gov.ph
+                {email}
               </span>
             </div>
           </DropdownMenuLabel>
@@ -115,7 +136,10 @@ function UserDropdown() {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem className="text-destructive focus:text-destructive">
+          <DropdownMenuItem
+            className="text-destructive focus:text-destructive"
+            onClick={handleSignOut}
+          >
             <LogOut className="mr-2.5 h-4 w-4" />
             Sign out
           </DropdownMenuItem>
