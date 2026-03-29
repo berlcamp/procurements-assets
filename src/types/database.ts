@@ -364,3 +364,131 @@ export interface BudgetUtilizationByFundSource {
   total_available: string
   utilization_pct: string
 }
+
+// ============================================================
+// Planning types (Phase 5 — PPMP)
+// ============================================================
+
+export type PpmpStatus =
+  | 'draft'
+  | 'submitted'
+  | 'chief_reviewed'
+  | 'budget_certified'
+  | 'approved'
+  | 'revision_required'
+  | 'locked'
+
+export type PpmpVersionStatus =
+  | 'draft'
+  | 'submitted'
+  | 'chief_reviewed'
+  | 'budget_certified'
+  | 'approved'
+  | 'superseded'
+
+export type PpmpVersionType = 'original' | 'amendment' | 'supplemental'
+
+export type PpmpItemCategory =
+  | 'common_use_supplies'
+  | 'non_common_supplies'
+  | 'equipment'
+  | 'services'
+  | 'infrastructure'
+
+export type IndicativeFinal = 'indicative' | 'final'
+
+export interface Ppmp {
+  id: string
+  division_id: string
+  office_id: string
+  fiscal_year_id: string
+  current_version: number
+  status: PpmpStatus
+  indicative_final: IndicativeFinal
+  submitted_at: string | null
+  submitted_by: string | null
+  chief_reviewed_by: string | null
+  chief_reviewed_at: string | null
+  chief_review_notes: string | null
+  budget_certified_by: string | null
+  budget_certified_at: string | null
+  budget_certification_notes: string | null
+  approved_by: string | null
+  approved_at: string | null
+  approval_notes: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+export interface PpmpVersion {
+  id: string
+  ppmp_id: string
+  version_number: number
+  version_type: PpmpVersionType
+  amendment_justification: string | null
+  total_estimated_cost: string
+  snapshot_data: Record<string, unknown> | null
+  status: PpmpVersionStatus
+  indicative_final: IndicativeFinal
+  approved_by: string | null
+  approved_at: string | null
+  office_id: string
+  created_at: string
+  created_by: string | null
+}
+
+export interface PpmpItem {
+  id: string
+  ppmp_version_id: string
+  ppmp_id: string
+  item_number: number
+  category: PpmpItemCategory
+  description: string
+  unit: string
+  quantity: string
+  estimated_unit_cost: string
+  estimated_total_cost: string
+  procurement_method: string
+  budget_allocation_id: string | null
+  schedule_q1: string
+  schedule_q2: string
+  schedule_q3: string
+  schedule_q4: string
+  is_cse: boolean
+  remarks: string | null
+  office_id: string
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+// Joined types for UI display
+export interface PpmpWithDetails extends Ppmp {
+  office?: Pick<Office, 'id' | 'name' | 'code' | 'office_type'>
+  fiscal_year?: Pick<FiscalYear, 'id' | 'year' | 'status'>
+}
+
+export interface PpmpVersionWithItems extends PpmpVersion {
+  ppmp_items?: PpmpItem[]
+}
+
+export interface PpmpItemWithAllocation extends PpmpItem {
+  budget_allocation?: BudgetAllocationWithDetails
+}
+
+// Version history row returned by get_ppmp_version_history RPC
+export interface PpmpVersionHistoryRow {
+  version_number: number
+  version_type: PpmpVersionType
+  status: PpmpVersionStatus
+  indicative_final: IndicativeFinal
+  total_estimated_cost: string
+  amendment_justification: string | null
+  approved_by: string | null
+  approved_at: string | null
+  created_at: string
+  item_count: number
+}
