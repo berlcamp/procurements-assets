@@ -168,7 +168,7 @@ export function DataTable<T extends object>({
               key={filter.key}
               value={activeFilters[filter.key] ?? "__all__"}
               onValueChange={(val) =>
-                setActiveFilters((prev) => ({ ...prev, [filter.key]: val }))
+                setActiveFilters((prev) => ({ ...prev, [filter.key]: val } as Record<string, string>))
               }
             >
               <SelectTrigger className="w-[160px]">
