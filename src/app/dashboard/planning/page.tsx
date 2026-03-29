@@ -35,7 +35,7 @@ export default function PlanningPage() {
         </Card>
 
         {/* APP Card */}
-        <Card className="opacity-60">
+        <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
               <ScrollText className="h-5 w-5 text-muted-foreground" />
@@ -46,12 +46,11 @@ export default function PlanningPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="outline" size="sm" className="w-full" disabled>
-              Go to APP <ChevronRightIcon className="ml-1 h-3.5 w-3.5" />
-            </Button>
-            <p className="mt-2 text-xs text-muted-foreground text-center">
-              Available after PPMPs are approved. Coming soon.
-            </p>
+            <Link href="/dashboard/planning/app">
+              <Button variant="outline" size="sm" className="w-full">
+                Go to APP <ChevronRightIcon className="ml-1 h-3.5 w-3.5" />
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>

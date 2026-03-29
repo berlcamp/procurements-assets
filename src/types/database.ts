@@ -519,3 +519,139 @@ export interface PpmpVersionHistoryRow {
   created_at: string
   project_count: number
 }
+
+// ============================================================
+// Planning types (Phase 6 — APP)
+// ============================================================
+
+export type AppStatus =
+  | 'populating'
+  | 'indicative'
+  | 'under_review'
+  | 'bac_finalization'
+  | 'final'
+  | 'approved'
+  | 'posted'
+
+export type AppVersionStatus =
+  | 'draft'
+  | 'under_review'
+  | 'bac_finalization'
+  | 'final'
+  | 'approved'
+  | 'superseded'
+
+export type AppVersionType = 'original' | 'amendment' | 'supplemental'
+
+export type HopeReviewStatus = 'pending' | 'approved' | 'remarked'
+
+export type AppLotStatus = 'draft' | 'finalized' | 'in_procurement'
+
+export interface App {
+  id: string
+  division_id: string
+  fiscal_year_id: string
+  current_version: number
+  status: AppStatus
+  indicative_final: IndicativeFinal
+  philgeps_reference: string | null
+  approved_by: string | null
+  approved_at: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+export interface AppVersion {
+  id: string
+  app_id: string
+  version_number: number
+  version_type: AppVersionType
+  amendment_justification: string | null
+  total_estimated_cost: string
+  snapshot_data: Record<string, unknown> | null
+  status: AppVersionStatus
+  indicative_final: IndicativeFinal
+  approved_by: string | null
+  approved_at: string | null
+  created_at: string
+  created_by: string | null
+}
+
+export interface AppItem {
+  id: string
+  app_version_id: string
+  app_id: string
+  source_ppmp_project_id: string | null
+  source_ppmp_lot_id: string | null
+  source_ppmp_id: string | null
+  item_number: number
+  general_description: string
+  project_type: string | null
+  procurement_mode: string | null
+  estimated_budget: string
+  source_of_funds: string | null
+  procurement_start: string | null
+  procurement_end: string | null
+  delivery_period: string | null
+  budget_allocation_id: string | null
+  source_office_id: string | null
+  hope_review_status: HopeReviewStatus
+  hope_reviewed_by: string | null
+  hope_reviewed_at: string | null
+  hope_remarks: string | null
+  lot_id: string | null
+  lot_item_number: number | null
+  remarks: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+export interface AppLot {
+  id: string
+  app_id: string
+  app_version_id: string
+  lot_number: number
+  lot_name: string
+  description: string | null
+  procurement_method: string | null
+  total_estimated_cost: string
+  status: AppLotStatus
+  finalized_by: string | null
+  finalized_at: string | null
+  division_id: string
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+// Joined types for UI
+export interface AppWithDetails extends App {
+  fiscal_year?: Pick<FiscalYear, 'id' | 'year' | 'status'>
+}
+
+export interface AppItemWithOffice extends AppItem {
+  source_office?: Pick<Office, 'id' | 'name' | 'code'> | null
+  lot?: Pick<AppLot, 'id' | 'lot_name' | 'lot_number'> | null
+}
+
+export interface AppLotWithItems extends AppLot {
+  app_items?: AppItem[]
+}
+
+export interface AppSummary {
+  total_items: number
+  pending_items: number
+  approved_items: number
+  remarked_items: number
+  lotted_items: number
+  unlotted_items: number
+  total_lots: number
+  finalized_lots: number
+  draft_lots: number
+  total_budget: string
+}
