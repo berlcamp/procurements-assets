@@ -82,7 +82,11 @@ export function PpmpProjectTable({
 
   const totalBudget = projects.reduce((sum, p) => {
     const lots = (p.ppmp_lots ?? []) as PpmpLotWithItems[]
-    return sum + lots.reduce((s, l) => s + parseFloat(l.estimated_budget || "0"), 0)
+    return sum + lots.reduce((lotSum, l) => {
+      const items = l.ppmp_lot_items ?? []
+      return lotSum + items.reduce((itemSum, item) =>
+        itemSum + parseFloat(item.estimated_total_cost || "0"), 0)
+    }, 0)
   }, 0)
 
   return (
@@ -99,7 +103,11 @@ export function PpmpProjectTable({
       {projects.map((project) => {
         const lots = (project.ppmp_lots ?? []) as PpmpLotWithItems[]
         const isOpen = openProjects.has(project.id)
-        const projectBudget = lots.reduce((s, l) => s + parseFloat(l.estimated_budget || "0"), 0)
+        const projectBudget = lots.reduce((lotSum, l) => {
+          const items = (l as PpmpLotWithItems).ppmp_lot_items ?? []
+          return lotSum + items.reduce((itemSum, item) =>
+            itemSum + parseFloat(item.estimated_total_cost || "0"), 0)
+        }, 0)
 
         return (
           <Collapsible key={project.id} open={isOpen} onOpenChange={() => toggleProject(project.id)}>
@@ -141,6 +149,8 @@ export function PpmpProjectTable({
                 <div className="divide-y">
                   {lots.map((lot) => {
                     const items = (lot as PpmpLotWithItems).ppmp_lot_items ?? []
+                    const lotTotal = items.reduce((sum, item) =>
+                      sum + parseFloat(item.estimated_total_cost || "0"), 0)
                     return (
                       <div key={lot.id} className="px-4 py-3">
                         {/* Lot header */}
@@ -160,7 +170,7 @@ export function PpmpProjectTable({
                             )}
                           </div>
                           <div className="flex items-center gap-2">
-                            <AmountDisplay amount={lot.estimated_budget} className="text-xs font-medium" />
+                            <AmountDisplay amount={lotTotal} className="text-xs font-medium" />
                             {editable && (
                               <Button
                                 variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive"

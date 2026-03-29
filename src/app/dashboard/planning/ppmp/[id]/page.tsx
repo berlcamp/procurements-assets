@@ -38,6 +38,13 @@ export default async function PpmpDetailPage({ params }: Props) {
       (s, l) => s + ((l as PpmpLotWithItems).ppmp_lot_items?.length ?? 0), 0
     )
   }, 0)
+  const computedTotalBudget = projects.reduce((sum, p) => {
+    return sum + (p.ppmp_lots ?? []).reduce((lotSum, l) => {
+      const items = (l as PpmpLotWithItems).ppmp_lot_items ?? []
+      return lotSum + items.reduce((itemSum, item) =>
+        itemSum + parseFloat(item.estimated_total_cost || "0"), 0)
+    }, 0)
+  }, 0)
 
   return (
     <div className="space-y-6">
@@ -141,15 +148,11 @@ export default async function PpmpDetailPage({ params }: Props) {
                 <span className="text-muted-foreground">Items</span>
                 <span className="font-medium">{itemCount}</span>
               </div>
-              {version && (
-                <>
-                  <Separator />
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Total Budget</span>
-                    <AmountDisplay amount={version.total_estimated_budget} className="font-semibold" />
-                  </div>
-                </>
-              )}
+              <Separator />
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Total Budget</span>
+                <AmountDisplay amount={computedTotalBudget} className="font-semibold" />
+              </div>
             </div>
           </div>
         </div>
