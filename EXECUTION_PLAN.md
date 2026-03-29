@@ -8,26 +8,26 @@
 
 # 1. PHASE OVERVIEW
 
-| Phase | Name                                            | Model    | Goal                                                                      | Why This Order                                                   |
-| ----- | ----------------------------------------------- | -------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| 1     | **Project Setup & Infrastructure**              | Sonnet   | Scaffold project, Supabase connection, base UI framework                  | Everything depends on this                                       |
-| 2     | **Platform Layer (Super Admin)**                | Sonnet   | Division onboarding, subscription management, shared lookups              | Tenancy must exist before any division data                      |
-| 3     | **Organization & Auth Foundation**              | **Opus** | Offices, users, roles, permissions, RLS, login/logout                     | All modules need users and access control                        |
-| 4     | **Budget Management**                           | Sonnet   | Fiscal years, budget allocations, adjustments, utilization                | Planning and procurement require budget to validate against      |
-| 5     | **Planning Module (PPMP)**                      | **Opus** | PPMP creation by End User, multi-step approval (Chief→Budget Officer→HOPE), INDICATIVE/FINAL versioning, auto-population to APP | PPMP feeds into APP; must be done before APP                     |
-| 6     | **Planning Module (APP)**                       | **Opus** | APP auto-populated from approved PPMPs, HOPE row-level review, BAC lot finalization, INDICATIVE/FINAL, PR enablement | APP must exist before procurement can reference it               |
-| 7     | **Procurement Core (PR + Suppliers)**           | Sonnet   | Purchase Requests, supplier registry, budget certification                | PR is the entry point for all procurement methods                |
-| 8     | **Procurement Workflows (SVP + Shopping)**      | **Opus** | Small Value Procurement and Shopping workflows end-to-end                 | Most common methods in DepEd; quickest to deliver value          |
-| 9     | **Procurement Workflows (Competitive Bidding)** | **Opus** | Full competitive bidding with BAC evaluation                              | Most complex method; requires all procurement infrastructure     |
-| 10    | **Procurement Workflows (Other Methods)**       | Sonnet   | Direct contracting, repeat order, emergency, negotiated, agency-to-agency | Completes RA 12009 coverage                                      |
-| 11    | **Purchase Orders & Delivery**                  | Sonnet   | PO creation, delivery recording, inspection, obligation tracking          | Bridges procurement to asset management                          |
-| 12    | **Asset Management (Inventory)**                | Sonnet   | Item catalog, stock-in/out, stock cards, inventory tracking               | Assets from deliveries enter inventory first                     |
-| 13    | **Asset Management (Property)**                 | **Opus** | Asset registration, PAR/ICS, custodian management, depreciation           | Depends on inventory for incoming assets                         |
-| 14    | **Request System**                              | Sonnet   | Supply/equipment/service requests, fulfillment routing                    | Depends on inventory (stock check) and procurement (PR creation) |
-| 15    | **Notifications & Approval Inbox**              | Sonnet   | Unified approvals, in-app notifications, email alerts                     | Cross-cutting; enhances all prior modules                        |
-| 16    | **Reports & Dashboards**                        | Sonnet   | All dashboards, compliance reports, exports                               | Requires data from all modules to be meaningful                  |
-| 17    | **Document Generation & Compliance**            | Sonnet   | PDF generation (PR, PO, NOA, ICS, PAR), PhilGEPS prep, COA reports        | Polish phase; all data flows must be working                     |
-| 18    | **Optimization, UAT & Launch Prep**             | **Opus** | Performance tuning, edge cases, UAT, bug fixes                            | Final hardening before deployment                                |
+| Status | Phase | Name                                            | Model    | Goal                                                                      | Why This Order                                                   |
+| ------ | ----- | ----------------------------------------------- | -------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [x]    | 1     | **Project Setup & Infrastructure**              | Sonnet   | Scaffold project, Supabase connection, base UI framework                  | Everything depends on this                                       |
+| [x]    | 2     | **Platform Layer (Super Admin)**                | Sonnet   | Division onboarding, subscription management, shared lookups              | Tenancy must exist before any division data                      |
+| [x]    | 3     | **Organization & Auth Foundation**              | **Opus** | Offices, users, roles, permissions, RLS, login/logout                     | All modules need users and access control                        |
+| [x]    | 4     | **Budget Management**                           | Sonnet   | Fiscal years, budget allocations, adjustments, utilization                | Planning and procurement require budget to validate against      |
+| [ ]    | 5     | **Planning Module (PPMP)**                      | **Opus** | PPMP creation by End User, multi-step approval (Chief→Budget Officer→HOPE), INDICATIVE/FINAL versioning, auto-population to APP | PPMP feeds into APP; must be done before APP                     |
+| [ ]    | 6     | **Planning Module (APP)**                       | **Opus** | APP auto-populated from approved PPMPs, HOPE row-level review, BAC lot finalization, INDICATIVE/FINAL, PR enablement | APP must exist before procurement can reference it               |
+| [ ]    | 7     | **Procurement Core (PR + Suppliers)**           | Sonnet   | Purchase Requests, supplier registry, budget certification                | PR is the entry point for all procurement methods                |
+| [ ]    | 8     | **Procurement Workflows (SVP + Shopping)**      | **Opus** | Small Value Procurement and Shopping workflows end-to-end                 | Most common methods in DepEd; quickest to deliver value          |
+| [ ]    | 9     | **Procurement Workflows (Competitive Bidding)** | **Opus** | Full competitive bidding with BAC evaluation                              | Most complex method; requires all procurement infrastructure     |
+| [ ]    | 10    | **Procurement Workflows (Other Methods)**       | Sonnet   | Direct contracting, repeat order, emergency, negotiated, agency-to-agency | Completes RA 12009 coverage                                      |
+| [ ]    | 11    | **Purchase Orders & Delivery**                  | Sonnet   | PO creation, delivery recording, inspection, obligation tracking          | Bridges procurement to asset management                          |
+| [ ]    | 12    | **Asset Management (Inventory)**                | Sonnet   | Item catalog, stock-in/out, stock cards, inventory tracking               | Assets from deliveries enter inventory first                     |
+| [ ]    | 13    | **Asset Management (Property)**                 | **Opus** | Asset registration, PAR/ICS, custodian management, depreciation           | Depends on inventory for incoming assets                         |
+| [ ]    | 14    | **Request System**                              | Sonnet   | Supply/equipment/service requests, fulfillment routing                    | Depends on inventory (stock check) and procurement (PR creation) |
+| [ ]    | 15    | **Notifications & Approval Inbox**              | Sonnet   | Unified approvals, in-app notifications, email alerts                     | Cross-cutting; enhances all prior modules                        |
+| [ ]    | 16    | **Reports & Dashboards**                        | Sonnet   | All dashboards, compliance reports, exports                               | Requires data from all modules to be meaningful                  |
+| [ ]    | 17    | **Document Generation & Compliance**            | Sonnet   | PDF generation (PR, PO, NOA, ICS, PAR), PhilGEPS prep, COA reports        | Polish phase; all data flows must be working                     |
+| [ ]    | 18    | **Optimization, UAT & Launch Prep**             | **Opus** | Performance tuning, edge cases, UAT, bug fixes                            | Final hardening before deployment                                |
 
 ### Model Assignment Guide
 
@@ -65,7 +65,7 @@
 
 ---
 
-## PHASE 1: Project Setup & Infrastructure
+## [x] PHASE 1: Project Setup & Infrastructure
 
 ### A. Scope
 
@@ -134,7 +134,7 @@
 
 ---
 
-## PHASE 2: Platform Layer (Super Admin)
+## [x] PHASE 2: Platform Layer (Super Admin)
 
 ### A. Scope
 
@@ -248,7 +248,7 @@ account_codes (id, code, name, expense_class, parent_code_id, level, is_active, 
 
 ---
 
-## PHASE 3: Organization & Auth Foundation
+## [x] PHASE 3: Organization & Auth Foundation
 
 ### A. Scope
 
@@ -427,7 +427,7 @@ documents (id, reference_type, reference_id, document_type, file_name, file_path
 
 ---
 
-## PHASE 4: Budget Management
+## [x] PHASE 4: Budget Management
 
 ### A. Scope
 
@@ -548,7 +548,7 @@ budget_adjustments (id, division_id, budget_allocation_id, adjustment_type, amou
 
 ---
 
-## PHASE 5: Planning Module (PPMP)
+## [ ] PHASE 5: Planning Module (PPMP)
 
 ### A. Scope
 
@@ -701,7 +701,7 @@ ppmp_items (id, ppmp_version_id, ppmp_id, item_number, category, description, un
 
 ---
 
-## PHASE 6: Planning Module (APP)
+## [ ] PHASE 6: Planning Module (APP)
 
 ### A. Scope
 
@@ -835,7 +835,7 @@ app_lots (id, app_id, app_version_id, lot_number, lot_name, description, procure
 
 ---
 
-## PHASE 7: Procurement Core (PR + Suppliers)
+## [ ] PHASE 7: Procurement Core (PR + Suppliers)
 
 ### A. Scope
 
@@ -949,7 +949,7 @@ obligation_requests (id, division_id, obr_number, purchase_request_id, procureme
 
 ---
 
-## PHASE 8: Procurement Workflows (SVP + Shopping)
+## [ ] PHASE 8: Procurement Workflows (SVP + Shopping)
 
 ### A. Scope
 
@@ -1036,7 +1036,7 @@ bid_items (id, bid_id, pr_item_id, offered_unit_cost, offered_total_cost, brand_
 
 ---
 
-## PHASE 9: Procurement Workflows (Competitive Bidding)
+## [ ] PHASE 9: Procurement Workflows (Competitive Bidding)
 
 ### A. Scope
 
@@ -1112,7 +1112,7 @@ Additional columns/considerations:
 
 ---
 
-## PHASE 10: Procurement Workflows (Other Methods)
+## [ ] PHASE 10: Procurement Workflows (Other Methods)
 
 ### A. Scope
 
@@ -1177,7 +1177,7 @@ No new tables — uses existing procurement tables. Each method uses different s
 
 ---
 
-## PHASE 11: Purchase Orders & Delivery
+## [ ] PHASE 11: Purchase Orders & Delivery
 
 ### A. Scope
 
@@ -1272,7 +1272,7 @@ delivery_items (id, delivery_id, po_item_id, quantity_delivered, quantity_accept
 
 ---
 
-## PHASE 12: Asset Management (Inventory)
+## [ ] PHASE 12: Asset Management (Inventory)
 
 ### A. Scope
 
@@ -1363,7 +1363,7 @@ stock_movements (id, inventory_id, movement_type, quantity, reference_type, refe
 
 ---
 
-## PHASE 13: Asset Management (Property)
+## [ ] PHASE 13: Asset Management (Property)
 
 ### A. Scope
 
@@ -1469,7 +1469,7 @@ depreciation_records (id, asset_id, period_year, period_month, depreciation_amou
 
 ---
 
-## PHASE 14: Request System
+## [ ] PHASE 14: Request System
 
 ### A. Scope
 
@@ -1560,7 +1560,7 @@ request_items (id, request_id, item_catalog_id, description, unit, quantity_requ
 
 ---
 
-## PHASE 15: Notifications & Approval Inbox
+## [ ] PHASE 15: Notifications & Approval Inbox
 
 ### A. Scope
 
@@ -1626,7 +1626,7 @@ Uses existing `notifications` and `approval_logs` tables from Phase 3.
 
 ---
 
-## PHASE 16: Reports & Dashboards
+## [ ] PHASE 16: Reports & Dashboards
 
 ### A. Scope
 
@@ -1715,7 +1715,7 @@ No new tables. Create views and RPCs for aggregations:
 
 ---
 
-## PHASE 17: Document Generation & Compliance
+## [ ] PHASE 17: Document Generation & Compliance
 
 ### A. Scope
 
@@ -1781,7 +1781,7 @@ Uses existing `documents` table. No new tables.
 
 ---
 
-## PHASE 18: Optimization, UAT & Launch Prep
+## [ ] PHASE 18: Optimization, UAT & Launch Prep
 
 ### A. Scope
 
