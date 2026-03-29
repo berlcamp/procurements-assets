@@ -23,7 +23,7 @@ export default async function EditPpmpPage({ params }: Props) {
   const projects = await getPpmpProjects(version.id)
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Edit PPMP — {office?.name}</h1>

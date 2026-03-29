@@ -40,7 +40,7 @@ export default async function PpmpDetailPage({ params }: Props) {
   }, 0)
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="space-y-1">
