@@ -1,10 +1,15 @@
 import Link from "next/link"
 import { getUsers } from "@/lib/actions/users"
+import { getPendingJoinRequests } from "@/lib/actions/join-requests"
 import { Button } from "@/components/ui/button"
 import { UsersTable } from "./users-table"
+import { PendingRequestsCard } from "./pending-requests-card"
 
 export default async function UsersPage() {
-  const users = await getUsers()
+  const [users, pendingRequests] = await Promise.all([
+    getUsers(),
+    getPendingJoinRequests(),
+  ])
 
   return (
     <div className="space-y-6">
@@ -19,6 +24,8 @@ export default async function UsersPage() {
           <Button>Invite User</Button>
         </Link>
       </div>
+
+      <PendingRequestsCard requests={pendingRequests} />
 
       <UsersTable data={users} />
     </div>

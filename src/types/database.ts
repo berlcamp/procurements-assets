@@ -126,6 +126,12 @@ export interface UserProfileWithEmail extends UserProfile {
   email?: string
 }
 
+export interface UserProfileForTable extends UserProfile {
+  email?: string
+  office?: Pick<Office, 'id' | 'name' | 'code'> | null
+  roles?: Pick<Role, 'id' | 'name' | 'display_name'>[]
+}
+
 export interface Role {
   id: string
   name: string
@@ -250,6 +256,33 @@ export interface AuditLog {
   office_id: string | null
   session_id: string | null
   created_at: string
+}
+
+// ============================================================
+// Division Join Requests
+// ============================================================
+export type JoinRequestStatus = 'pending' | 'approved' | 'rejected'
+
+export interface DivisionJoinRequest {
+  id: string
+  user_id: string
+  division_id: string
+  first_name: string
+  last_name: string
+  middle_name: string | null
+  suffix: string | null
+  position: string | null
+  office_id: string | null
+  status: JoinRequestStatus
+  reviewed_by: string | null
+  reviewed_at: string | null
+  review_notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DivisionJoinRequestWithDivision extends DivisionJoinRequest {
+  division?: Pick<Division, 'id' | 'name' | 'code' | 'region'>
 }
 
 export interface AuditLogWithUser extends AuditLog {

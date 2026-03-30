@@ -32,6 +32,9 @@ function LoginForm() {
       provider: "google",
       options: {
         redirectTo: callbackUrl.toString(),
+        queryParams: {
+          prompt: "select_account",
+        },
       },
     })
 

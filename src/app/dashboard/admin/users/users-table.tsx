@@ -5,17 +5,17 @@ import { useRouter } from "next/navigation"
 import { EyeIcon } from "lucide-react"
 import { DataTable } from "@/components/shared/data-table"
 import { Badge } from "@/components/ui/badge"
-import type { UserProfile } from "@/types/database"
+import type { UserProfileForTable } from "@/types/database"
 import type { Column, FilterDef, RowAction } from "@/components/shared/data-table"
 
-function fullName(u: UserProfile): string {
+function fullName(u: UserProfileForTable): string {
   const parts = [u.first_name, u.middle_name, u.last_name]
     .filter(Boolean)
     .join(" ")
   return u.suffix ? `${parts}, ${u.suffix}` : parts
 }
 
-const columns: Column<UserProfile>[] = [
+const columns: Column<UserProfileForTable>[] = [
   {
     key: "last_name",
     header: "Name",
@@ -30,8 +30,43 @@ const columns: Column<UserProfile>[] = [
     ),
   },
   {
+    key: "email",
+    header: "Email",
+    render: (row) => (
+      <span className="text-sm text-muted-foreground">
+        {row.email ?? "—"}
+      </span>
+    ),
+  },
+  {
+    key: "roles",
+    header: "Roles",
+    render: (row) =>
+      row.roles && row.roles.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {row.roles.map((r) => (
+            <Badge key={r.id} variant="secondary" className="text-xs">
+              {r.display_name}
+            </Badge>
+          ))}
+        </div>
+      ) : (
+        <span className="text-muted-foreground text-xs">No roles</span>
+      ),
+  },
+  {
+    key: "office_id",
+    header: "Office",
+    render: (row) => (
+      <span className="text-sm">
+        {row.office?.name ?? <span className="text-muted-foreground">—</span>}
+      </span>
+    ),
+  },
+  {
     key: "employee_id",
     header: "Employee ID",
+    defaultHidden: true,
     render: (row) =>
       row.employee_id ? (
         <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
@@ -44,6 +79,7 @@ const columns: Column<UserProfile>[] = [
   {
     key: "position",
     header: "Position",
+    defaultHidden: true,
     render: (row) => <span className="text-sm">{row.position ?? "—"}</span>,
   },
   {
@@ -66,7 +102,7 @@ const columns: Column<UserProfile>[] = [
   },
 ]
 
-const filters: FilterDef<UserProfile>[] = [
+const filters: FilterDef<UserProfileForTable>[] = [
   {
     key: "is_active",
     label: "Status",
@@ -77,10 +113,10 @@ const filters: FilterDef<UserProfile>[] = [
   },
 ]
 
-export function UsersTable({ data }: { data: UserProfile[] }) {
+export function UsersTable({ data }: { data: UserProfileForTable[] }) {
   const router = useRouter()
 
-  const rowActions: RowAction<UserProfile>[] = [
+  const rowActions: RowAction<UserProfileForTable>[] = [
     {
       label: "View Profile",
       icon: <EyeIcon />,
@@ -93,7 +129,7 @@ export function UsersTable({ data }: { data: UserProfile[] }) {
       columns={columns}
       data={data}
       searchable
-      searchPlaceholder="Search by name, employee ID, or position…"
+      searchPlaceholder="Search by name, email, or office…"
       emptyMessage="No users yet. Invite your first user."
       filters={filters}
       rowActions={rowActions}

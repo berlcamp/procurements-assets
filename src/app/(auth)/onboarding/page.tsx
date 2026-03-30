@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { completeOnboarding, getAvailableDivisions } from "@/lib/actions/onboarding"
+import { completeOnboarding, getAvailableDivisions, getOfficesForDivision } from "@/lib/actions/onboarding"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -30,6 +30,13 @@ interface Division {
   region: string
 }
 
+interface OfficeOption {
+  id: string
+  name: string
+  code: string
+  office_type: string
+}
+
 export default function OnboardingPage() {
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
@@ -52,6 +59,11 @@ export default function OnboardingPage() {
   const [divCode, setDivCode] = useState("")
   const [divRegion, setDivRegion] = useState("")
 
+  // Office selection
+  const [offices, setOffices] = useState<OfficeOption[]>([])
+  const [selectedOfficeId, setSelectedOfficeId] = useState("")
+  const [loadingOffices, setLoadingOffices] = useState(false)
+
   useEffect(() => {
     async function loadDivisions() {
       const list = await getAvailableDivisions()
@@ -61,6 +73,27 @@ export default function OnboardingPage() {
     }
     loadDivisions()
   }, [])
+
+  // Load offices when a division is selected
+  useEffect(() => {
+    if (!selectedDivisionId) {
+      setOffices([])
+      setSelectedOfficeId("")
+      return
+    }
+    let cancelled = false
+    async function loadOffices() {
+      setLoadingOffices(true)
+      const list = await getOfficesForDivision(selectedDivisionId)
+      if (!cancelled) {
+        setOffices(list)
+        setSelectedOfficeId("")
+        setLoadingOffices(false)
+      }
+    }
+    loadOffices()
+    return () => { cancelled = true }
+  }, [selectedDivisionId])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -82,12 +115,13 @@ export default function OnboardingPage() {
 
     setSubmitting(true)
 
-    const { error } = await completeOnboarding({
+    const { error, requestSubmitted } = await completeOnboarding({
       first_name: firstName.trim(),
       last_name: lastName.trim(),
       middle_name: middleName.trim() || undefined,
       suffix: suffix.trim() || undefined,
       position: position.trim() || undefined,
+      office_id: divisionTab === "existing" && selectedOfficeId ? selectedOfficeId : undefined,
       division_id: divisionTab === "existing" ? selectedDivisionId : undefined,
       new_division:
         divisionTab === "new"
@@ -98,6 +132,12 @@ export default function OnboardingPage() {
     if (error) {
       toast.error(error)
       setSubmitting(false)
+      return
+    }
+
+    if (requestSubmitted) {
+      toast.success("Your join request has been submitted for approval.")
+      router.push("/pending-approval")
       return
     }
 
@@ -202,8 +242,11 @@ export default function OnboardingPage() {
                   )}
 
                   <TabsContent value="existing" className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Joining an existing division requires approval from a division administrator.
+                    </p>
                     <div className="space-y-2">
-                      <Label>Select Division</Label>
+                      <Label>Select Division <span className="text-destructive">*</span></Label>
                       <Select
                         value={selectedDivisionId}
                         onValueChange={(v) => setSelectedDivisionId(v ?? "")}
@@ -220,6 +263,35 @@ export default function OnboardingPage() {
                         </SelectContent>
                       </Select>
                     </div>
+                    {selectedDivisionId && (
+                      <div className="space-y-2">
+                        <Label>Office / School</Label>
+                        {loadingOffices ? (
+                          <p className="text-sm text-muted-foreground">Loading offices...</p>
+                        ) : offices.length > 0 ? (
+                          <Select
+                            value={selectedOfficeId}
+                            onValueChange={(v) => setSelectedOfficeId(v === "none" ? "" : v ?? "")}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select your office or school" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">— Not sure / Will set later —</SelectItem>
+                              {offices.map((o) => (
+                                <SelectItem key={o.id} value={o.id}>
+                                  {o.name} ({o.code})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            No offices configured yet. Your admin can assign one later.
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </TabsContent>
 
                   <TabsContent value="new" className="space-y-3">

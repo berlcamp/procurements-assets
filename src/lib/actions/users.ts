@@ -2,15 +2,18 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import type { UserProfile, UserRoleWithRole } from "@/types/database"
+import type { UserProfile, UserProfileForTable, UserRoleWithRole } from "@/types/database"
 import type { UserProfileInput, AssignRoleInput } from "@/lib/schemas/admin"
 
-export async function getUsers(): Promise<UserProfile[]> {
+export async function getUsers(): Promise<UserProfileForTable[]> {
   const supabase = await createClient()
-  const { data, error } = await supabase
+  const adminClient = createAdminClient()
+
+  // Fetch profiles with office join
+  const { data: profiles, error } = await supabase
     .schema("procurements")
     .from("user_profiles")
-    .select("*")
+    .select("*, office:offices!office_id(id, name, code)")
     .is("deleted_at", null)
     .order("last_name")
 
@@ -19,7 +22,48 @@ export async function getUsers(): Promise<UserProfile[]> {
     return []
   }
 
-  return (data ?? []) as UserProfile[]
+  if (!profiles || profiles.length === 0) return []
+
+  const userIds = profiles.map((p) => p.id)
+
+  // Fetch roles for all users in one query
+  const { data: allUserRoles } = await supabase
+    .schema("procurements")
+    .from("user_roles")
+    .select("user_id, role:roles!inner(id, name, display_name)")
+    .in("user_id", userIds)
+    .eq("is_active", true)
+    .is("revoked_at", null)
+
+  const rolesByUser = new Map<string, { id: string; name: string; display_name: string }[]>()
+  for (const ur of allUserRoles ?? []) {
+    const role = ur.role as unknown as { id: string; name: string; display_name: string }
+    const list = rolesByUser.get(ur.user_id) ?? []
+    list.push(role)
+    rolesByUser.set(ur.user_id, list)
+  }
+
+  // Fetch emails from auth via admin API
+  const { data: authData } = await adminClient.auth.admin.listUsers({
+    perPage: 1000,
+  })
+  const emailMap = new Map<string, string>()
+  for (const u of authData?.users ?? []) {
+    if (u.email) emailMap.set(u.id, u.email)
+  }
+
+  return profiles.map((p) => ({
+    ...p,
+    office: (p.office as unknown as { id: string; name: string; code: string }) ?? null,
+    roles: rolesByUser.get(p.id) ?? [],
+    email: emailMap.get(p.id),
+  })) as UserProfileForTable[]
+}
+
+export async function getUserEmail(id: string): Promise<string | null> {
+  const adminClient = createAdminClient()
+  const { data } = await adminClient.auth.admin.getUserById(id)
+  return data?.user?.email ?? null
 }
 
 export async function getUserById(id: string): Promise<UserProfile | null> {
@@ -185,6 +229,30 @@ export async function revokeRole(
   userRoleId: string
 ): Promise<{ error: string | null }> {
   const supabase = await createClient()
+
+  // Fetch the role assignment to check if it's the division creator's admin role
+  const { data: userRole } = await supabase
+    .schema("procurements")
+    .from("user_roles")
+    .select("user_id, division_id, role:roles!inner(name)")
+    .eq("id", userRoleId)
+    .single()
+
+  if (userRole && (userRole.role as unknown as { name: string }).name === "division_admin") {
+    // Check if this user is the division creator
+    const adminClient = createAdminClient()
+    const { data: division } = await adminClient
+      .schema("platform")
+      .from("divisions")
+      .select("onboarded_by")
+      .eq("id", userRole.division_id)
+      .single()
+
+    if (division?.onboarded_by === userRole.user_id) {
+      return { error: "Cannot revoke the division creator's admin role." }
+    }
+  }
+
   const { error } = await supabase
     .schema("procurements")
     .from("user_roles")
@@ -199,6 +267,29 @@ export async function deactivateUser(
   id: string
 ): Promise<{ error: string | null }> {
   const supabase = await createClient()
+
+  // Check if this user is the division creator
+  const { data: profile } = await supabase
+    .schema("procurements")
+    .from("user_profiles")
+    .select("division_id")
+    .eq("id", id)
+    .single()
+
+  if (profile) {
+    const adminClient = createAdminClient()
+    const { data: division } = await adminClient
+      .schema("platform")
+      .from("divisions")
+      .select("onboarded_by")
+      .eq("id", profile.division_id)
+      .single()
+
+    if (division?.onboarded_by === id) {
+      return { error: "Cannot deactivate the division creator." }
+    }
+  }
+
   const { error } = await supabase
     .schema("procurements")
     .from("user_profiles")

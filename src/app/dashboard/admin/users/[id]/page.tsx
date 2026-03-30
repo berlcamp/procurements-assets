@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { userProfileSchema, assignRoleSchema, type UserProfileInput, type AssignRoleInput } from "@/lib/schemas/admin"
-import { getUserById, getUserRoles, updateUserProfile, inviteUser, assignRole, revokeRole, deactivateUser } from "@/lib/actions/users"
+import { getUserById, getUserEmail, getUserRoles, updateUserProfile, inviteUser, assignRole, revokeRole, deactivateUser } from "@/lib/actions/users"
 import { getDivisionRoles } from "@/lib/actions/roles"
 import { getOffices } from "@/lib/actions/offices"
 import { useDivision } from "@/lib/hooks/use-division"
@@ -38,6 +38,7 @@ export default function UserDetailPage() {
   const isInvite = params.id === "invite"
 
   const [user, setUser] = useState<UserProfile | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
   const [userRoles, setUserRoles] = useState<UserRoleWithRole[]>([])
   const [roles, setRoles] = useState<Role[]>([])
   const [offices, setOffices] = useState<Office[]>([])
@@ -63,10 +64,12 @@ export default function UserDetailPage() {
     setOffices(allOffices)
 
     if (!isInvite) {
-      const [profile, roles] = await Promise.all([
+      const [profile, roles, email] = await Promise.all([
         getUserById(params.id),
         getUserRoles(params.id),
+        getUserEmail(params.id),
       ])
+      setUserEmail(email)
       if (profile) {
         setUser(profile)
         profileForm.reset({
@@ -181,7 +184,7 @@ export default function UserDetailPage() {
             onSubmit={profileForm.handleSubmit(onSaveProfile)}
             className="space-y-4"
           >
-            {isInvite && (
+            {isInvite ? (
               <div className="space-y-2">
                 <Label htmlFor="email">Email address *</Label>
                 <Input
@@ -195,6 +198,18 @@ export default function UserDetailPage() {
                     {profileForm.formState.errors.email.message}
                   </p>
                 )}
+              </div>
+            ) : userEmail && (
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input
+                  value={userEmail}
+                  disabled
+                  className="bg-muted"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Email cannot be changed.
+                </p>
               </div>
             )}
 
