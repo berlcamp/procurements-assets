@@ -1,10 +1,17 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { userProfileSchema, assignRoleSchema, type UserProfileInput, type AssignRoleInput } from "@/lib/schemas/admin"
+import {
+  userProfileSchema,
+  inviteUserSchema,
+  assignRoleSchema,
+  type UserProfileInput,
+  type InviteUserInput,
+  type AssignRoleInput,
+} from "@/lib/schemas/admin"
 import { getUserById, getUserEmail, getUserRoles, updateUserProfile, inviteUser, assignRole, revokeRole, deactivateUser } from "@/lib/actions/users"
 import { getDivisionRoles } from "@/lib/actions/roles"
 import { getOffices } from "@/lib/actions/offices"
@@ -46,8 +53,21 @@ export default function UserDetailPage() {
   const [saving, setSaving] = useState(false)
   const [assigningRole, setAssigningRole] = useState(false)
 
-  const profileForm = useForm<UserProfileInput>({
-    resolver: zodResolver(userProfileSchema),
+  const profileForm = useForm<UserProfileInput & { role_id?: string }>({
+    resolver: zodResolver(isInvite ? inviteUserSchema : userProfileSchema),
+    defaultValues: {
+      email: "",
+      first_name: "",
+      middle_name: "",
+      last_name: "",
+      suffix: "",
+      employee_id: "",
+      position: "",
+      department: "",
+      office_id: undefined,
+      contact_number: "",
+      role_id: "",
+    },
   })
 
   const roleForm = useForm<AssignRoleInput>({
@@ -73,7 +93,7 @@ export default function UserDetailPage() {
       if (profile) {
         setUser(profile)
         profileForm.reset({
-          email: "",
+          email: email ?? "",
           first_name: profile.first_name,
           middle_name: profile.middle_name ?? "",
           last_name: profile.last_name,
@@ -95,13 +115,21 @@ export default function UserDetailPage() {
     loadData()
   }, [loadData])
 
-  async function onSaveProfile(values: UserProfileInput) {
-    if (!divisionId) return
+  function effectiveDivisionId(): string | null {
+    return divisionId ?? user?.division_id ?? null
+  }
+
+  async function onSaveProfile(values: UserProfileInput & { role_id?: string }) {
+    const divId = effectiveDivisionId()
+    if (isInvite && !divId) {
+      toast.error("Division context is not available. Refresh the page or try again.")
+      return
+    }
     setSaving(true)
 
     const result = isInvite
-      ? await inviteUser(values, divisionId)
-      : await updateUserProfile(params.id, values)
+      ? await inviteUser(values as InviteUserInput, divId!)
+      : await updateUserProfile(params.id, values as UserProfileInput)
 
     if (result.error) {
       toast.error(result.error)
@@ -114,9 +142,13 @@ export default function UserDetailPage() {
   }
 
   async function onAssignRole(values: AssignRoleInput) {
-    if (!divisionId) return
+    const divId = effectiveDivisionId()
+    if (!divId) {
+      toast.error("Division context is not available. Refresh the page or try again.")
+      return
+    }
     setAssigningRole(true)
-    const result = await assignRole(values, divisionId)
+    const result = await assignRole(values, divId)
     if (result.error) {
       toast.error(result.error)
       setAssigningRole(false)
@@ -138,6 +170,29 @@ export default function UserDetailPage() {
     toast.success("Role revoked.")
     setUserRoles((prev) => prev.filter((r) => r.id !== userRoleId))
   }
+
+  const roleItems = useMemo(
+    () => Object.fromEntries(roles.map((r) => [r.id, r.display_name])),
+    [roles],
+  )
+  const officeItems = useMemo(
+    () => Object.fromEntries([
+      ["none", "— No office —"],
+      ...offices.map((o) => [o.id, o.name]),
+    ]),
+    [offices],
+  )
+  const officeItemsNoNone = useMemo(
+    () => Object.fromEntries(offices.map((o) => [o.id, o.name])),
+    [offices],
+  )
+  const officeScopeItems = useMemo(
+    () => Object.fromEntries([
+      ["none", "Division-wide"],
+      ...offices.map((o) => [o.id, o.name]),
+    ]),
+    [offices],
+  )
 
   if (loading) {
     return (
@@ -185,20 +240,49 @@ export default function UserDetailPage() {
             className="space-y-4"
           >
             {isInvite ? (
-              <div className="space-y-2">
-                <Label htmlFor="email">Email address *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  {...profileForm.register("email")}
-                  placeholder="user@deped.gov.ph"
-                />
-                {profileForm.formState.errors.email && (
-                  <p className="text-xs text-destructive">
-                    {profileForm.formState.errors.email.message}
-                  </p>
-                )}
-              </div>
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email address *</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    {...profileForm.register("email")}
+                    placeholder="user@deped.gov.ph"
+                  />
+                  {profileForm.formState.errors.email && (
+                    <p className="text-xs text-destructive">
+                      {profileForm.formState.errors.email.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="invite-role">Role *</Label>
+                  <Select
+                    value={profileForm.watch("role_id") || undefined}
+                    onValueChange={(v) =>
+                      profileForm.setValue("role_id", v ?? "", { shouldValidate: true })
+                    }
+                    items={roleItems}
+                  >
+                    <SelectTrigger id="invite-role">
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roles.map((r) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {r.display_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {profileForm.formState.errors.role_id && (
+                    <p className="text-xs text-destructive">
+                      {profileForm.formState.errors.role_id.message}
+                    </p>
+                  )}
+                </div>
+              </>
             ) : userEmail && (
               <div className="space-y-2">
                 <Label>Email</Label>
@@ -240,25 +324,52 @@ export default function UserDetailPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Office</Label>
-              <Select
-                value={profileForm.watch("office_id") ?? "none"}
-                onValueChange={(v) =>
-                  profileForm.setValue("office_id", v === "none" ? undefined : v)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select office" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— No office —</SelectItem>
-                  {offices.map((o) => (
-                    <SelectItem key={o.id} value={o.id}>
-                      {o.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>{isInvite ? "Office *" : "Office"}</Label>
+              {isInvite ? (
+                <Select
+                  value={profileForm.watch("office_id") ?? undefined}
+                  onValueChange={(v) =>
+                    profileForm.setValue("office_id", v ?? "", { shouldValidate: true })
+                  }
+                  items={officeItemsNoNone}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select office" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {offices.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>
+                        {o.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Select
+                  value={profileForm.watch("office_id") ?? "none"}
+                  onValueChange={(v) =>
+                    profileForm.setValue("office_id", v === "none" ? undefined : v)
+                  }
+                  items={officeItems}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select office" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— No office —</SelectItem>
+                    {offices.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>
+                        {o.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {profileForm.formState.errors.office_id && (
+                <p className="text-xs text-destructive">
+                  {profileForm.formState.errors.office_id.message}
+                </p>
+              )}
             </div>
 
             <div className="flex gap-3 pt-2">
@@ -329,6 +440,7 @@ export default function UserDetailPage() {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Select
                   onValueChange={(v) => roleForm.setValue("role_id", v as string)}
+                  items={roleItems}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select role" />
@@ -346,6 +458,7 @@ export default function UserDetailPage() {
                   onValueChange={(v) =>
                     roleForm.setValue("office_id", v === "none" ? null : v as string)
                   }
+                  items={officeScopeItems}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Office scope (optional)" />

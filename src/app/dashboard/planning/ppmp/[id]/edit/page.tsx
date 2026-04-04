@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation"
 import Link from "next/link"
 import { getPpmpById, getCurrentPpmpVersion, getPpmpProjects } from "@/lib/actions/ppmp"
 import { Button } from "@/components/ui/button"
+import { XIcon } from "lucide-react"
 import { PpmpEditClient } from "@/components/planning/ppmp-edit-client"
 
 interface Props {
@@ -30,7 +31,8 @@ export default async function EditPpmpPage({ params }: Props) {
           <p className="text-sm text-muted-foreground">FY {fy?.year} · Draft</p>
         </div>
         <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/dashboard/planning/ppmp/${id}`} />}>
-          Cancel
+          <XIcon className="mr-1.5 h-3.5 w-3.5" />
+          Close
         </Button>
       </div>
       <div className="rounded-lg border bg-card overflow-hidden">

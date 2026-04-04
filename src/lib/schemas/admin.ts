@@ -27,6 +27,16 @@ export const userProfileSchema = z.object({
 
 export type UserProfileInput = z.infer<typeof userProfileSchema>
 
+/** Invite flow: profile office + initial role are mandatory */
+export const inviteUserSchema = userProfileSchema
+  .omit({ office_id: true })
+  .extend({
+    office_id: z.string().min(1, "Office is required").uuid("Office is required"),
+    role_id: z.string().min(1, "Role is required").uuid("Role is required"),
+  })
+
+export type InviteUserInput = z.infer<typeof inviteUserSchema>
+
 export const assignRoleSchema = z.object({
   user_id: z.string().uuid(),
   role_id: z.string().uuid(),

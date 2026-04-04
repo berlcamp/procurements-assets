@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
@@ -58,6 +58,14 @@ export function AdjustmentForm() {
       })
   }, [])
 
+  const allocationItems = useMemo(
+    () => Object.fromEntries(allocations.map((a) => [
+      a.id,
+      `${(a.office as { name: string } | undefined)?.name} — ${(a.account_code as { code: string } | undefined)?.code} (${(a.fiscal_year as { year: number } | undefined)?.year})`,
+    ])),
+    [allocations]
+  )
+
   const watchedAllocationId = watch("budget_allocation_id")
   useEffect(() => {
     const found = allocations.find((a) => a.id === watchedAllocationId) ?? null
@@ -84,6 +92,7 @@ export function AdjustmentForm() {
         <Select
           onValueChange={(v) => { if (v) setValue("budget_allocation_id", v) }}
           value={watch("budget_allocation_id") ?? ""}
+          items={allocationItems}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select allocation to adjust" />
@@ -117,6 +126,7 @@ export function AdjustmentForm() {
         <Select
           onValueChange={(v) => { if (v) setValue("adjustment_type", v as BudgetAdjustmentInput["adjustment_type"]) }}
           value={watch("adjustment_type") ?? ""}
+          items={ADJUSTMENT_TYPE_LABELS as Record<string, React.ReactNode>}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select type" />

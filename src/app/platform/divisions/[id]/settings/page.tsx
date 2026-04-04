@@ -212,6 +212,7 @@ export default function DivisionSettingsPage({
                       <Select
                         onValueChange={field.onChange}
                         value={field.value}
+                        items={Object.fromEntries(REGIONS.map((r) => [r, r]))}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -282,6 +283,7 @@ export default function DivisionSettingsPage({
                       <Select
                         onValueChange={field.onChange}
                         value={field.value}
+                        items={{ basic: "Basic", standard: "Standard", premium: "Premium" }}
                       >
                         <FormControl>
                           <SelectTrigger>

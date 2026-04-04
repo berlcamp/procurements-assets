@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import {
   Select,
@@ -57,11 +57,20 @@ export function OfficeSelector({
     load()
   }, [officeTypes?.join(",")])
 
+  const officeItems = useMemo(
+    () => Object.fromEntries([
+      ...(allowClear ? [["none", `— ${placeholder} —`]] : []),
+      ...offices.map((o) => [o.id, o.name]),
+    ]),
+    [offices, allowClear, placeholder]
+  )
+
   return (
     <Select
       value={value ?? "none"}
       onValueChange={(v) => onChange(v === "none" ? null : v)}
       disabled={disabled || loading}
+      items={officeItems}
     >
       <SelectTrigger>
         <SelectValue placeholder={loading ? "Loading…" : placeholder} />

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -49,6 +49,14 @@ export default function OfficeDetailPage() {
     resolver: zodResolver(officeSchema),
     defaultValues: { office_type: "section" },
   })
+
+  const parentOfficeItems = useMemo(
+    () => Object.fromEntries([
+      ["none", "None (top level)"],
+      ...offices.map((o) => [o.id, o.name]),
+    ]),
+    [offices]
+  )
 
   const loadData = useCallback(async () => {
     const [allOffices, office] = await Promise.all([
@@ -168,6 +176,7 @@ export default function OfficeDetailPage() {
                 onValueChange={(v) =>
                   setValue("office_type", v as OfficeInput["office_type"])
                 }
+                items={{ division_office: "Division Office", school: "School", section: "Section" }}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -187,6 +196,7 @@ export default function OfficeDetailPage() {
                 onValueChange={(v) =>
                   setValue("parent_office_id", v === "none" ? null : v)
                 }
+                items={parentOfficeItems}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="None (top level)" />

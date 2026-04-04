@@ -37,6 +37,50 @@ const PPMP_SELECT = `
   fiscal_year:fiscal_years(id, year, status)
 ` as const
 
+function officeNameFromJoin(
+  office: { name: string } | { name: string }[] | null | undefined
+): string | null {
+  if (office == null) return null
+  const row = Array.isArray(office) ? office[0] : office
+  return row?.name ?? null
+}
+
+async function enrichPpmpsWithCreators(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ppmps: PpmpWithDetails[]
+): Promise<PpmpWithDetails[]> {
+  const ids = [...new Set(ppmps.map((p) => p.created_by).filter(Boolean))] as string[]
+  if (ids.length === 0) return ppmps
+
+  const { data: profiles, error } = await supabase
+    .schema("procurements")
+    .from("user_profiles")
+    .select("id, first_name, last_name, office:offices!office_id(name)")
+    .in("id", ids)
+
+  if (error) {
+    console.error("enrichPpmpsWithCreators error:", error)
+    return ppmps
+  }
+
+  type Row = {
+    id: string
+    first_name: string
+    last_name: string
+    office: { name: string } | { name: string }[] | null
+  }
+  const byId = new Map((profiles as Row[] | null)?.map((p) => [p.id, p]) ?? [])
+
+  return ppmps.map((p) => {
+    if (!p.created_by) return p
+    const prof = byId.get(p.created_by)
+    if (!prof) return p
+    const full_name = [prof.first_name, prof.last_name].filter(Boolean).join(" ").trim() || "—"
+    const office_name = officeNameFromJoin(prof.office)
+    return { ...p, creator: { full_name, office_name } }
+  })
+}
+
 export async function getPpmps(
   fiscalYearId?: string
 ): Promise<PpmpWithDetails[]> {
@@ -88,49 +132,35 @@ async function getUserRoleContext(supabase: Awaited<ReturnType<typeof createClie
 }
 
 /**
- * Returns PPMPs visible to the current user under "My PPMP":
- * - HOPE / division_admin: all PPMPs in the division
- * - Section Chief / School Head: all PPMPs in their office
- * - All other users: only PPMPs they created
+ * Returns PPMPs created by the current user ("My PPMP" list only).
+ * Division- or office-wide PPMP views belong on a different screen or use {@link getPpmps}.
  */
 export async function getMyPpmps(
   fiscalYearId?: string
 ): Promise<PpmpWithDetails[]> {
   const supabase = await createClient()
-  const ctx = await getUserRoleContext(supabase)
-  if (!ctx) return []
-
-  const { user, profile, roles, roleNames } = ctx
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return []
 
   let query = supabase
     .schema("procurements")
     .from("ppmps")
     .select(PPMP_SELECT)
     .is("deleted_at", null)
+    .eq("created_by", user.id)
     .order("created_at", { ascending: false })
 
   if (fiscalYearId) query = query.eq("fiscal_year_id", fiscalYearId)
-
-  if (roleNames.includes("hope") || roleNames.includes("division_admin")) {
-    // RLS already scopes to division — no extra filter needed
-  } else if (roleNames.some(r => ["section_chief", "school_head"].includes(r))) {
-    const chiefRole = roles.find(r => r.role?.name && ["section_chief", "school_head"].includes(r.role.name))
-    const officeId = chiefRole?.office_id ?? profile?.office_id
-    if (officeId) {
-      query = query.eq("office_id", officeId)
-    } else {
-      query = query.eq("created_by", user.id)
-    }
-  } else {
-    query = query.eq("created_by", user.id)
-  }
 
   const { data, error } = await query
   if (error) {
     console.error("getMyPpmps error:", error)
     return []
   }
-  return (data ?? []) as PpmpWithDetails[]
+  const rows = (data ?? []) as PpmpWithDetails[]
+  return enrichPpmpsWithCreators(supabase, rows)
 }
 
 /**

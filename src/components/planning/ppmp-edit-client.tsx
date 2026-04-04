@@ -2,12 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { toast } from "sonner"
-import { submitPpmp } from "@/lib/actions/ppmp"
 import { PpmpProjectTable } from "@/components/planning/ppmp-item-table"
 import { PpmpProjectForm, PpmpLotForm, PpmpLotItemForm } from "@/components/planning/ppmp-item-form"
-import { Button } from "@/components/ui/button"
-import { SendIcon } from "lucide-react"
 import type { PpmpProjectWithLots } from "@/types/database"
 
 interface PpmpEditClientProps {
@@ -27,19 +23,6 @@ export function PpmpEditClient({
   const [showProjectForm, setShowProjectForm] = useState(false)
   const [lotFormProjectId, setLotFormProjectId] = useState<string | null>(null)
   const [itemFormLotId, setItemFormLotId] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-
-  async function handleSubmit() {
-    setSubmitting(true)
-    const result = await submitPpmp(ppmpId)
-    setSubmitting(false)
-    if (result.error) {
-      toast.error(result.error)
-      return
-    }
-    toast.success("PPMP submitted for review.")
-    router.push(`/dashboard/planning/ppmp/${ppmpId}`)
-  }
 
   return (
     <div className="space-y-6">
@@ -51,16 +34,6 @@ export function PpmpEditClient({
         onAddItem={(lotId) => setItemFormLotId(lotId)}
         onChanged={() => router.refresh()}
       />
-
-      <div className="flex justify-end gap-3">
-        <Button
-          onClick={handleSubmit}
-          disabled={submitting || projects.length === 0}
-        >
-          <SendIcon className="mr-1.5 h-4 w-4" />
-          {submitting ? "Submitting..." : "Submit for Review"}
-        </Button>
-      </div>
 
       {/* Project form dialog */}
       <PpmpProjectForm

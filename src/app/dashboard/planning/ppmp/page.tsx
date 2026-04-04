@@ -9,7 +9,13 @@ import {
 import { PlusIcon } from "lucide-react"
 import type { PpmpWithDetails } from "@/types/database"
 
-function PpmpTable({ ppmps }: { ppmps: PpmpWithDetails[] }) {
+function PpmpTable({
+  ppmps,
+  showCreator = false,
+}: {
+  ppmps: PpmpWithDetails[]
+  showCreator?: boolean
+}) {
   if (ppmps.length === 0) {
     return (
       <div className="p-8 text-center">
@@ -50,7 +56,17 @@ function PpmpTable({ ppmps }: { ppmps: PpmpWithDetails[] }) {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
-                  {new Date(ppmp.created_at).toLocaleDateString("en-PH")}
+                  <div className="space-y-1">
+                    <div>{new Date(ppmp.created_at).toLocaleDateString("en-PH")}</div>
+                    {showCreator && ppmp.creator ? (
+                      <div className="text-xs leading-snug">
+                        <div className="font-medium text-foreground">{ppmp.creator.full_name}</div>
+                        {ppmp.creator.office_name ? (
+                          <div className="text-muted-foreground">{ppmp.creator.office_name}</div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <Button variant="ghost" size="sm" nativeButton={false} render={<Link href={`/dashboard/planning/ppmp/${ppmp.id}`} />}>
@@ -104,7 +120,7 @@ export default async function PpmpListPage() {
         <div className="px-5 py-4 border-b">
           <h2 className="text-lg font-semibold">My PPMP</h2>
           <p className="text-sm text-muted-foreground">
-            PPMPs you created or are within your visibility scope
+            PPMPs you created
           </p>
         </div>
         <div className="p-0">
@@ -116,7 +132,7 @@ export default async function PpmpListPage() {
               </Button>
             </div>
           ) : (
-            <PpmpTable ppmps={myPpmps} />
+            <PpmpTable ppmps={myPpmps} showCreator />
           )}
         </div>
       </section>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { completeOnboarding, getAvailableDivisions, getOfficesForDivision } from "@/lib/actions/onboarding"
 import { Button } from "@/components/ui/button"
@@ -63,6 +63,19 @@ export default function OnboardingPage() {
   const [offices, setOffices] = useState<OfficeOption[]>([])
   const [selectedOfficeId, setSelectedOfficeId] = useState("")
   const [loadingOffices, setLoadingOffices] = useState(false)
+
+  const divisionItems = useMemo(
+    () => Object.fromEntries(divisions.map((d) => [d.id, `${d.name} (${d.code}) — ${d.region}`])),
+    [divisions]
+  )
+
+  const officeItems = useMemo(
+    () => Object.fromEntries([
+      ["none", "— Not sure / Will set later —"],
+      ...offices.map((o) => [o.id, `${o.name} (${o.code})`]),
+    ]),
+    [offices]
+  )
 
   useEffect(() => {
     async function loadDivisions() {
@@ -250,6 +263,7 @@ export default function OnboardingPage() {
                       <Select
                         value={selectedDivisionId}
                         onValueChange={(v) => setSelectedDivisionId(v ?? "")}
+                        items={divisionItems}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Choose a division" />
@@ -272,6 +286,7 @@ export default function OnboardingPage() {
                           <Select
                             value={selectedOfficeId}
                             onValueChange={(v) => setSelectedOfficeId(v === "none" ? "" : v ?? "")}
+                            items={officeItems}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="Select your office or school" />

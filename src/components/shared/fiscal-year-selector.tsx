@@ -1,5 +1,6 @@
 "use client"
 
+import { useMemo } from "react"
 import {
   Select,
   SelectContent,
@@ -24,11 +25,20 @@ export function FiscalYearSelector({
 }: FiscalYearSelectorProps) {
   const { allYears, loading } = useFiscalYear()
 
+  const fiscalYearItems = useMemo(
+    () => Object.fromEntries([
+      ["none", `— ${placeholder} —`],
+      ...allYears.map((fy) => [fy.id, `${fy.year}${fy.is_active ? " (Active)" : ""}`]),
+    ]),
+    [allYears, placeholder]
+  )
+
   return (
     <Select
       value={value ?? "none"}
       onValueChange={(v) => onChange(v === "none" ? null : v)}
       disabled={disabled || loading}
+      items={fiscalYearItems}
     >
       <SelectTrigger>
         <SelectValue placeholder={loading ? "Loading…" : placeholder} />

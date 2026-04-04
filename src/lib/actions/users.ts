@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { UserProfile, UserProfileForTable, UserRoleWithRole } from "@/types/database"
-import type { UserProfileInput, AssignRoleInput } from "@/lib/schemas/admin"
+import type { UserProfileInput, InviteUserInput, AssignRoleInput } from "@/lib/schemas/admin"
 
 export async function getUsers(): Promise<UserProfileForTable[]> {
   const supabase = await createClient()
@@ -43,13 +43,14 @@ export async function getUsers(): Promise<UserProfileForTable[]> {
     rolesByUser.set(ur.user_id, list)
   }
 
-  // Fetch emails from auth via admin API
-  const { data: authData } = await adminClient.auth.admin.listUsers({
-    perPage: 1000,
-  })
+  // Fetch emails from auth for these specific users
+  const emailResults = await Promise.all(
+    userIds.map((id) => adminClient.auth.admin.getUserById(id))
+  )
   const emailMap = new Map<string, string>()
-  for (const u of authData?.users ?? []) {
-    if (u.email) emailMap.set(u.id, u.email)
+  for (const res of emailResults) {
+    const u = res.data?.user
+    if (u?.email) emailMap.set(u.id, u.email)
   }
 
   return profiles.map((p) => ({
@@ -109,7 +110,7 @@ async function findAuthUserIdByEmail(email: string): Promise<string | null> {
 }
 
 export async function inviteUser(
-  input: UserProfileInput,
+  input: InviteUserInput,
   divisionId: string
 ): Promise<{ data: UserProfile | null; error: string | null }> {
   const adminClient = createAdminClient()
@@ -167,13 +168,23 @@ export async function inviteUser(
       employee_id: input.employee_id ?? null,
       position: input.position ?? null,
       department: input.department ?? null,
-      office_id: input.office_id ?? null,
+      office_id: input.office_id,
       contact_number: input.contact_number ?? null,
     })
     .select()
     .single()
 
   if (error) return { data: null, error: error.message }
+
+  const roleRes = await assignRole(
+    { user_id: userId, role_id: input.role_id, office_id: input.office_id },
+    divisionId
+  )
+  if (roleRes.error) {
+    await supabase.schema("procurements").from("user_profiles").delete().eq("id", userId)
+    return { data: null, error: roleRes.error }
+  }
+
   return { data: data as UserProfile, error: null }
 }
 
@@ -187,14 +198,14 @@ export async function updateUserProfile(
     .from("user_profiles")
     .update({
       first_name: input.first_name,
-      middle_name: input.middle_name ?? null,
+      middle_name: input.middle_name || null,
       last_name: input.last_name,
-      suffix: input.suffix ?? null,
-      employee_id: input.employee_id ?? null,
-      position: input.position ?? null,
-      department: input.department ?? null,
+      suffix: input.suffix || null,
+      employee_id: input.employee_id || null,
+      position: input.position || null,
+      department: input.department || null,
       office_id: input.office_id ?? null,
-      contact_number: input.contact_number ?? null,
+      contact_number: input.contact_number || null,
     })
     .eq("id", id)
     .is("deleted_at", null)

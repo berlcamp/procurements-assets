@@ -137,7 +137,7 @@ export default function NewAnnouncementPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Type *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} items={{ info: "Info", warning: "Warning", critical: "Critical", maintenance: "Maintenance" }}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue />

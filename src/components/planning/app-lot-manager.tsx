@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useMemo, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -49,6 +49,16 @@ export function AppLotManager({ appId, items, lots, canManageLots, canFinalizeLo
   const [assignOpen, setAssignOpen] = useState(false)
   const [assignLotId, setAssignLotId] = useState("")
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
+
+  const procurementMethodItems = useMemo(
+    () => Object.fromEntries(PROCUREMENT_MODES.map((mode) => [mode.value, mode.label])),
+    []
+  )
+
+  const lotItems = useMemo(
+    () => Object.fromEntries(lots.filter(l => l.status === "draft").map((lot) => [lot.id, `Lot ${lot.lot_number}: ${lot.lot_name}`])),
+    [lots]
+  )
 
   const approvedUnlottedItems = items.filter(
     i => i.hope_review_status === "approved" && i.lot_id === null
@@ -262,7 +272,7 @@ export function AppLotManager({ appId, items, lots, canManageLots, canFinalizeLo
             </div>
             <div>
               <Label htmlFor="lot-method">Procurement Method (optional)</Label>
-              <Select value={lotMethod} onValueChange={(v) => setLotMethod(v ?? "")}>
+              <Select value={lotMethod} onValueChange={(v) => setLotMethod(v ?? "")} items={procurementMethodItems}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select method..." />
                 </SelectTrigger>
@@ -297,7 +307,7 @@ export function AppLotManager({ appId, items, lots, canManageLots, canFinalizeLo
           <div className="space-y-4">
             <div>
               <Label>Target Lot</Label>
-              <Select value={assignLotId} onValueChange={(v) => setAssignLotId(v ?? "")}>
+              <Select value={assignLotId} onValueChange={(v) => setAssignLotId(v ?? "")} items={lotItems}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select lot..." />
                 </SelectTrigger>

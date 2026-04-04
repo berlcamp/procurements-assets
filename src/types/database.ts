@@ -517,10 +517,18 @@ export interface PpmpLotItem {
   updated_at: string
 }
 
+/** Creator summary for PPMP list (e.g. My PPMP Created column) */
+export interface PpmpCreatorSummary {
+  full_name: string
+  office_name: string | null
+}
+
 // Joined types for UI display
 export interface PpmpWithDetails extends Ppmp {
   office?: Pick<Office, 'id' | 'name' | 'code' | 'office_type'>
   fiscal_year?: Pick<FiscalYear, 'id' | 'year' | 'status'>
+  /** Set when list queries enrich with user_profiles (e.g. getMyPpmps) */
+  creator?: PpmpCreatorSummary
 }
 
 export interface PpmpLotWithItems extends PpmpLot {

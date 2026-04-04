@@ -170,6 +170,10 @@ export function DataTable<T extends object>({
               onValueChange={(val) =>
                 setActiveFilters((prev) => ({ ...prev, [filter.key]: val } as Record<string, string>))
               }
+              items={Object.fromEntries([
+                ["__all__", `All ${filter.label}`],
+                ...filter.options.map((opt) => [opt.value, opt.label]),
+              ])}
             >
               <SelectTrigger className="w-[160px]">
                 <SelectValue placeholder={`All ${filter.label}`} />
@@ -285,6 +289,7 @@ export function DataTable<T extends object>({
                 setPageSize(Number(val))
                 setPage(1)
               }}
+              items={Object.fromEntries(PAGE_SIZE_OPTIONS.map((n) => [String(n), String(n)]))}
             >
               <SelectTrigger className="w-16" size="sm">
                 <SelectValue />

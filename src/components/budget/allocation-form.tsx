@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
@@ -39,6 +39,26 @@ export function AllocationForm() {
     resolver: zodResolver(budgetAllocationSchema),
   })
 
+  const fiscalYearItems = useMemo(
+    () => Object.fromEntries(fiscalYears.map((fy) => [fy.id, `${fy.year} — ${fy.status}${fy.is_active ? " (Active)" : ""}`])),
+    [fiscalYears]
+  )
+
+  const officeItems = useMemo(
+    () => Object.fromEntries(offices.map((o) => [o.id, `${o.name} (${o.code})`])),
+    [offices]
+  )
+
+  const fundSourceItems = useMemo(
+    () => Object.fromEntries(fundSources.map((fs) => [fs.id, `${fs.name} (${fs.code})`])),
+    [fundSources]
+  )
+
+  const accountCodeItems = useMemo(
+    () => Object.fromEntries(accountCodes.map((ac) => [ac.id, `${ac.code} — ${ac.name} (${ac.expense_class})`])),
+    [accountCodes]
+  )
+
   useEffect(() => {
     const supabase = createClient()
     Promise.all([
@@ -74,6 +94,7 @@ export function AllocationForm() {
         <Select
           onValueChange={(v) => { if (v) setValue("fiscal_year_id", v) }}
           value={watch("fiscal_year_id") ?? ""}
+          items={fiscalYearItems}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select fiscal year" />
@@ -97,6 +118,7 @@ export function AllocationForm() {
         <Select
           onValueChange={(v) => { if (v) setValue("office_id", v) }}
           value={watch("office_id") ?? ""}
+          items={officeItems}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select office" />
@@ -120,6 +142,7 @@ export function AllocationForm() {
         <Select
           onValueChange={(v) => { if (v) setValue("fund_source_id", v) }}
           value={watch("fund_source_id") ?? ""}
+          items={fundSourceItems}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select fund source" />
@@ -143,6 +166,7 @@ export function AllocationForm() {
         <Select
           onValueChange={(v) => { if (v) setValue("account_code_id", v) }}
           value={watch("account_code_id") ?? ""}
+          items={accountCodeItems}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select account code" />

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
@@ -27,6 +27,16 @@ export function PpmpForm() {
   } = useForm<PpmpHeaderInput>({
     resolver: zodResolver(ppmpHeaderSchema),
   })
+
+  const officeItems = useMemo(
+    () => Object.fromEntries(offices.map((o) => [o.id, `${o.name} (${o.code})`])),
+    [offices]
+  )
+
+  const fiscalYearItems = useMemo(
+    () => Object.fromEntries(fiscalYears.map((fy) => [fy.id, `FY ${fy.year}${fy.is_active ? " (Active)" : ""}`])),
+    [fiscalYears]
+  )
 
   useEffect(() => {
     const supabase = createClient()
@@ -55,7 +65,7 @@ export function PpmpForm() {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
       <div className="space-y-2">
         <Label>Office *</Label>
-        <Select onValueChange={(v) => { if (v) setValue("office_id", v) }} value={watch("office_id") ?? ""}>
+        <Select onValueChange={(v) => { if (v) setValue("office_id", v) }} value={watch("office_id") ?? ""} items={officeItems}>
           <SelectTrigger>
             <SelectValue placeholder="Select office" />
           </SelectTrigger>
@@ -70,7 +80,7 @@ export function PpmpForm() {
 
       <div className="space-y-2">
         <Label>Fiscal Year *</Label>
-        <Select onValueChange={(v) => { if (v) setValue("fiscal_year_id", v) }} value={watch("fiscal_year_id") ?? ""}>
+        <Select onValueChange={(v) => { if (v) setValue("fiscal_year_id", v) }} value={watch("fiscal_year_id") ?? ""} items={fiscalYearItems}>
           <SelectTrigger>
             <SelectValue placeholder="Select fiscal year" />
           </SelectTrigger>

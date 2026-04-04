@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { AmountDisplay } from "@/components/shared/amount-display"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -94,6 +94,11 @@ export function PpmpVersionDiff({ ppmpId, versions }: PpmpVersionDiffProps) {
   const [rightData, setRightData] = useState<PpmpVersionWithProjects | null>(null)
   const [loading, setLoading] = useState(false)
 
+  const versionItems = useMemo(
+    () => Object.fromEntries(versions.map((v) => [v.version_number.toString(), `v${v.version_number} (${v.version_type})`])),
+    [versions]
+  )
+
   useEffect(() => {
     if (versions.length >= 2) {
       setLeftVer(versions[1].version_number)
@@ -166,7 +171,7 @@ export function PpmpVersionDiff({ ppmpId, versions }: PpmpVersionDiffProps) {
       <div className="flex items-center gap-4">
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Base Version</label>
-          <Select value={leftVer?.toString() ?? ""} onValueChange={(v) => { if (v) setLeftVer(parseInt(v)) }}>
+          <Select value={leftVer?.toString() ?? ""} onValueChange={(v) => { if (v) setLeftVer(parseInt(v)) }} items={versionItems}>
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="Select" />
             </SelectTrigger>
@@ -184,7 +189,7 @@ export function PpmpVersionDiff({ ppmpId, versions }: PpmpVersionDiffProps) {
 
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Compare With</label>
-          <Select value={rightVer?.toString() ?? ""} onValueChange={(v) => { if (v) setRightVer(parseInt(v)) }}>
+          <Select value={rightVer?.toString() ?? ""} onValueChange={(v) => { if (v) setRightVer(parseInt(v)) }} items={versionItems}>
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="Select" />
             </SelectTrigger>

@@ -10,6 +10,7 @@ import { PpmpIndicativeFinalBadge } from "@/components/planning/ppmp-indicative-
 import { PpmpProjectTable } from "@/components/planning/ppmp-item-table"
 import { PpmpReviewActions } from "@/components/planning/ppmp-review-actions"
 import { EditIcon, HistoryIcon } from "lucide-react"
+import { PpmpSubmitForReviewButton } from "@/components/planning/ppmp-submit-for-review-button"
 import type { PpmpLotWithItems } from "@/types/database"
 
 interface Props {
@@ -59,12 +60,18 @@ export default async function PpmpDetailPage({ params }: Props) {
             FY {fy?.year} · Version {ppmp.current_version} · <StatusBadge status={ppmp.status} />
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isDraft && (
-            <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/dashboard/planning/ppmp/${ppmp.id}/edit`} />}>
-              <EditIcon className="mr-1.5 h-3.5 w-3.5" />
-              Edit
-            </Button>
+            <>
+              <PpmpSubmitForReviewButton
+                ppmpId={ppmp.id}
+                disabled={projectCount === 0}
+              />
+              <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/dashboard/planning/ppmp/${ppmp.id}/edit`} />}>
+                <EditIcon className="mr-1.5 h-3.5 w-3.5" />
+                Edit
+              </Button>
+            </>
           )}
           <Button size="sm" variant="ghost" nativeButton={false} render={<Link href={`/dashboard/planning/ppmp/${ppmp.id}/versions`} />}>
             <HistoryIcon className="mr-1.5 h-3.5 w-3.5" />

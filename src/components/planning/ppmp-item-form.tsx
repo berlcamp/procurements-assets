@@ -83,6 +83,7 @@ export function PpmpProjectForm({
             <Select
               onValueChange={(v) => { if (v) setValue("project_type", v as PpmpProjectInput["project_type"]) }}
               value={watch("project_type") ?? ""}
+              items={PPMP_PROJECT_TYPE_LABELS as Record<string, React.ReactNode>}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select project type" />
@@ -167,6 +168,7 @@ export function PpmpLotForm({
               <Select
                 onValueChange={(v) => { if (v) setValue("procurement_mode", v) }}
                 value={watch("procurement_mode") ?? "competitive_bidding"}
+                items={Object.fromEntries(PROCUREMENT_MODES.map((m) => [m.value, m.label]))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select mode" />

@@ -236,6 +236,7 @@ export default function AccountCodesPage() {
                       <Select
                         onValueChange={field.onChange}
                         defaultValue={field.value}
+                        items={Object.fromEntries(EXPENSE_CLASSES.map((cls) => [cls, cls]))}
                       >
                         <FormControl>
                           <SelectTrigger>
