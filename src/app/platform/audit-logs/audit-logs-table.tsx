@@ -28,7 +28,6 @@ const columns: Column<PlatformAuditLogWithDivision>[] = [
   {
     key: "action",
     header: "Action",
-    hideable: false,
     render: (row) => (
       <span className="font-medium">{formatAction(row.action)}</span>
     ),
@@ -45,7 +44,6 @@ const columns: Column<PlatformAuditLogWithDivision>[] = [
   {
     key: "details",
     header: "Details",
-    defaultHidden: true,
     render: (row) => (
       <span
         className="font-mono text-xs text-muted-foreground"
@@ -58,7 +56,6 @@ const columns: Column<PlatformAuditLogWithDivision>[] = [
   {
     key: "performed_by",
     header: "Performed By",
-    defaultHidden: true,
     render: (row) => (
       <span className="font-mono text-xs text-muted-foreground">
         {row.performed_by ? row.performed_by.substring(0, 8) + "..." : "—"}
@@ -84,7 +81,6 @@ export function AuditLogsTable({
       searchable
       searchPlaceholder="Search by action or division..."
       emptyMessage="No audit log entries found."
-      columnToggle
       pageSize={50}
     />
   )

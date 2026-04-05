@@ -14,7 +14,6 @@ const columns: Column<Announcement>[] = [
   {
     key: "title",
     header: "Title",
-    hideable: false,
     render: (row) => <span className="font-medium">{row.title}</span>,
   },
   {
@@ -37,7 +36,6 @@ const columns: Column<Announcement>[] = [
   {
     key: "expires_at",
     header: "Expires At",
-    defaultHidden: true,
     render: (row) => formatDate(row.expires_at),
   },
 ]
@@ -72,7 +70,6 @@ export function AnnouncementsTable({ data }: { data: Announcement[] }) {
       searchPlaceholder="Search by title..."
       emptyMessage="No announcements found."
       filters={filters}
-      columnToggle
     />
   )
 }

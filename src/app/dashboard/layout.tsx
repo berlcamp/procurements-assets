@@ -1,5 +1,6 @@
 import { SidebarProvider, Sidebar } from "@/components/layout/sidebar"
 import { Topbar } from "@/components/layout/topbar"
+import { ActionCountsProvider } from "@/components/layout/action-counts-provider"
 import {
   LayoutDashboard,
   ClipboardList,
@@ -101,20 +102,22 @@ export default function DashboardLayout({
 }) {
   return (
     <SidebarProvider navGroups={navGroups} sectionTitle="Division Portal">
-      {/*
-       * Asana-style layout:
-       *   Sidebar spans full viewport height (left column)
-       *   Content column stacks topbar + scrollable main (right column)
-       */}
-      <div className="flex h-screen overflow-hidden">
-        <Sidebar />
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <Topbar />
-          <main className="flex-1 overflow-y-auto bg-background p-6">
-            {children}
-          </main>
+      <ActionCountsProvider>
+        {/*
+         * Asana-style layout:
+         *   Sidebar spans full viewport height (left column)
+         *   Content column stacks topbar + scrollable main (right column)
+         */}
+        <div className="flex h-screen overflow-hidden">
+          <Sidebar />
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <Topbar />
+            <main className="flex-1 overflow-y-auto bg-background p-6">
+              {children}
+            </main>
+          </div>
         </div>
-      </div>
+      </ActionCountsProvider>
     </SidebarProvider>
   )
 }

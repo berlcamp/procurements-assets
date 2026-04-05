@@ -95,12 +95,11 @@ export default function FundSourcesPage() {
   }
 
   const columns: Column<FundSource>[] = [
-    { key: "code", header: "Code", className: "font-mono font-medium", hideable: false },
-    { key: "name", header: "Name", hideable: false },
+    { key: "code", header: "Code", className: "font-mono font-medium" },
+    { key: "name", header: "Name" },
     {
       key: "description",
       header: "Description",
-      defaultHidden: true,
       render: (row) => (
         <span className="text-muted-foreground">
           {row.description ?? "—"}
@@ -150,7 +149,6 @@ export default function FundSourcesPage() {
         searchPlaceholder="Search by code or name..."
         emptyMessage="No fund sources found."
         filters={filters}
-        columnToggle
       />
 
       {/* Add Sheet */}

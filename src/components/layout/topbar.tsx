@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation"
 import {
   ChevronRight,
   PanelLeft,
-  Bell,
   ChevronDown,
   LogOut,
   Settings,
@@ -26,8 +25,10 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 import { useSidebar, type NavItem } from "./sidebar"
 import { useAuth } from "@/lib/hooks/use-auth"
+import { useProfile } from "@/lib/hooks/use-profile"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
+import { NotificationBell } from "./notification-bell"
 
 // ─── Breadcrumb generation ────────────────────────────────────────────────────
 
@@ -82,6 +83,7 @@ function useBreadcrumbs(): Crumb[] {
 
 function UserDropdown() {
   const { user } = useAuth()
+  const { office_name, roles } = useProfile()
   const router = useRouter()
 
   const displayName = user?.user_metadata?.full_name ?? user?.email ?? "User"
@@ -115,11 +117,24 @@ function UserDropdown() {
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="font-normal py-2">
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-1">
               <span className="text-sm font-semibold leading-none">{displayName}</span>
-              <span className="text-xs text-muted-foreground mt-1">
-                {email}
-              </span>
+              <span className="text-xs text-muted-foreground">{email}</span>
+              {office_name && (
+                <span className="text-xs text-muted-foreground">{office_name}</span>
+              )}
+              {roles.length > 0 && (
+                <div className="flex flex-col gap-0.5 mt-1 pt-1 border-t border-border">
+                  {roles.map((r, i) => (
+                    <div key={i} className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-foreground">{r.role_display_name}</span>
+                      {r.office_name && (
+                        <span className="text-xs text-muted-foreground truncate max-w-[110px]">{r.office_name}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </DropdownMenuLabel>
         </DropdownMenuGroup>
@@ -230,14 +245,7 @@ export function Topbar({ actions }: TopbarProps) {
 
       {/* Right side controls */}
       <div className="flex shrink-0 items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-          aria-label="Notifications"
-        >
-          <Bell className="h-4 w-4" />
-        </Button>
+        <NotificationBell />
         <UserDropdown />
       </div>
     </header>

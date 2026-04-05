@@ -14,7 +14,6 @@ const columns: Column<UserProfile>[] = [
   {
     key: "last_name",
     header: "Name",
-    hideable: false,
     render: (row) => <span className="font-medium">{fullName(row)}</span>,
   },
   {
@@ -67,7 +66,6 @@ export function DivisionUsersTable({ data }: { data: UserProfile[] }) {
       searchPlaceholder="Search by name, employee ID, or position..."
       emptyMessage="No users found for this division."
       filters={filters}
-      columnToggle
     />
   )
 }

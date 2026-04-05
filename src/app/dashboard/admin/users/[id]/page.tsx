@@ -171,6 +171,21 @@ export default function UserDetailPage() {
     setUserRoles((prev) => prev.filter((r) => r.id !== userRoleId))
   }
 
+  // Track selected role name for office filtering
+  const selectedInviteRoleId = profileForm.watch("role_id")
+  const selectedInviteRole = roles.find((r) => r.id === selectedInviteRoleId)
+  const selectedAssignRoleId = roleForm.watch("role_id")
+  const selectedAssignRole = roles.find((r) => r.id === selectedAssignRoleId)
+
+  function officesForRole(roleName: string | undefined) {
+    if (roleName === "school_head") return offices.filter((o) => o.office_type === "school")
+    if (roleName === "section_chief") return offices.filter((o) => o.office_type !== "school")
+    return offices
+  }
+
+  const officeRequired = (roleName: string | undefined) =>
+    roleName === "section_chief" || roleName === "school_head"
+
   const roleItems = useMemo(
     () => Object.fromEntries(roles.map((r) => [r.id, r.display_name])),
     [roles],
@@ -186,13 +201,7 @@ export default function UserDetailPage() {
     () => Object.fromEntries(offices.map((o) => [o.id, o.name])),
     [offices],
   )
-  const officeScopeItems = useMemo(
-    () => Object.fromEntries([
-      ["none", "Division-wide"],
-      ...offices.map((o) => [o.id, o.name]),
-    ]),
-    [offices],
-  )
+
 
   if (loading) {
     return (
@@ -209,18 +218,27 @@ export default function UserDetailPage() {
           {isInvite ? "Invite User" : "Edit User"}
         </h1>
         {!isInvite && user && (
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={async () => {
-              if (!confirm("Deactivate this user?")) return
-              await deactivateUser(params.id)
-              toast.success("User deactivated.")
-              router.push("/dashboard/admin/users")
-            }}
-          >
-            Deactivate
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push("/dashboard/admin/users")}
+            >
+              Close
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={async () => {
+                if (!confirm("Deactivate this user?")) return
+                await deactivateUser(params.id)
+                toast.success("User deactivated.")
+                router.push("/dashboard/admin/users")
+              }}
+            >
+              Deactivate
+            </Button>
+          </div>
         )}
       </div>
 
@@ -326,24 +344,32 @@ export default function UserDetailPage() {
             <div className="space-y-2">
               <Label>{isInvite ? "Office *" : "Office"}</Label>
               {isInvite ? (
-                <Select
-                  value={profileForm.watch("office_id") ?? undefined}
-                  onValueChange={(v) =>
-                    profileForm.setValue("office_id", v ?? "", { shouldValidate: true })
-                  }
-                  items={officeItemsNoNone}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select office" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {offices.map((o) => (
-                      <SelectItem key={o.id} value={o.id}>
-                        {o.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <>
+                  <Select
+                    value={profileForm.watch("office_id") ?? undefined}
+                    onValueChange={(v) =>
+                      profileForm.setValue("office_id", v ?? "", { shouldValidate: true })
+                    }
+                    items={Object.fromEntries(officesForRole(selectedInviteRole?.name).map((o) => [o.id, o.name]))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select office" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {officesForRole(selectedInviteRole?.name).map((o) => (
+                        <SelectItem key={o.id} value={o.id}>
+                          {o.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedInviteRole?.name === "school_head" && (
+                    <p className="text-xs text-muted-foreground">Only schools are shown — School Head is scoped to a specific school.</p>
+                  )}
+                  {selectedInviteRole?.name === "section_chief" && (
+                    <p className="text-xs text-muted-foreground">Only non-school offices are shown — Section Chief is scoped to a specific office.</p>
+                  )}
+                </>
               ) : (
                 <Select
                   value={profileForm.watch("office_id") ?? "none"}
@@ -375,13 +401,6 @@ export default function UserDetailPage() {
             <div className="flex gap-3 pt-2">
               <Button type="submit" disabled={saving}>
                 {saving ? "Saving…" : isInvite ? "Send Invite" : "Save Changes"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => router.push("/dashboard/admin/users")}
-              >
-                Cancel
               </Button>
             </div>
           </form>
@@ -439,7 +458,10 @@ export default function UserDetailPage() {
               <p className="text-sm font-medium">Assign new role</p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Select
-                  onValueChange={(v) => roleForm.setValue("role_id", v as string)}
+                  onValueChange={(v) => {
+                    roleForm.setValue("role_id", v as string)
+                    roleForm.setValue("office_id", null)
+                  }}
                   items={roleItems}
                 >
                   <SelectTrigger>
@@ -454,29 +476,46 @@ export default function UserDetailPage() {
                   </SelectContent>
                 </Select>
 
-                <Select
-                  onValueChange={(v) =>
-                    roleForm.setValue("office_id", v === "none" ? null : v as string)
-                  }
-                  items={officeScopeItems}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Office scope (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Division-wide</SelectItem>
-                    {offices.map((o) => (
-                      <SelectItem key={o.id} value={o.id}>
-                        {o.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="space-y-1">
+                  <Select
+                    onValueChange={(v) =>
+                      roleForm.setValue("office_id", v === "none" ? null : v as string)
+                    }
+                    items={Object.fromEntries([
+                      ...(!officeRequired(selectedAssignRole?.name) ? [["none", "Division-wide"]] : []),
+                      ...officesForRole(selectedAssignRole?.name).map((o) => [o.id, o.name]),
+                    ])}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={officeRequired(selectedAssignRole?.name) ? "Select office *" : "Office scope (optional)"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {!officeRequired(selectedAssignRole?.name) && (
+                        <SelectItem value="none">Division-wide</SelectItem>
+                      )}
+                      {officesForRole(selectedAssignRole?.name).map((o) => (
+                        <SelectItem key={o.id} value={o.id}>
+                          {o.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedAssignRole?.name === "school_head" && (
+                    <p className="text-xs text-muted-foreground">Required — showing schools only.</p>
+                  )}
+                  {selectedAssignRole?.name === "section_chief" && (
+                    <p className="text-xs text-muted-foreground">Required — showing non-school offices only.</p>
+                  )}
+                </div>
               </div>
               <Button
                 type="submit"
                 size="sm"
-                disabled={assigningRole || !roleForm.watch("role_id")}
+                disabled={
+                  assigningRole ||
+                  !roleForm.watch("role_id") ||
+                  (officeRequired(selectedAssignRole?.name) && !roleForm.watch("office_id"))
+                }
               >
                 {assigningRole ? "Assigning…" : "Assign Role"}
               </Button>

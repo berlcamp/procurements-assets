@@ -61,7 +61,6 @@ export async function getApps(
     .schema("procurements")
     .from("apps")
     .select(APP_SELECT)
-    .is("deleted_at", null)
     .order("created_at", { ascending: false })
 
   if (fiscalYearId) {
@@ -85,7 +84,6 @@ export async function getAppById(
     .from("apps")
     .select(APP_SELECT)
     .eq("id", id)
-    .is("deleted_at", null)
     .single()
 
   if (error) return null
@@ -122,7 +120,6 @@ export async function getAppItems(
       lot:app_lots!fk_app_items_lot_id(id, lot_name, lot_number)
     `)
     .eq("app_version_id", appVersionId)
-    .is("deleted_at", null)
     .order("item_number", { ascending: true })
 
   if (error) {
@@ -144,7 +141,6 @@ export async function getAppLots(
       app_items(*)
     `)
     .eq("app_version_id", appVersionId)
-    .is("deleted_at", null)
     .order("lot_number", { ascending: true })
 
   if (error) {
@@ -156,7 +152,6 @@ export async function getAppLots(
   for (const lot of lots) {
     if (lot.app_items) {
       lot.app_items = lot.app_items
-        .filter((i: AppItem) => i.deleted_at === null)
         .sort((a: AppItem, b: AppItem) => (a.lot_item_number ?? 0) - (b.lot_item_number ?? 0))
     }
   }
@@ -226,6 +221,49 @@ export async function getAppUserPermissions(appId: string): Promise<{
     canFinalizeApp: isHope,
     canApproveApp: isHope,
   }
+}
+
+// ============================================================
+// APP action queue (items requiring the current user's attention)
+// ============================================================
+
+export async function getAppsRequiringMyAction(
+  fiscalYearId?: string
+): Promise<AppWithDetails[]> {
+  const supabase = await createClient()
+  const ctx = await getUserRoleContext(supabase)
+  if (!ctx) return []
+
+  const { roleNames } = ctx
+
+  const isHope = roleNames.includes("hope") || roleNames.includes("division_admin")
+  const isBac = roleNames.some(r =>
+    ["bac_chair", "bac_member", "bac_secretariat"].includes(r)
+  )
+
+  if (!isHope && !isBac) return []
+
+  const hopeStatuses = ["indicative", "under_review", "bac_finalization", "final"]
+  const bacStatuses = ["bac_finalization"]
+  const statuses = isHope ? hopeStatuses : bacStatuses
+
+  let query = supabase
+    .schema("procurements")
+    .from("apps")
+    .select(APP_SELECT)
+    .in("status", statuses)
+    .order("updated_at", { ascending: false })
+
+  if (fiscalYearId) {
+    query = query.eq("fiscal_year_id", fiscalYearId)
+  }
+
+  const { data, error } = await query
+  if (error) {
+    console.error("getAppsRequiringMyAction error:", error)
+    return []
+  }
+  return (data ?? []) as AppWithDetails[]
 }
 
 // ============================================================

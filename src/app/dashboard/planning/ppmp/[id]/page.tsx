@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { getPpmpById, getCurrentPpmpVersion, getPpmpProjects } from "@/lib/actions/ppmp"
+import { createClient } from "@/lib/supabase/server"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { AmountDisplay } from "@/components/shared/amount-display"
@@ -11,6 +12,7 @@ import { PpmpProjectTable } from "@/components/planning/ppmp-item-table"
 import { PpmpReviewActions } from "@/components/planning/ppmp-review-actions"
 import { EditIcon, HistoryIcon } from "lucide-react"
 import { PpmpSubmitForReviewButton } from "@/components/planning/ppmp-submit-for-review-button"
+import { PpmpCancelButton } from "@/components/planning/ppmp-cancel-button"
 import type { PpmpLotWithItems } from "@/types/database"
 
 interface Props {
@@ -19,9 +21,11 @@ interface Props {
 
 export default async function PpmpDetailPage({ params }: Props) {
   const { id } = await params
-  const [ppmp, version] = await Promise.all([
+  const supabase = await createClient()
+  const [ppmp, version, { data: { user: authUser } }] = await Promise.all([
     getPpmpById(id),
     getCurrentPpmpVersion(id),
+    supabase.auth.getUser(),
   ])
   if (!ppmp) notFound()
 
@@ -30,6 +34,7 @@ export default async function PpmpDetailPage({ params }: Props) {
   const fy = ppmp.fiscal_year as { year: number } | undefined
 
   const isDraft = ppmp.status === "draft" || ppmp.status === "revision_required"
+  const canCancel = authUser?.id === ppmp.created_by && ppmp.status === "draft"
 
   // Count projects and total lots
   const projectCount = projects.length
@@ -71,6 +76,7 @@ export default async function PpmpDetailPage({ params }: Props) {
                 <EditIcon className="mr-1.5 h-3.5 w-3.5" />
                 Edit
               </Button>
+              {canCancel ? <PpmpCancelButton ppmpId={ppmp.id} /> : null}
             </>
           )}
           <Button size="sm" variant="ghost" nativeButton={false} render={<Link href={`/dashboard/planning/ppmp/${ppmp.id}/versions`} />}>

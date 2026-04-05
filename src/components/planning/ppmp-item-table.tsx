@@ -9,6 +9,14 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { AmountDisplay } from "@/components/shared/amount-display"
@@ -40,6 +48,7 @@ export function PpmpProjectTable({
   onChanged,
 }: PpmpProjectTableProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmDeleteProjectId, setConfirmDeleteProjectId] = useState<string | null>(null)
   const [openProjects, setOpenProjects] = useState<Set<string>>(
     new Set(projects.map((p) => p.id))
   )
@@ -59,6 +68,7 @@ export function PpmpProjectTable({
     setDeletingId(null)
     if (result.error) { toast.error(result.error); return }
     toast.success("Project removed.")
+    setConfirmDeleteProjectId(null)
     onChanged?.()
   }
 
@@ -79,6 +89,16 @@ export function PpmpProjectTable({
     toast.success("Item removed.")
     onChanged?.()
   }
+
+  const projectPendingDelete = confirmDeleteProjectId
+    ? projects.find((p) => p.id === confirmDeleteProjectId)
+    : undefined
+
+  const projectDeleteDescPreview = projectPendingDelete?.general_description
+    ? projectPendingDelete.general_description.length > 160
+      ? `${projectPendingDelete.general_description.slice(0, 160)}…`
+      : projectPendingDelete.general_description
+    : null
 
   const totalBudget = projects.reduce((sum, p) => {
     const lots = (p.ppmp_lots ?? []) as PpmpLotWithItems[]
@@ -137,7 +157,7 @@ export function PpmpProjectTable({
                     <Button
                       variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
                       disabled={deletingId === project.id}
-                      onClick={() => handleDeleteProject(project.id)}
+                      onClick={() => setConfirmDeleteProjectId(project.id)}
                     >
                       <Trash2Icon className="h-3.5 w-3.5" />
                     </Button>
@@ -290,6 +310,52 @@ export function PpmpProjectTable({
           Add Procurement Project
         </Button>
       )}
+
+      <Dialog
+        open={confirmDeleteProjectId !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDeleteProjectId(null)
+        }}
+      >
+        <DialogContent className="max-w-[calc(100%-2rem)] gap-0 p-0 sm:max-w-md">
+          <DialogHeader className="border-b border-border px-6 py-5 text-left">
+            <DialogTitle className="text-lg">Delete procurement project?</DialogTitle>
+            <DialogDescription className="text-left">
+              This will permanently remove{" "}
+              <span className="font-medium text-foreground">
+                Project #{projectPendingDelete?.project_number ?? "—"}
+              </span>
+              {projectDeleteDescPreview && (
+                <>
+                  {" "}
+                  <span className="whitespace-pre-wrap">({projectDeleteDescPreview})</span>
+                </>
+              )}{" "}
+              and all lots and line items under it. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="!mx-0 !mb-0 gap-2 border-t border-border bg-muted/40 px-6 py-4 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmDeleteProjectId(null)}
+              disabled={!!confirmDeleteProjectId && deletingId === confirmDeleteProjectId}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={!confirmDeleteProjectId || deletingId === confirmDeleteProjectId}
+              onClick={() => {
+                if (confirmDeleteProjectId) void handleDeleteProject(confirmDeleteProjectId)
+              }}
+            >
+              {deletingId === confirmDeleteProjectId ? "Deleting…" : "Delete project"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

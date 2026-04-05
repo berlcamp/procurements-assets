@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { getApps } from "@/lib/actions/app"
+import { getApps, getAppsRequiringMyAction } from "@/lib/actions/app"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { Badge } from "@/components/ui/badge"
@@ -64,7 +64,10 @@ function AppTable({ apps }: { apps: AppWithDetails[] }) {
 }
 
 export default async function AppListPage() {
-  const apps = await getApps()
+  const [apps, actionApps] = await Promise.all([
+    getApps(),
+    getAppsRequiringMyAction(),
+  ])
 
   return (
     <div className="space-y-8">
@@ -75,6 +78,26 @@ export default async function AppListPage() {
         </p>
       </div>
 
+      {/* APP That Requires My Action */}
+      <section className="rounded-lg border bg-card overflow-hidden">
+        <div className="px-5 py-4 border-b">
+          <h2 className="text-lg font-semibold">APP That Requires My Action</h2>
+          <p className="text-sm text-muted-foreground">
+            APPs currently awaiting your review or approval
+          </p>
+        </div>
+        <div className="p-0">
+          {actionApps.length === 0 ? (
+            <div className="p-8 text-center">
+              <p className="text-sm text-muted-foreground">No APPs require your action.</p>
+            </div>
+          ) : (
+            <AppTable apps={actionApps} />
+          )}
+        </div>
+      </section>
+
+      {/* All APPs */}
       <section className="rounded-lg border bg-card overflow-hidden">
         <div className="px-5 py-4 border-b">
           <h2 className="text-lg font-semibold">APPs</h2>

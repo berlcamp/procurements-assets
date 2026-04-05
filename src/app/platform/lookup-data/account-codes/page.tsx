@@ -114,14 +114,14 @@ export default function AccountCodesPage() {
   }
 
   const columns: Column<AccountCode>[] = [
-    { key: "code", header: "Code", className: "font-mono", hideable: false },
-    { key: "name", header: "Name", hideable: false },
+    { key: "code", header: "Code", className: "font-mono" },
+    { key: "name", header: "Name" },
     {
       key: "expense_class",
       header: "Expense Class",
       render: (row) => <StatusBadge status={row.expense_class} />,
     },
-    { key: "level", header: "Level", defaultHidden: true },
+    { key: "level", header: "Level" },
     {
       key: "is_active",
       header: "Active",
@@ -176,7 +176,6 @@ export default function AccountCodesPage() {
               searchPlaceholder="Search by code or name..."
               emptyMessage="No account codes found."
               filters={filters}
-              columnToggle
             />
           </TabsContent>
         ))}

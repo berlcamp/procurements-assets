@@ -12,7 +12,6 @@ const columns: Column<Division>[] = [
   {
     key: "name",
     header: "Division Name",
-    hideable: false,
     render: (row) => (
       <Link
         href={`/platform/divisions/${row.id}`}
@@ -43,7 +42,6 @@ const columns: Column<Division>[] = [
   {
     key: "created_at",
     header: "Created",
-    defaultHidden: true,
     render: (row) =>
       new Date(row.created_at).toLocaleDateString("en-PH", {
         dateStyle: "medium",
@@ -95,7 +93,6 @@ export function DivisionsTable({ data }: { data: Division[] }) {
       emptyMessage="No divisions onboarded yet."
       filters={filters}
       rowActions={rowActions}
-      columnToggle
     />
   )
 }

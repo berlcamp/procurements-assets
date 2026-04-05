@@ -19,7 +19,6 @@ const columns: Column<UserProfileForTable>[] = [
   {
     key: "last_name",
     header: "Name",
-    hideable: false,
     render: (row) => (
       <Link
         href={`/dashboard/admin/users/${row.id}`}
@@ -66,7 +65,6 @@ const columns: Column<UserProfileForTable>[] = [
   {
     key: "employee_id",
     header: "Employee ID",
-    defaultHidden: true,
     render: (row) =>
       row.employee_id ? (
         <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
@@ -79,7 +77,6 @@ const columns: Column<UserProfileForTable>[] = [
   {
     key: "position",
     header: "Position",
-    defaultHidden: true,
     render: (row) => <span className="text-sm">{row.position ?? "—"}</span>,
   },
   {
@@ -94,7 +91,6 @@ const columns: Column<UserProfileForTable>[] = [
   {
     key: "created_at",
     header: "Added",
-    defaultHidden: true,
     render: (row) =>
       new Date(row.created_at).toLocaleDateString("en-PH", {
         dateStyle: "medium",
@@ -133,7 +129,6 @@ export function UsersTable({ data }: { data: UserProfileForTable[] }) {
       emptyMessage="No users yet. Invite your first user."
       filters={filters}
       rowActions={rowActions}
-      columnToggle
     />
   )
 }

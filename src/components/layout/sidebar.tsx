@@ -16,6 +16,8 @@ import {
   SheetContent,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { useDivision } from "@/lib/hooks/use-division"
+import { useActionCounts } from "@/components/layout/action-counts-provider"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -100,9 +102,14 @@ export function SidebarProvider({
 
 // ─── Nav Link ─────────────────────────────────────────────────────────────────
 
+const PLANNING_HREF = "/dashboard/planning"
+
 function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
   const pathname = usePathname()
   const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+  const { ppmp, app } = useActionCounts()
+  const planningCount = ppmp + app
+  const badge = item.href === PLANNING_HREF && planningCount > 0 ? planningCount : 0
 
   const linkClassName = cn(
     "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors duration-150",
@@ -116,14 +123,21 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
     return (
       <Tooltip>
         <TooltipTrigger render={<Link href={item.href} className={linkClassName} />}>
-          {item.icon && (
-            <span className={cn("shrink-0", isActive ? "text-sidebar-accent-foreground" : "text-sidebar-foreground/60")}>
-              {item.icon}
-            </span>
-          )}
+          <span className="relative">
+            {item.icon && (
+              <span className={cn("shrink-0", isActive ? "text-sidebar-accent-foreground" : "text-sidebar-foreground/60")}>
+                {item.icon}
+              </span>
+            )}
+            {badge > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-destructive text-[8px] font-bold text-white">
+                {badge > 9 ? "9+" : badge}
+              </span>
+            )}
+          </span>
         </TooltipTrigger>
         <TooltipContent side="right" sideOffset={12}>
-          {item.label}
+          {item.label}{badge > 0 ? ` (${badge})` : ""}
         </TooltipContent>
       </Tooltip>
     )
@@ -136,7 +150,12 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
           {item.icon}
         </span>
       )}
-      <span>{item.label}</span>
+      <span className="flex-1">{item.label}</span>
+      {badge > 0 && (
+        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
     </Link>
   )
 }
@@ -151,14 +170,15 @@ function SidebarInner({
   footer?: React.ReactNode
 }) {
   const { navGroups, brandName } = useSidebar()
+  const { division } = useDivision()
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Brand header */}
       <div
         className={cn(
-          "shrink-0 flex items-center h-14 border-b border-sidebar-border/40",
-          collapsed ? "justify-center px-0" : "px-4"
+          "shrink-0 flex items-center border-b border-sidebar-border/40",
+          collapsed ? "justify-center px-0 h-14" : "px-4 py-3 min-h-14"
         )}
       >
         <Link
@@ -171,9 +191,16 @@ function SidebarInner({
             </span>
           </div>
           {!collapsed && (
-            <span className="text-sm font-semibold text-sidebar-accent-foreground truncate">
-              {brandName}
-            </span>
+            <div className="flex flex-col min-w-0">
+              <span className="text-sm font-semibold text-sidebar-accent-foreground truncate leading-tight">
+                {brandName}
+              </span>
+              {division?.name && (
+                <span className="text-[0.65rem] text-sidebar-foreground/50 truncate leading-tight mt-0.5">
+                  {division.name}
+                </span>
+              )}
+            </div>
           )}
         </Link>
       </div>

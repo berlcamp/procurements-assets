@@ -1,9 +1,13 @@
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ChevronRightIcon, ClipboardList, ScrollText } from "lucide-react"
+import { getActionCounts } from "@/lib/actions/action-counts"
 
-export default function PlanningPage() {
+export default async function PlanningPage() {
+  const { ppmp, app } = await getActionCounts()
+
   return (
     <div className="space-y-6">
       <div>
@@ -20,6 +24,11 @@ export default function PlanningPage() {
             <div className="flex items-center gap-2">
               <ClipboardList className="h-5 w-5 text-muted-foreground" />
               <CardTitle>Project Procurement Management Plan</CardTitle>
+              {ppmp > 0 && (
+                <Badge variant="destructive" className="ml-1 text-xs">
+                  {ppmp}
+                </Badge>
+              )}
             </div>
             <CardDescription>
               Office-level procurement planning per fiscal year. Prepare, submit, and track PPMP approval.
@@ -40,6 +49,11 @@ export default function PlanningPage() {
             <div className="flex items-center gap-2">
               <ScrollText className="h-5 w-5 text-muted-foreground" />
               <CardTitle>Annual Procurement Plan</CardTitle>
+              {app > 0 && (
+                <Badge variant="destructive" className="ml-1 text-xs">
+                  {app}
+                </Badge>
+              )}
             </div>
             <CardDescription>
               Division-wide procurement plan auto-populated from approved PPMPs.

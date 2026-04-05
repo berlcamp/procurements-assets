@@ -44,7 +44,6 @@ const columns: Column<FlatOffice>[] = [
   {
     key: "name",
     header: "Name",
-    hideable: false,
     render: (row) => (
       <div
         className="flex items-center gap-2"
@@ -129,7 +128,6 @@ export function OfficesTable({ tree }: { tree: OfficeWithChildren[] }) {
       emptyMessage="No offices yet. Add your first office."
       filters={filters}
       rowActions={rowActions}
-      columnToggle
     />
   )
 }

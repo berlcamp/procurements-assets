@@ -1,6 +1,21 @@
-"use client"
+"use client";
 
-import * as React from "react"
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -8,75 +23,51 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
-import { Input } from "@/components/ui/input"
-import { Button, buttonVariants } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
-  Columns3Icon,
   MoreHorizontalIcon,
-} from "lucide-react"
-import { cn } from "@/lib/utils"
+} from "lucide-react";
+import * as React from "react";
 
 export interface Column<T> {
-  key: string
-  header: string
-  render?: (row: T) => React.ReactNode
-  className?: string
-  /** Whether this column appears in the column-toggle menu. Defaults to true. */
-  hideable?: boolean
-  /** Start hidden in the column-toggle menu. */
-  defaultHidden?: boolean
+  key: string;
+  header: string;
+  render?: (row: T) => React.ReactNode;
+  className?: string;
 }
 
 export interface FilterDef<T> {
-  key: keyof T & string
-  label: string
-  options: { label: string; value: string }[]
+  key: keyof T & string;
+  label: string;
+  options: { label: string; value: string }[];
 }
 
 export interface RowAction<T> {
-  label: string
-  icon?: React.ReactNode
-  onClick: (row: T) => void
-  variant?: "default" | "destructive"
+  label: string;
+  icon?: React.ReactNode;
+  onClick: (row: T) => void;
+  variant?: "default" | "destructive";
   /** Return true to hide this action for a specific row. */
-  hidden?: (row: T) => boolean
+  hidden?: (row: T) => boolean;
 }
 
 interface DataTableProps<T> {
-  columns: Column<T>[]
-  data: T[]
-  isLoading?: boolean
-  emptyMessage?: string
-  onRowClick?: (row: T) => void
-  searchable?: boolean
-  searchPlaceholder?: string
-  filters?: FilterDef<T>[]
-  rowActions?: RowAction<T>[]
-  columnToggle?: boolean
-  pageSize?: number
+  columns: Column<T>[];
+  data: T[];
+  isLoading?: boolean;
+  emptyMessage?: string;
+  onRowClick?: (row: T) => void;
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  filters?: FilterDef<T>[];
+  rowActions?: RowAction<T>[];
+  pageSize?: number;
 }
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 export function DataTable<T extends object>({
   columns,
@@ -88,67 +79,52 @@ export function DataTable<T extends object>({
   searchPlaceholder = "Search...",
   filters,
   rowActions,
-  columnToggle = false,
   pageSize: initialPageSize = 20,
 }: DataTableProps<T>) {
-  const [search, setSearch] = React.useState("")
+  const [search, setSearch] = React.useState("");
   const [activeFilters, setActiveFilters] = React.useState<
     Record<string, string>
-  >({})
-  const [hiddenColumns, setHiddenColumns] = React.useState<Set<string>>(
-    () => new Set(columns.filter((c) => c.defaultHidden).map((c) => c.key))
-  )
-  const [page, setPage] = React.useState(1)
-  const [pageSize, setPageSize] = React.useState(initialPageSize)
+  >({});
+  const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(initialPageSize);
 
   React.useEffect(() => {
-    setPage(1)
-  }, [search, activeFilters])
+    setPage(1);
+  }, [search, activeFilters]);
 
   const filteredData = React.useMemo(() => {
-    let result = data
+    let result = data;
 
     if (searchable && search.trim()) {
-      const lower = search.toLowerCase()
+      const lower = search.toLowerCase();
       result = result.filter((row) =>
         columns.some((col) => {
-          const val = (row as Record<string, unknown>)[col.key]
-          return typeof val === "string" && val.toLowerCase().includes(lower)
-        })
-      )
+          const val = (row as Record<string, unknown>)[col.key];
+          return typeof val === "string" && val.toLowerCase().includes(lower);
+        }),
+      );
     }
 
     for (const [key, value] of Object.entries(activeFilters)) {
-      if (!value || value === "__all__") continue
+      if (!value || value === "__all__") continue;
       result = result.filter((row) => {
-        const val = (row as Record<string, unknown>)[key]
-        return String(val ?? "") === value
-      })
+        const val = (row as Record<string, unknown>)[key];
+        return String(val ?? "") === value;
+      });
     }
 
-    return result
-  }, [data, search, searchable, columns, activeFilters])
+    return result;
+  }, [data, search, searchable, columns, activeFilters]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize))
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
 
   const paginatedData = React.useMemo(() => {
-    const start = (page - 1) * pageSize
-    return filteredData.slice(start, start + pageSize)
-  }, [filteredData, page, pageSize])
+    const start = (page - 1) * pageSize;
+    return filteredData.slice(start, start + pageSize);
+  }, [filteredData, page, pageSize]);
 
-  const visibleColumns = columns.filter((col) => !hiddenColumns.has(col.key))
-
-  const toggleColumn = (key: string) => {
-    setHiddenColumns((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
-
-  const colSpan = visibleColumns.length + (rowActions ? 1 : 0)
-  const hasToolbar = searchable || (filters && filters.length > 0) || columnToggle
+  const colSpan = columns.length + (rowActions ? 1 : 0);
+  const hasToolbar = searchable || (filters && filters.length > 0);
 
   return (
     <div className="space-y-3">
@@ -168,7 +144,10 @@ export function DataTable<T extends object>({
               key={filter.key}
               value={activeFilters[filter.key] ?? "__all__"}
               onValueChange={(val) =>
-                setActiveFilters((prev) => ({ ...prev, [filter.key]: val } as Record<string, string>))
+                setActiveFilters(
+                  (prev) =>
+                    ({ ...prev, [filter.key]: val }) as Record<string, string>,
+                )
               }
               items={Object.fromEntries([
                 ["__all__", `All ${filter.label}`],
@@ -188,36 +167,6 @@ export function DataTable<T extends object>({
               </SelectContent>
             </Select>
           ))}
-
-          {columnToggle && (
-            <div className="ml-auto">
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  className={cn(
-                    buttonVariants({ variant: "outline", size: "sm" })
-                  )}
-                >
-                  <Columns3Icon />
-                  Columns
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {columns
-                    .filter((col) => col.hideable !== false)
-                    .map((col) => (
-                      <DropdownMenuCheckboxItem
-                        key={col.key}
-                        checked={!hiddenColumns.has(col.key)}
-                        onCheckedChange={() => toggleColumn(col.key)}
-                      >
-                        {col.header}
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          )}
         </div>
       )}
 
@@ -225,7 +174,7 @@ export function DataTable<T extends object>({
         <Table>
           <TableHeader>
             <TableRow>
-              {visibleColumns.map((col) => (
+              {columns.map((col) => (
                 <TableHead key={col.key} className={col.className}>
                   {col.header}
                 </TableHead>
@@ -260,12 +209,12 @@ export function DataTable<T extends object>({
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   className={onRowClick ? "cursor-pointer" : undefined}
                 >
-                  {visibleColumns.map((col) => (
+                  {columns.map((col) => (
                     <TableCell key={col.key} className={col.className}>
                       {col.render
                         ? col.render(row)
                         : String(
-                            (row as Record<string, unknown>)[col.key] ?? ""
+                            (row as Record<string, unknown>)[col.key] ?? "",
                           )}
                     </TableCell>
                   ))}
@@ -286,10 +235,12 @@ export function DataTable<T extends object>({
             <Select
               value={String(pageSize)}
               onValueChange={(val) => {
-                setPageSize(Number(val))
-                setPage(1)
+                setPageSize(Number(val));
+                setPage(1);
               }}
-              items={Object.fromEntries(PAGE_SIZE_OPTIONS.map((n) => [String(n), String(n)]))}
+              items={Object.fromEntries(
+                PAGE_SIZE_OPTIONS.map((n) => [String(n), String(n)]),
+              )}
             >
               <SelectTrigger className="w-16" size="sm">
                 <SelectValue />
@@ -333,29 +284,27 @@ export function DataTable<T extends object>({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function RowActionsCell<T>({
   row,
   actions,
 }: {
-  row: T
-  actions: RowAction<T>[]
+  row: T;
+  actions: RowAction<T>[];
 }) {
-  const visible = actions.filter((a) => !a.hidden?.(row))
+  const visible = actions.filter((a) => !a.hidden?.(row));
 
   if (visible.length === 0) {
-    return <TableCell className="w-12" />
+    return <TableCell className="w-12" />;
   }
 
   return (
     <TableCell className="w-12 py-1">
       <DropdownMenu>
         <DropdownMenuTrigger
-          className={cn(
-            buttonVariants({ variant: "ghost", size: "icon-sm" })
-          )}
+          className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))}
           onClick={(e: React.MouseEvent) => e.stopPropagation()}
         >
           <MoreHorizontalIcon />
@@ -367,8 +316,8 @@ function RowActionsCell<T>({
               key={action.label}
               variant={action.variant}
               onClick={(e: React.MouseEvent) => {
-                e.stopPropagation()
-                action.onClick(row)
+                e.stopPropagation();
+                action.onClick(row);
               }}
             >
               {action.icon}
@@ -378,5 +327,5 @@ function RowActionsCell<T>({
         </DropdownMenuContent>
       </DropdownMenu>
     </TableCell>
-  )
+  );
 }

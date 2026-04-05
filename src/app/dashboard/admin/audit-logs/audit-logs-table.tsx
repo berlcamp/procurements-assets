@@ -18,7 +18,6 @@ const columns: Column<AuditLog>[] = [
   {
     key: "created_at",
     header: "When",
-    hideable: false,
     render: (row) => (
       <span className="whitespace-nowrap text-xs text-muted-foreground">
         {new Date(row.created_at).toLocaleString("en-PH", {
@@ -58,7 +57,6 @@ const columns: Column<AuditLog>[] = [
   {
     key: "changed_fields",
     header: "Changed Fields",
-    defaultHidden: false,
     render: (row) => (
       <span className="text-xs text-muted-foreground">
         {row.changed_fields?.join(", ") ?? "—"}
@@ -68,7 +66,6 @@ const columns: Column<AuditLog>[] = [
   {
     key: "user_id",
     header: "User",
-    defaultHidden: true,
     render: (row) => (
       <span className="font-mono text-xs text-muted-foreground">
         {row.user_id?.slice(0, 8) ?? "—"}
@@ -98,7 +95,6 @@ export function AuditLogsTable({ data }: { data: AuditLog[] }) {
       searchPlaceholder="Search by table or action..."
       emptyMessage="No audit log entries yet."
       filters={filters}
-      columnToggle
       pageSize={50}
     />
   )
