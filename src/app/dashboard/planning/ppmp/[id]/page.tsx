@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { getPpmpById, getCurrentPpmpVersion, getPpmpProjects } from "@/lib/actions/ppmp"
+import { getPpmpById, getCurrentPpmpVersion, getPpmpProjects, getPpmpUserPermissions, getPpmpRemarks } from "@/lib/actions/ppmp"
 import { createClient } from "@/lib/supabase/server"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
@@ -13,6 +13,7 @@ import { PpmpReviewActions } from "@/components/planning/ppmp-review-actions"
 import { EditIcon, HistoryIcon } from "lucide-react"
 import { PpmpSubmitForReviewButton } from "@/components/planning/ppmp-submit-for-review-button"
 import { PpmpCancelButton } from "@/components/planning/ppmp-cancel-button"
+import { PpmpRemarks } from "@/components/planning/ppmp-remarks"
 import type { PpmpLotWithItems } from "@/types/database"
 
 interface Props {
@@ -22,10 +23,12 @@ interface Props {
 export default async function PpmpDetailPage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
-  const [ppmp, version, { data: { user: authUser } }] = await Promise.all([
+  const [ppmp, version, { data: { user: authUser } }, permissions, remarks] = await Promise.all([
     getPpmpById(id),
     getCurrentPpmpVersion(id),
     supabase.auth.getUser(),
+    getPpmpUserPermissions(),
+    getPpmpRemarks(id),
   ])
   if (!ppmp) notFound()
 
@@ -35,6 +38,12 @@ export default async function PpmpDetailPage({ params }: Props) {
 
   const isDraft = ppmp.status === "draft" || ppmp.status === "revision_required"
   const canCancel = authUser?.id === ppmp.created_by && ppmp.status === "draft"
+
+  // Only show review actions when this user has a role matching the current status
+  const hasActionableReview =
+    (ppmp.status === "submitted" && permissions.canChiefReview) ||
+    (ppmp.status === "chief_reviewed" && permissions.canCertify) ||
+    (ppmp.status === "budget_certified" && permissions.canApprove)
 
   // Count projects and total lots
   const projectCount = projects.length
@@ -101,22 +110,34 @@ export default async function PpmpDetailPage({ params }: Props) {
             </div>
           </div>
 
+          {hasActionableReview && (
+            <div className="rounded-lg border bg-card overflow-hidden">
+              <div className="px-5 py-4 border-b">
+                <h2 className="text-lg font-semibold">Review Actions</h2>
+              </div>
+              <div className="p-5">
+                <PpmpReviewActions
+                  ppmpId={ppmp.id}
+                  ppmpStatus={ppmp.status}
+                  canChiefReview={permissions.canChiefReview}
+                  canCertify={permissions.canCertify}
+                  canApprove={permissions.canApprove}
+                  canReturn={permissions.canReturn}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="rounded-lg border bg-card overflow-hidden">
             <div className="px-5 py-4 border-b">
-              <h2 className="text-lg font-semibold">Review Actions</h2>
+              <h2 className="text-lg font-semibold">Remarks</h2>
             </div>
             <div className="p-5">
-              <PpmpReviewActions
+              <PpmpRemarks
                 ppmpId={ppmp.id}
-                ppmpStatus={ppmp.status}
-                canChiefReview={false}
-                canCertify={false}
-                canApprove={false}
-                canReturn={false}
+                remarks={remarks}
+                canAddRemark={permissions.canReturn}
               />
-              <p className="text-xs text-muted-foreground mt-2">
-                Actions are available to authorized roles when PPMP is at the relevant stage.
-              </p>
             </div>
           </div>
         </div>

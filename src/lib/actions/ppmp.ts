@@ -225,6 +225,26 @@ async function getUserRoleContext(
   return { user, profile, roles, roleNames };
 }
 
+export async function getPpmpUserPermissions(): Promise<{
+  canChiefReview: boolean;
+  canCertify: boolean;
+  canApprove: boolean;
+  canReturn: boolean;
+}> {
+  const supabase = await createClient();
+  const ctx = await getUserRoleContext(supabase);
+  const none = { canChiefReview: false, canCertify: false, canApprove: false, canReturn: false };
+  if (!ctx) return none;
+
+  const { roleNames } = ctx;
+  const canChiefReview = roleNames.some((r) => ["section_chief", "school_head", "division_admin"].includes(r));
+  const canCertify = roleNames.some((r) => ["budget_officer", "division_admin"].includes(r));
+  const canApprove = roleNames.some((r) => ["hope", "division_admin"].includes(r));
+  const canReturn = canChiefReview || canCertify || canApprove;
+
+  return { canChiefReview, canCertify, canApprove, canReturn };
+}
+
 /**
  * Returns PPMPs created by the current user ("My PPMP" list only).
  * Division- or office-wide PPMP views belong on a different screen or use {@link getPpmps}.
@@ -1102,4 +1122,83 @@ export async function getPpmpVersionHistory(
     return [];
   }
   return (data ?? []) as PpmpVersionHistoryRow[];
+}
+
+// ============================================================
+// PPMP Remarks (approval_logs with action = 'noted')
+// ============================================================
+
+export type PpmpRemark = {
+  id: string;
+  remarks: string;
+  acted_at: string;
+  step_name: string;
+  actor_name: string;
+};
+
+export async function getPpmpRemarks(ppmpId: string): Promise<PpmpRemark[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .schema("procurements")
+    .from("approval_logs")
+    .select("id, remarks, acted_at, step_name, acted_by")
+    .eq("reference_type", "ppmp")
+    .eq("reference_id", ppmpId)
+    .eq("action", "noted")
+    .order("acted_at", { ascending: true });
+
+  if (error) {
+    console.error("getPpmpRemarks error:", error);
+    return [];
+  }
+
+  const rows = (data ?? []) as {
+    id: string;
+    remarks: string;
+    acted_at: string;
+    step_name: string;
+    acted_by: string;
+  }[];
+
+  if (rows.length === 0) return [];
+
+  // Resolve actor names
+  const actorIds = [...new Set(rows.map((r) => r.acted_by))];
+  const { data: profiles } = await supabase
+    .schema("procurements")
+    .from("user_profiles")
+    .select("id, first_name, last_name")
+    .in("id", actorIds);
+
+  const nameMap = new Map(
+    (profiles ?? []).map((p: { id: string; first_name: string; last_name: string }) => [
+      p.id,
+      `${p.first_name} ${p.last_name}`.trim(),
+    ]),
+  );
+
+  return rows.map((r) => ({
+    id: r.id,
+    remarks: r.remarks,
+    acted_at: r.acted_at,
+    step_name: r.step_name,
+    actor_name: nameMap.get(r.acted_by) ?? "Unknown",
+  }));
+}
+
+export async function addPpmpRemark(
+  ppmpId: string,
+  remarks: string,
+): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .schema("procurements")
+    .rpc("add_ppmp_remark", { p_ppmp_id: ppmpId, p_remarks: remarks });
+
+  if (error) {
+    console.error("addPpmpRemark error:", error);
+    return { error: error.message };
+  }
+  revalidatePath(`/dashboard/planning/ppmp/${ppmpId}`);
+  return { error: null };
 }

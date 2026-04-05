@@ -701,7 +701,7 @@ ppmp_items (id, ppmp_version_id, ppmp_id, item_number, category, description, un
 
 ---
 
-## [ ] PHASE 6: Planning Module (APP)
+## [x] PHASE 6: Planning Module (APP)
 
 ### A. Scope
 

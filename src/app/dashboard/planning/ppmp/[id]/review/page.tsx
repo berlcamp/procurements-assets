@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { getPpmpById, getCurrentPpmpVersion, getPpmpProjects } from "@/lib/actions/ppmp"
+import { getPpmpById, getCurrentPpmpVersion, getPpmpProjects, getPpmpUserPermissions } from "@/lib/actions/ppmp"
 import {
   Card, CardContent, CardHeader, CardTitle,
 } from "@/components/ui/card"
@@ -19,9 +19,10 @@ interface Props {
 
 export default async function PpmpReviewPage({ params }: Props) {
   const { id } = await params
-  const [ppmp, version] = await Promise.all([
+  const [ppmp, version, permissions] = await Promise.all([
     getPpmpById(id),
     getCurrentPpmpVersion(id),
+    getPpmpUserPermissions(),
   ])
   if (!ppmp) notFound()
 
@@ -29,7 +30,11 @@ export default async function PpmpReviewPage({ params }: Props) {
   const office = ppmp.office as { name: string; code: string } | undefined
   const fy = ppmp.fiscal_year as { year: number } | undefined
 
-  const reviewable = ["submitted","chief_reviewed","budget_certified"].includes(ppmp.status)
+  // Only show review actions when the user's role matches the current status
+  const reviewable =
+    (ppmp.status === "submitted" && permissions.canChiefReview) ||
+    (ppmp.status === "chief_reviewed" && permissions.canCertify) ||
+    (ppmp.status === "budget_certified" && permissions.canApprove)
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -64,10 +69,10 @@ export default async function PpmpReviewPage({ params }: Props) {
                 <PpmpReviewActions
                   ppmpId={ppmp.id}
                   ppmpStatus={ppmp.status}
-                  canChiefReview={ppmp.status === "submitted"}
-                  canCertify={ppmp.status === "chief_reviewed"}
-                  canApprove={ppmp.status === "budget_certified"}
-                  canReturn={true}
+                  canChiefReview={permissions.canChiefReview}
+                  canCertify={permissions.canCertify}
+                  canApprove={permissions.canApprove}
+                  canReturn={permissions.canReturn}
                 />
                 <p className="text-xs text-muted-foreground">
                   Role-based permission enforcement is applied by RLS on the server.
