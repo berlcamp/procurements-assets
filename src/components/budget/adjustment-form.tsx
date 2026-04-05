@@ -53,7 +53,7 @@ export function AdjustmentForm() {
       .is("deleted_at", null)
       .eq("status", "active")
       .order("created_at", { ascending: false })
-      .then(({ data }) => {
+      .then(({ data }: { data: BudgetAllocationWithDetails[] | null }) => {
         setAllocations((data ?? []) as BudgetAllocationWithDetails[])
       })
   }, [])

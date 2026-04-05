@@ -13,7 +13,7 @@ export function useIsSuperAdmin() {
     supabase
       .schema("platform")
       .rpc("is_super_admin")
-      .then(({ data }) => {
+      .then(({ data }: { data: boolean | null }) => {
         setIsSuperAdmin(Boolean(data))
         setLoading(false)
       })

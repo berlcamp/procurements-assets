@@ -13,7 +13,7 @@ export function usePermissions() {
     supabase
       .schema("procurements")
       .rpc("get_user_permissions")
-      .then(({ data }) => {
+      .then(({ data }: { data: string[] | null }) => {
         setPermissions((data as string[]) ?? [])
         setLoading(false)
       })
