@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   CalendarDays,
   ScrollText,
+  FileText,
 } from "lucide-react"
 import type { NavGroup } from "@/components/layout/sidebar"
 
@@ -40,6 +41,16 @@ const navGroups: NavGroup[] = [
         label: "Procurement",
         href: "/dashboard/procurement",
         icon: <ShoppingCart className="h-4 w-4" />,
+      },
+      {
+        label: "Purchase Requests",
+        href: "/dashboard/procurement/purchase-requests",
+        icon: <FileText className="h-4 w-4" />,
+      },
+      {
+        label: "Suppliers",
+        href: "/dashboard/procurement/suppliers",
+        icon: <Building2 className="h-4 w-4" />,
       },
       {
         label: "Assets",

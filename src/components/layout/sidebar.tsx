@@ -4,7 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
+  useMemo,
   useState,
 } from "react"
 import Link from "next/link"
@@ -66,14 +66,15 @@ export function SidebarProvider({
   sectionTitle,
   brandName = "DepEd PAS",
 }: SidebarProviderProps) {
-  const [collapsed, setCollapsed] = useState(false)
-  const [mobileOpen, setMobileOpen] = useState(false)
-
-  useEffect(() => {
-    if (localStorage.getItem("sidebar-collapsed") === "true") {
-      setCollapsed(true)
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false
+    try {
+      return localStorage.getItem("sidebar-collapsed") === "true"
+    } catch {
+      return false
     }
-  }, [])
+  })
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed((prev) => {
@@ -104,9 +105,26 @@ export function SidebarProvider({
 
 const PLANNING_HREF = "/dashboard/planning"
 
-function NavLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
-  const pathname = usePathname()
-  const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+/** Single active item: longest matching href wins (e.g. /dashboard/planning over /dashboard). */
+function computeActiveNavHref(pathname: string, navGroups: NavGroup[]): string | null {
+  const hrefs = navGroups.flatMap((g) => g.items.map((i) => i.href))
+  const matches = hrefs.filter(
+    (href) => pathname === href || pathname.startsWith(href + "/")
+  )
+  if (matches.length === 0) return null
+  return matches.reduce((a, b) => (a.length >= b.length ? a : b))
+}
+
+function NavLink({
+  item,
+  collapsed,
+  activeHref,
+}: {
+  item: NavItem
+  collapsed: boolean
+  activeHref: string | null
+}) {
+  const isActive = activeHref === item.href
   const { ppmp, app } = useActionCounts()
   const planningCount = ppmp + app
   const badge = item.href === PLANNING_HREF && planningCount > 0 ? planningCount : 0
@@ -170,6 +188,11 @@ function SidebarInner({
   footer?: React.ReactNode
 }) {
   const { navGroups, brandName } = useSidebar()
+  const pathname = usePathname()
+  const activeNavHref = useMemo(
+    () => computeActiveNavHref(pathname, navGroups),
+    [pathname, navGroups]
+  )
   const { division } = useDivision()
 
   return (
@@ -221,7 +244,11 @@ function SidebarInner({
               <ul className="space-y-0.5">
                 {group.items.map((item) => (
                   <li key={item.href}>
-                    <NavLink item={item} collapsed={collapsed} />
+                    <NavLink
+                      item={item}
+                      collapsed={collapsed}
+                      activeHref={activeNavHref}
+                    />
                   </li>
                 ))}
               </ul>

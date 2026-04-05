@@ -696,3 +696,146 @@ export interface AppSummary {
   draft_lots: number
   total_budget: string
 }
+
+// ============================================================
+// Procurement types (Phase 7)
+// ============================================================
+
+export type SupplierStatus = 'active' | 'blacklisted' | 'suspended' | 'inactive'
+
+export type PrStatus =
+  | 'draft'
+  | 'submitted'
+  | 'budget_certified'
+  | 'approved'
+  | 'in_procurement'
+  | 'completed'
+  | 'cancelled'
+
+export type ObrStatus = 'pending' | 'certified' | 'obligated' | 'cancelled'
+
+export interface Supplier {
+  id: string
+  division_id: string
+  name: string
+  trade_name: string | null
+  tin: string
+  philgeps_number: string | null
+  address: string | null
+  city: string | null
+  province: string | null
+  zip_code: string | null
+  contact_person: string | null
+  contact_number: string | null
+  email: string | null
+  website: string | null
+  business_type: string | null
+  classification: string[]
+  status: SupplierStatus
+  blacklist_reason: string | null
+  blacklist_date: string | null
+  blacklist_until: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+export interface PurchaseRequest {
+  id: string
+  division_id: string
+  pr_number: string
+  office_id: string
+  fiscal_year_id: string
+  purpose: string
+  requested_by: string
+  requested_at: string | null
+  fund_source_id: string | null
+  budget_allocation_id: string | null
+  ppmp_item_id: string | null
+  app_item_id: string | null
+  lot_id: string | null
+  total_estimated_cost: string
+  status: PrStatus
+  budget_certified_by: string | null
+  budget_certified_at: string | null
+  approved_by: string | null
+  approved_at: string | null
+  cancellation_reason: string | null
+  cancelled_by: string | null
+  cancelled_at: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+export interface PrItem {
+  id: string
+  purchase_request_id: string
+  item_number: number
+  description: string
+  unit: string
+  quantity: string
+  estimated_unit_cost: string
+  estimated_total_cost: string
+  ppmp_item_id: string | null
+  app_item_id: string | null
+  remarks: string | null
+  office_id: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ObligationRequest {
+  id: string
+  division_id: string
+  obr_number: string
+  purchase_request_id: string
+  procurement_id: string | null
+  budget_allocation_id: string | null
+  office_id: string | null
+  amount: string
+  status: ObrStatus
+  certified_by: string | null
+  certified_at: string | null
+  obligated_at: string | null
+  remarks: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+// Joined types for UI
+
+export interface PurchaseRequestWithDetails extends PurchaseRequest {
+  office?: Pick<Office, 'id' | 'name' | 'code'>
+  fiscal_year?: Pick<FiscalYear, 'id' | 'year' | 'status'>
+  fund_source?: Pick<FundSource, 'id' | 'name' | 'code'> | null
+  budget_allocation?: Pick<BudgetAllocation, 'id' | 'adjusted_amount' | 'obligated_amount'> | null
+  app_item?: Pick<AppItem, 'id' | 'general_description' | 'estimated_budget' | 'procurement_mode'> | null
+  lot?: Pick<AppLot, 'id' | 'lot_name' | 'lot_number'> | null
+  pr_items?: PrItem[]
+  obr?: ObligationRequest | null
+  requester?: Pick<UserProfile, 'id' | 'first_name' | 'last_name'> | null
+}
+
+export interface ProcurementDashboardStats {
+  total_prs: number
+  draft_prs: number
+  pending_certification: number
+  pending_approval: number
+  in_procurement: number
+  completed_prs: number
+  total_obligated: string
+  total_prs_value: string
+}
+
+export interface SplitContractWarning {
+  warning: boolean
+  cumulative_amount: number
+  threshold: number
+  pr_count: number
+}
