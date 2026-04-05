@@ -153,7 +153,13 @@ export function PpmpReviewActions({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={handleConfirm} disabled={loading}>
+            <Button
+              onClick={handleConfirm}
+              disabled={
+                loading ||
+                (action !== "chief_forward" && action !== "certify" && action !== "approve" && notes.trim().length < 5)
+              }
+            >
               {loading ? "Processing..." : "Confirm"}
             </Button>
           </DialogFooter>

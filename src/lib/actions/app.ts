@@ -452,3 +452,26 @@ export async function approveApp(
   revalidatePath(`/dashboard/planning/app/${appId}`)
   return { error: null }
 }
+
+// ============================================================
+// APP amendment
+// ============================================================
+
+export async function createAppAmendment(
+  appId: string,
+  justification: string,
+): Promise<{ versionId: string | null; error: string | null }> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .schema("procurements")
+    .rpc("create_app_amendment", {
+      p_app_id: appId,
+      p_justification: justification,
+    })
+
+  if (error) return { versionId: null, error: error.message }
+
+  revalidatePath("/dashboard/planning/app")
+  revalidatePath(`/dashboard/planning/app/${appId}`)
+  return { versionId: data as string, error: null }
+}

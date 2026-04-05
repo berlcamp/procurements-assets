@@ -13,6 +13,7 @@ import { PpmpReviewActions } from "@/components/planning/ppmp-review-actions"
 import { EditIcon, HistoryIcon } from "lucide-react"
 import { PpmpSubmitForReviewButton } from "@/components/planning/ppmp-submit-for-review-button"
 import { PpmpCancelButton } from "@/components/planning/ppmp-cancel-button"
+import { PpmpAmendmentButton } from "@/components/planning/ppmp-amendment-button"
 import { PpmpRemarks } from "@/components/planning/ppmp-remarks"
 import type { PpmpLotWithItems } from "@/types/database"
 
@@ -38,6 +39,7 @@ export default async function PpmpDetailPage({ params }: Props) {
 
   const isDraft = ppmp.status === "draft" || ppmp.status === "revision_required"
   const canCancel = authUser?.id === ppmp.created_by && ppmp.status === "draft"
+  const canAmend = authUser?.id === ppmp.created_by && (ppmp.status === "approved" || ppmp.status === "locked")
 
   // Only show review actions when this user has a role matching the current status
   const hasActionableReview =
@@ -88,6 +90,7 @@ export default async function PpmpDetailPage({ params }: Props) {
               {canCancel ? <PpmpCancelButton ppmpId={ppmp.id} /> : null}
             </>
           )}
+          {canAmend && <PpmpAmendmentButton ppmpId={ppmp.id} />}
           <Button size="sm" variant="ghost" nativeButton={false} render={<Link href={`/dashboard/planning/ppmp/${ppmp.id}/versions`} />}>
             <HistoryIcon className="mr-1.5 h-3.5 w-3.5" />
             History

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { getPpmpById, getCurrentPpmpVersion, getPpmpProjects, getPpmpUserPermissions } from "@/lib/actions/ppmp"
+import { getPpmpById, getCurrentPpmpVersion, getPpmpProjects, getPpmpUserPermissions, getPpmpRemarks } from "@/lib/actions/ppmp"
 import {
   Card, CardContent, CardHeader, CardTitle,
 } from "@/components/ui/card"
@@ -10,6 +10,7 @@ import { PpmpApprovalChain } from "@/components/planning/ppmp-approval-chain"
 import { PpmpIndicativeFinalBadge } from "@/components/planning/ppmp-indicative-final-badge"
 import { PpmpProjectTable } from "@/components/planning/ppmp-item-table"
 import { PpmpReviewActions } from "@/components/planning/ppmp-review-actions"
+import { PpmpRemarks } from "@/components/planning/ppmp-remarks"
 import { AmountDisplay } from "@/components/shared/amount-display"
 import { Separator } from "@/components/ui/separator"
 
@@ -19,10 +20,11 @@ interface Props {
 
 export default async function PpmpReviewPage({ params }: Props) {
   const { id } = await params
-  const [ppmp, version, permissions] = await Promise.all([
+  const [ppmp, version, permissions, remarks] = await Promise.all([
     getPpmpById(id),
     getCurrentPpmpVersion(id),
     getPpmpUserPermissions(),
+    getPpmpRemarks(id),
   ])
   if (!ppmp) notFound()
 
@@ -80,6 +82,17 @@ export default async function PpmpReviewPage({ params }: Props) {
               </CardContent>
             </Card>
           )}
+
+          <Card>
+            <CardHeader><CardTitle className="text-base">Remarks</CardTitle></CardHeader>
+            <CardContent>
+              <PpmpRemarks
+                ppmpId={ppmp.id}
+                remarks={remarks}
+                canAddRemark={permissions.canReturn}
+              />
+            </CardContent>
+          </Card>
         </div>
 
         <div className="space-y-4">
