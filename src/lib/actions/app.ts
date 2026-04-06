@@ -141,6 +141,7 @@ export async function getAppLots(
       app_items(*)
     `)
     .eq("app_version_id", appVersionId)
+    .is("deleted_at", null)
     .order("lot_number", { ascending: true })
 
   if (error) {
@@ -200,6 +201,7 @@ export async function getAppVersionHistory(
 
 export async function getAppUserPermissions(appId: string): Promise<{
   canHopeReview: boolean
+  canViewLots: boolean
   canManageLots: boolean
   canFinalizeLot: boolean
   canFinalizeApp: boolean
@@ -207,7 +209,7 @@ export async function getAppUserPermissions(appId: string): Promise<{
 }> {
   const supabase = await createClient()
   const ctx = await getUserRoleContext(supabase)
-  if (!ctx) return { canHopeReview: false, canManageLots: false, canFinalizeLot: false, canFinalizeApp: false, canApproveApp: false }
+  if (!ctx) return { canHopeReview: false, canViewLots: false, canManageLots: false, canFinalizeLot: false, canFinalizeApp: false, canApproveApp: false }
 
   const { roleNames } = ctx
   const isHope = roleNames.includes("hope") || roleNames.includes("division_admin")
@@ -216,6 +218,7 @@ export async function getAppUserPermissions(appId: string): Promise<{
 
   return {
     canHopeReview: isHope,
+    canViewLots: isHope || isBac,
     canManageLots: isBac,
     canFinalizeLot,
     canFinalizeApp: isHope,
@@ -408,6 +411,20 @@ export async function finalizeLot(
   const { error } = await supabase
     .schema("procurements")
     .rpc("finalize_lot", { p_lot_id: lotId })
+
+  if (error) return { error: error.message }
+
+  revalidatePath("/dashboard/planning/app")
+  return { error: null }
+}
+
+export async function deleteAppLot(
+  lotId: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .schema("procurements")
+    .rpc("delete_app_lot", { p_lot_id: lotId })
 
   if (error) return { error: error.message }
 

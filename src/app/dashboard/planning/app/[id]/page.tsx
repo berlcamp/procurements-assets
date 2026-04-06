@@ -56,7 +56,7 @@ export default async function AppDetailPage({ params }: Props) {
               HOPE Review
             </Button>
           )}
-          {permissions.canManageLots && (
+          {permissions.canViewLots && (
             <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/dashboard/planning/app/${app.id}/lots`} />}>
               <Layers className="mr-1.5 h-3.5 w-3.5" />
               BAC Lots

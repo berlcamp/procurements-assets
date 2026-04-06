@@ -12,7 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { AmountDisplay } from "@/components/shared/amount-display"
+import { AmountDisplay, formatPeso } from "@/components/shared/amount-display"
 import { PrItemsEdit } from "@/components/procurement/pr-items-table"
 import { createPrSchema, type CreatePrInput } from "@/lib/schemas/procurement"
 import { createPurchaseRequest, getApprovedAppItemsForOffice, checkSplitContract } from "@/lib/actions/procurement"
@@ -75,7 +75,7 @@ export function PrCreateForm({ fiscalYear, offices }: PrCreateFormProps) {
     form.setValue("budget_allocation_id", item.budget_allocation_id ?? undefined)
     // Pre-fill first line item from APP item description
     form.setValue("items.0.description", item.general_description)
-    form.setValue("items.0.estimated_unit_cost", item.estimated_budget ?? "0")
+    form.setValue("items.0.estimated_unit_cost", String(item.estimated_budget ?? "0"))
   }
 
   async function onSubmit(data: CreatePrInput) {
@@ -88,13 +88,25 @@ export function PrCreateForm({ fiscalYear, offices }: PrCreateFormProps) {
     router.push(`/dashboard/procurement/purchase-requests/${result.id}`)
   }
 
-  const available = selectedItem?.budget_allocation_id
-    ? null  // would need a live fetch; shown as N/A
-    : null
+  const grandTotal = watchItems.reduce((sum, i) => {
+    const q = parseFloat(i.quantity || "0")
+    const c = parseFloat(i.estimated_unit_cost || "0")
+    return sum + (isNaN(q) || isNaN(c) ? 0 : q * c)
+  }, 0)
+
+  const appBudget = selectedItem ? parseFloat(selectedItem.estimated_budget ?? "0") : null
+  const budgetExceeded = appBudget !== null && grandTotal > appBudget
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {budgetExceeded && (
+          <Alert className="border-red-400 bg-red-50">
+            <AlertDescription className="text-red-800">
+              <strong>Budget Exceeded:</strong> PR total of <strong>{formatPeso(grandTotal)}</strong> exceeds the APP item budget of <strong>{formatPeso(appBudget!)}</strong>. Reduce item quantities or costs before submitting.
+            </AlertDescription>
+          </Alert>
+        )}
         {splitWarning && (
           <Alert className="border-yellow-400 bg-yellow-50">
             <AlertDescription className="text-yellow-800">
@@ -113,7 +125,11 @@ export function PrCreateForm({ fiscalYear, offices }: PrCreateFormProps) {
               <FormField control={form.control} name="office_id" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Office *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    items={Object.fromEntries(offices.map(o => [o.id, o.name]))}
+                  >
                     <FormControl>
                       <SelectTrigger><SelectValue placeholder="Select office" /></SelectTrigger>
                     </FormControl>
@@ -206,7 +222,7 @@ export function PrCreateForm({ fiscalYear, offices }: PrCreateFormProps) {
         </Card>
 
         <div className="flex gap-3">
-          <Button type="submit" disabled={form.formState.isSubmitting}>
+          <Button type="submit" disabled={form.formState.isSubmitting || budgetExceeded}>
             {form.formState.isSubmitting ? "Saving…" : "Save as Draft"}
           </Button>
           <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>

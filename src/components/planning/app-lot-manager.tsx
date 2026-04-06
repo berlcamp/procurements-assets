@@ -22,9 +22,15 @@ import {
 } from "@/components/ui/select"
 import { AppLotCard } from "./app-lot-card"
 import { PlusIcon, Lock, MoveRight } from "lucide-react"
-import { createAppLot, assignItemsToLot, unassignItemsFromLot, finalizeLot } from "@/lib/actions/app"
+import { createAppLot, assignItemsToLot, unassignItemsFromLot, finalizeLot, deleteAppLot } from "@/lib/actions/app"
 import { PROCUREMENT_MODES } from "@/lib/schemas/ppmp"
 import type { AppItemWithOffice, AppLotWithItems } from "@/types/database"
+import { cn } from "@/lib/utils"
+
+const lotTableShell =
+  "overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm dark:bg-card"
+const lotTableHeader =
+  "border-b border-border/50 bg-muted/35 [&_tr]:border-border/50 [&_tr]:hover:bg-transparent"
 
 interface AppLotManagerProps {
   appId: string
@@ -49,6 +55,10 @@ export function AppLotManager({ appId, items, lots, canManageLots, canFinalizeLo
   const [assignOpen, setAssignOpen] = useState(false)
   const [assignLotId, setAssignLotId] = useState("")
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
+
+  // Delete lot confirmation
+  const [deleteLotId, setDeleteLotId] = useState<string | null>(null)
+  const deletingLot = lots.find(l => l.id === deleteLotId)
 
   const procurementMethodItems = useMemo(
     () => Object.fromEntries(PROCUREMENT_MODES.map((mode) => [mode.value, mode.label])),
@@ -126,6 +136,19 @@ export function AppLotManager({ appId, items, lots, canManageLots, canFinalizeLo
     })
   }
 
+  const handleDeleteLot = () => {
+    if (!deleteLotId) return
+    setError(null)
+    startTransition(async () => {
+      const result = await deleteAppLot(deleteLotId)
+      if (result.error) setError(result.error)
+      else {
+        setDeleteLotId(null)
+        router.refresh()
+      }
+    })
+  }
+
   return (
     <div className="space-y-6">
       {error && (
@@ -162,38 +185,43 @@ export function AppLotManager({ appId, items, lots, canManageLots, canFinalizeLo
         <div className="space-y-4">
           {lots.map((lot) => (
             <div key={lot.id} className="space-y-2">
-              <AppLotCard lot={lot} />
+              <AppLotCard lot={lot} onDelete={canManageLots ? () => setDeleteLotId(lot.id) : undefined} />
 
               {/* Lot items */}
               {lot.app_items && lot.app_items.length > 0 && (
-                <div className="ml-4 rounded-lg border overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[50px]">#</TableHead>
+                <div className={cn("ml-4", lotTableShell)}>
+                  <Table className="[&_td]:px-3 [&_td]:py-2.5 [&_th]:h-11 [&_th]:px-3 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground">
+                    <TableHeader className={lotTableHeader}>
+                      <TableRow className="border-0 hover:bg-transparent">
+                        <TableHead className="w-[52px]">#</TableHead>
                         <TableHead>Description</TableHead>
-                        <TableHead className="text-right">Est. Budget</TableHead>
+                        <TableHead className="text-right tabular-nums">Est. budget</TableHead>
                         {canManageLots && lot.status === "draft" && (
-                          <TableHead className="w-[80px]" />
+                          <TableHead className="w-[88px] text-right" />
                         )}
                       </TableRow>
                     </TableHeader>
-                    <TableBody>
+                    <TableBody className="bg-white dark:bg-card [&_tr]:border-border/40 [&_tr:last-child]:border-0">
                       {lot.app_items.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-mono text-xs text-muted-foreground">
+                        <TableRow
+                          key={item.id}
+                          className="bg-white hover:bg-muted/35 dark:bg-card dark:hover:bg-muted/25"
+                        >
+                          <TableCell className="font-mono text-xs text-muted-foreground tabular-nums">
                             {item.lot_item_number}
                           </TableCell>
-                          <TableCell className="text-sm">{item.general_description}</TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="max-w-[min(100%,28rem)] whitespace-normal text-sm leading-snug">
+                            {item.general_description}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
                             <AmountDisplay amount={item.estimated_budget} className="text-sm" />
                           </TableCell>
                           {canManageLots && lot.status === "draft" && (
-                            <TableCell>
+                            <TableCell className="text-right">
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-7 text-xs"
+                                className="h-8 text-xs text-muted-foreground hover:text-destructive"
                                 onClick={() => handleUnassign([item.id])}
                                 disabled={isPending}
                               >
@@ -243,38 +271,45 @@ export function AppLotManager({ appId, items, lots, canManageLots, canFinalizeLo
 
       {/* Create Lot Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create New Lot</DialogTitle>
-            <DialogDescription>
-              Group approved APP items into a procurement lot.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="lot-name">Lot Name</Label>
+        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-lg">
+          <div className="border-b border-border/60 bg-muted/20 px-6 py-5">
+            <DialogHeader className="gap-1.5">
+              <DialogTitle className="text-lg font-semibold tracking-tight">Create new lot</DialogTitle>
+              <DialogDescription className="text-sm leading-relaxed">
+                Group HOPE-approved APP line items into a single procurement lot.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="space-y-4 px-6 py-5">
+            <div className="space-y-2">
+              <Label htmlFor="lot-name" className="text-foreground">
+                Lot name
+              </Label>
               <Input
                 id="lot-name"
-                placeholder="e.g., Office Supplies, IT Equipment"
+                placeholder="e.g. Office supplies, IT equipment"
                 value={lotName}
                 onChange={(e) => setLotName(e.target.value)}
+                className="h-10"
               />
+              <p className="text-xs text-muted-foreground">At least 3 characters.</p>
             </div>
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="lot-desc">Description (optional)</Label>
               <Textarea
                 id="lot-desc"
-                placeholder="Brief description of this lot..."
+                placeholder="Brief scope or notes for this lot…"
                 value={lotDesc}
                 onChange={(e) => setLotDesc(e.target.value)}
-                rows={2}
+                rows={3}
+                className="min-h-[5rem] resize-y"
               />
             </div>
-            <div>
-              <Label htmlFor="lot-method">Procurement Method (optional)</Label>
+            <div className="space-y-2">
+              <Label htmlFor="lot-method">Procurement method (optional)</Label>
               <Select value={lotMethod} onValueChange={(v) => setLotMethod(v ?? "")} items={procurementMethodItems}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select method..." />
+                <SelectTrigger className="h-10 w-full">
+                  <SelectValue placeholder="Select method…" />
                 </SelectTrigger>
                 <SelectContent>
                   {PROCUREMENT_MODES.map((mode) => (
@@ -286,10 +321,36 @@ export function AppLotManager({ appId, items, lots, canManageLots, canFinalizeLo
               </Select>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+          <DialogFooter className="mx-0 mb-0 gap-2 rounded-b-xl border-t border-border/60 bg-muted/25 sm:gap-3">
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+              Cancel
+            </Button>
             <Button onClick={handleCreateLot} disabled={lotName.trim().length < 3 || isPending}>
-              Create Lot
+              Create lot
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Lot Confirmation Dialog */}
+      <Dialog open={!!deleteLotId} onOpenChange={(open) => { if (!open) setDeleteLotId(null) }}>
+        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md">
+          <div className="border-b border-border/60 bg-muted/20 px-6 py-5">
+            <DialogHeader className="gap-1.5">
+              <DialogTitle className="text-lg font-semibold tracking-tight">Delete lot?</DialogTitle>
+              <DialogDescription className="text-sm leading-relaxed">
+                {deletingLot
+                  ? `Lot ${deletingLot.lot_number}: ${deletingLot.lot_name} will be permanently deleted. Any assigned items will be returned to the unlotted pool.`
+                  : "This lot will be permanently deleted."}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <DialogFooter className="mx-0 mb-0 gap-2 rounded-b-xl border-t border-border/60 bg-muted/25 sm:gap-3">
+            <Button variant="outline" onClick={() => setDeleteLotId(null)} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteLot} disabled={isPending}>
+              Delete lot
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -297,19 +358,25 @@ export function AppLotManager({ appId, items, lots, canManageLots, canFinalizeLo
 
       {/* Assign Items Dialog */}
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Assign Items to Lot</DialogTitle>
-            <DialogDescription>
-              Select HOPE-approved items and assign them to a lot.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Target Lot</Label>
-              <Select value={assignLotId} onValueChange={(v) => setAssignLotId(v ?? "")} items={lotItems}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select lot..." />
+        <DialogContent className="max-w-2xl gap-0 overflow-hidden p-0 sm:max-w-[42rem]">
+          <div className="border-b border-border/60 bg-muted/20 px-6 py-5">
+            <DialogHeader className="gap-1.5">
+              <DialogTitle className="text-lg font-semibold tracking-tight">Assign items to lot</DialogTitle>
+              <DialogDescription className="text-sm leading-relaxed">
+                Choose a draft lot, then select HOPE-approved items to move into it.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="space-y-4 px-6 py-5">
+            <div className="space-y-2">
+              <Label htmlFor="assign-lot">Target lot</Label>
+              <Select
+                value={assignLotId}
+                onValueChange={(v) => setAssignLotId(v ?? "")}
+                items={lotItems}
+              >
+                <SelectTrigger id="assign-lot" className="h-10 w-full">
+                  <SelectValue placeholder="Select a lot…" />
                 </SelectTrigger>
                 <SelectContent>
                   {lots.filter(l => l.status === "draft").map((lot) => (
@@ -320,43 +387,61 @@ export function AppLotManager({ appId, items, lots, canManageLots, canFinalizeLo
                 </SelectContent>
               </Select>
             </div>
-            <div className="max-h-[300px] overflow-y-auto rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[40px]" />
-                    <TableHead>#</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead className="text-right">Budget</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {approvedUnlottedItems.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedItems.has(item.id)}
-                          onCheckedChange={() => toggleItemSelect(item.id)}
-                        />
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">{item.item_number}</TableCell>
-                      <TableCell className="text-sm">{item.general_description}</TableCell>
-                      <TableCell className="text-right">
-                        <AmountDisplay amount={item.estimated_budget} className="text-sm" />
-                      </TableCell>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-foreground">Items to assign</span>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {selectedItems.size} selected
+                </span>
+              </div>
+              <div className={cn(lotTableShell, "max-h-[min(340px,50vh)] overflow-y-auto")}>
+                <Table className="[&_td]:px-3 [&_td]:py-2.5 [&_th]:h-11 [&_th]:px-3 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground">
+                  <TableHeader className={cn(lotTableHeader, "sticky top-0 z-10 shadow-[0_1px_0_0_hsl(var(--border))]")}>
+                    <TableRow className="border-0 hover:bg-transparent">
+                      <TableHead className="w-12" />
+                      <TableHead className="w-[72px]">#</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead className="text-right tabular-nums">Budget</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody className="bg-white dark:bg-card [&_tr]:border-border/40 [&_tr:last-child]:border-0">
+                    {approvedUnlottedItems.map((item) => (
+                      <TableRow
+                        key={item.id}
+                        className="bg-white hover:bg-muted/35 dark:bg-card dark:hover:bg-muted/25"
+                      >
+                        <TableCell className="align-middle">
+                          <Checkbox
+                            checked={selectedItems.has(item.id)}
+                            onCheckedChange={() => toggleItemSelect(item.id)}
+                            aria-label={`Select item ${item.item_number}`}
+                          />
+                        </TableCell>
+                        <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
+                          {item.item_number}
+                        </TableCell>
+                        <TableCell className="max-w-[min(100%,20rem)] whitespace-normal text-sm leading-snug">
+                          {item.general_description}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          <AmountDisplay amount={item.estimated_budget} className="text-sm" />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAssignOpen(false)}>Cancel</Button>
+          <DialogFooter className="mx-0 mb-0 gap-2 rounded-b-xl border-t border-border/60 bg-muted/25 sm:gap-3">
+            <Button variant="outline" onClick={() => setAssignOpen(false)}>
+              Cancel
+            </Button>
             <Button
               onClick={handleAssignItems}
               disabled={!assignLotId || selectedItems.size === 0 || isPending}
             >
-              Assign {selectedItems.size} Item{selectedItems.size !== 1 ? "s" : ""}
+              Assign {selectedItems.size} item{selectedItems.size !== 1 ? "s" : ""}
             </Button>
           </DialogFooter>
         </DialogContent>
