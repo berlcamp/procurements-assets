@@ -71,9 +71,9 @@ async function notifyRoleInDivision(
   const { data: userRoles } = await admin
     .schema("procurements")
     .from("user_roles")
-    .select("user_id, role:roles!inner(name), user_profile:user_profiles!inner(division_id)")
+    .select("user_id, role:roles!inner(name)")
     .in("role.name" as string, roleNames)
-    .eq("user_profile.division_id" as string, divisionId)
+    .eq("division_id", divisionId)
     .eq("is_active", true)
     .is("revoked_at", null)
 

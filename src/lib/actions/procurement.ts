@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import type {
   Supplier,
   PurchaseRequest,
@@ -52,6 +53,61 @@ async function getUserRoleContext(supabase: Awaited<ReturnType<typeof createClie
   const roleNames = roles.map(r => r.role?.name).filter((n): n is string => !!n)
 
   return { user, profile, roleNames }
+}
+
+type NotificationInsert = {
+  title: string
+  message: string
+  type: "info" | "success" | "warning" | "error" | "approval"
+  reference_type: string
+  reference_id: string
+}
+
+async function notifyRoleInOffice(roleNames: string[], officeId: string, notification: NotificationInsert) {
+  const admin = createAdminClient()
+  const { data: userRoles } = await admin
+    .schema("procurements")
+    .from("user_roles")
+    .select("user_id, role:roles!inner(name)")
+    .in("role.name" as string, roleNames)
+    .eq("office_id", officeId)
+    .eq("is_active", true)
+    .is("revoked_at", null)
+  if (!userRoles?.length) return
+  const inserts = userRoles.map((r: { user_id: string }) => ({ user_id: r.user_id, ...notification }))
+  await admin.schema("procurements").from("notifications").insert(inserts)
+}
+
+async function notifyRoleInDivision(roleNames: string[], divisionId: string, notification: NotificationInsert) {
+  const admin = createAdminClient()
+  const { data: userRoles } = await admin
+    .schema("procurements")
+    .from("user_roles")
+    .select("user_id, role:roles!inner(name)")
+    .in("role.name" as string, roleNames)
+    .eq("division_id", divisionId)
+    .eq("is_active", true)
+    .is("revoked_at", null)
+  if (!userRoles?.length) return
+  const inserts = userRoles.map((r: { user_id: string }) => ({ user_id: r.user_id, ...notification }))
+  await admin.schema("procurements").from("notifications").insert(inserts)
+}
+
+async function notifyUser(userId: string, notification: NotificationInsert) {
+  const admin = createAdminClient()
+  await admin.schema("procurements").from("notifications").insert({ user_id: userId, ...notification })
+}
+
+async function getPrMeta(prId: string): Promise<{ officeId: string | null; divisionId: string | null; createdBy: string | null } | null> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .schema("procurements")
+    .from("purchase_requests")
+    .select("office_id, division_id, created_by")
+    .eq("id", prId)
+    .single()
+  if (!data) return null
+  return { officeId: data.office_id, divisionId: data.division_id, createdBy: data.created_by }
 }
 
 // ============================================================
@@ -236,7 +292,7 @@ const PR_SELECT = `
   fiscal_year:fiscal_years(id, year, status),
   fund_source:fund_sources(id, name, code),
   budget_allocation:budget_allocations(id, adjusted_amount, obligated_amount),
-  app_item:app_items(id, general_description, estimated_budget, procurement_mode),
+  app_item:app_items(id, item_number, general_description, estimated_budget, procurement_mode, project_type, source_of_funds, procurement_start, procurement_end, delivery_period),
   lot:app_lots(id, lot_name, lot_number)
 ` as const
 
@@ -277,8 +333,9 @@ export async function getPurchaseRequestById(
 
   if (error || !pr) return null
 
-  // Fetch items and OBR in parallel
-  const [{ data: items }, { data: obr }] = await Promise.all([
+  // Fetch items, OBR, and requester profile in parallel
+  const prData = pr as PurchaseRequestWithDetails
+  const [{ data: items }, { data: obr }, { data: requester }] = await Promise.all([
     supabase
       .schema("procurements")
       .from("pr_items")
@@ -294,12 +351,21 @@ export async function getPurchaseRequestById(
       .is("deleted_at", null)
       .neq("status", "cancelled")
       .maybeSingle(),
+    prData.created_by
+      ? supabase
+          .schema("procurements")
+          .from("user_profiles")
+          .select("id, first_name, last_name, position")
+          .eq("id", prData.created_by)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ])
 
   return {
-    ...(pr as PurchaseRequestWithDetails),
+    ...prData,
     pr_items: (items ?? []) as PrItem[],
     obr: obr as ObligationRequest | null,
+    requester: requester as PurchaseRequestWithDetails["requester"],
   }
 }
 
@@ -514,6 +580,18 @@ export async function submitPurchaseRequest(
 
   revalidatePath("/dashboard/procurement/purchase-requests")
   revalidatePath(`/dashboard/procurement/purchase-requests/${prId}`)
+
+  const meta = await getPrMeta(prId)
+  if (meta?.divisionId) {
+    notifyRoleInDivision(["budget_officer"], meta.divisionId, {
+      title: "Purchase Request Awaiting Certification",
+      message: "A Purchase Request has been submitted and requires budget availability certification.",
+      type: "approval",
+      reference_type: "purchase_request",
+      reference_id: prId,
+    })
+  }
+
   return { error: null }
 }
 
@@ -533,6 +611,18 @@ export async function certifyBudgetAvailability(
 
   revalidatePath("/dashboard/procurement/purchase-requests")
   revalidatePath(`/dashboard/procurement/purchase-requests/${prId}`)
+
+  const meta = await getPrMeta(prId)
+  if (meta?.divisionId) {
+    notifyRoleInDivision(["hope", "division_chief", "school_head"], meta.divisionId, {
+      title: "Purchase Request Awaiting Approval",
+      message: "Budget availability has been certified. The Purchase Request is ready for approval.",
+      type: "approval",
+      reference_type: "purchase_request",
+      reference_id: prId,
+    })
+  }
+
   return { obrNumber: data as string, error: null }
 }
 
@@ -552,6 +642,18 @@ export async function approvePurchaseRequest(
 
   revalidatePath("/dashboard/procurement/purchase-requests")
   revalidatePath(`/dashboard/procurement/purchase-requests/${prId}`)
+
+  const meta = await getPrMeta(prId)
+  if (meta?.createdBy) {
+    notifyUser(meta.createdBy, {
+      title: "Purchase Request Approved",
+      message: "Your Purchase Request has been approved and is now in procurement.",
+      type: "success",
+      reference_type: "purchase_request",
+      reference_id: prId,
+    })
+  }
+
   return { error: null }
 }
 
@@ -571,6 +673,18 @@ export async function returnPrToEndUser(
 
   revalidatePath("/dashboard/procurement/purchase-requests")
   revalidatePath(`/dashboard/procurement/purchase-requests/${prId}`)
+
+  const meta = await getPrMeta(prId)
+  if (meta?.createdBy) {
+    notifyUser(meta.createdBy, {
+      title: "Purchase Request Returned",
+      message: `Your Purchase Request has been returned for revision. Reason: ${input.reason}`,
+      type: "warning",
+      reference_type: "purchase_request",
+      reference_id: prId,
+    })
+  }
+
   return { error: null }
 }
 

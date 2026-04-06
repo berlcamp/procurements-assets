@@ -104,6 +104,7 @@ export function SidebarProvider({
 // ─── Nav Link ─────────────────────────────────────────────────────────────────
 
 const PLANNING_HREF = "/dashboard/planning"
+const PR_HREF = "/dashboard/procurement/purchase-requests"
 
 /** Single active item: longest matching href wins (e.g. /dashboard/planning over /dashboard). */
 function computeActiveNavHref(pathname: string, navGroups: NavGroup[]): string | null {
@@ -125,9 +126,12 @@ function NavLink({
   activeHref: string | null
 }) {
   const isActive = activeHref === item.href
-  const { ppmp, app } = useActionCounts()
+  const { ppmp, app, pr } = useActionCounts()
   const planningCount = ppmp + app
-  const badge = item.href === PLANNING_HREF && planningCount > 0 ? planningCount : 0
+  const badge =
+    item.href === PLANNING_HREF && planningCount > 0 ? planningCount :
+    item.href === PR_HREF && pr > 0 ? pr :
+    0
 
   const linkClassName = cn(
     "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors duration-150",

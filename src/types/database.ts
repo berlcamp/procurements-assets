@@ -815,11 +815,11 @@ export interface PurchaseRequestWithDetails extends PurchaseRequest {
   fiscal_year?: Pick<FiscalYear, 'id' | 'year' | 'status'>
   fund_source?: Pick<FundSource, 'id' | 'name' | 'code'> | null
   budget_allocation?: Pick<BudgetAllocation, 'id' | 'adjusted_amount' | 'obligated_amount'> | null
-  app_item?: Pick<AppItem, 'id' | 'general_description' | 'estimated_budget' | 'procurement_mode'> | null
+  app_item?: Pick<AppItem, 'id' | 'item_number' | 'general_description' | 'estimated_budget' | 'procurement_mode' | 'project_type' | 'source_of_funds' | 'procurement_start' | 'procurement_end' | 'delivery_period'> | null
   lot?: Pick<AppLot, 'id' | 'lot_name' | 'lot_number'> | null
   pr_items?: PrItem[]
   obr?: ObligationRequest | null
-  requester?: Pick<UserProfile, 'id' | 'first_name' | 'last_name'> | null
+  requester?: Pick<UserProfile, 'id' | 'first_name' | 'last_name' | 'position'> | null
 }
 
 export interface ProcurementDashboardStats {

@@ -127,13 +127,64 @@ export default async function PurchaseRequestDetailPage({
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <p>{pr.purpose}</p>
+              <Separator />
               {pr.app_item && (
-                <div>
-                  <span className="text-muted-foreground">APP Item: </span>
-                  <span className="font-medium">{pr.app_item.general_description}</span>
-                  {pr.app_item.procurement_mode && (
-                    <span className="text-muted-foreground"> · {pr.app_item.procurement_mode}</span>
-                  )}
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">APP Item</p>
+                  <div className="grid gap-1.5">
+                    <div>
+                      <span className="text-muted-foreground">Description: </span>
+                      <span className="font-medium">{pr.app_item.general_description}</span>
+                    </div>
+                    {pr.app_item.item_number && (
+                      <div>
+                        <span className="text-muted-foreground">Item No.: </span>
+                        <span>{pr.app_item.item_number}</span>
+                      </div>
+                    )}
+                    {pr.app_item.project_type && (
+                      <div>
+                        <span className="text-muted-foreground">Type: </span>
+                        <span className="capitalize">{pr.app_item.project_type}</span>
+                      </div>
+                    )}
+                    {pr.app_item.procurement_mode && (
+                      <div>
+                        <span className="text-muted-foreground">Mode of Procurement: </span>
+                        <span>{pr.app_item.procurement_mode}</span>
+                      </div>
+                    )}
+                    {pr.app_item.source_of_funds && (
+                      <div>
+                        <span className="text-muted-foreground">Source of Funds: </span>
+                        <span>{pr.app_item.source_of_funds}</span>
+                      </div>
+                    )}
+                    {(pr.app_item.procurement_start || pr.app_item.procurement_end) && (
+                      <div>
+                        <span className="text-muted-foreground">Procurement Schedule: </span>
+                        <span>
+                          {pr.app_item.procurement_start
+                            ? format(new Date(pr.app_item.procurement_start), "MMM yyyy")
+                            : "—"}
+                          {" – "}
+                          {pr.app_item.procurement_end
+                            ? format(new Date(pr.app_item.procurement_end), "MMM yyyy")
+                            : "—"}
+                        </span>
+                      </div>
+                    )}
+                    {pr.app_item.delivery_period && (
+                      <div>
+                        <span className="text-muted-foreground">Delivery Period: </span>
+                        <span>{pr.app_item.delivery_period}</span>
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-muted-foreground">APP Budget: </span>
+                      <span className="font-medium"><AmountDisplay amount={pr.app_item.estimated_budget} /></span>
+                    </div>
+                  </div>
                 </div>
               )}
               {pr.lot && (
@@ -208,6 +259,17 @@ export default async function PurchaseRequestDetailPage({
               <CardTitle className="text-base">Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
+              {pr.requester && (
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground shrink-0">Requested By</span>
+                  <span className="font-medium text-right">
+                    {pr.requester.first_name} {pr.requester.last_name}
+                    {pr.requester.position && (
+                      <span className="block text-xs text-muted-foreground font-normal">{pr.requester.position}</span>
+                    )}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Office</span>
                 <span className="font-medium">{pr.office?.name}</span>
