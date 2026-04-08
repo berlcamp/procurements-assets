@@ -69,6 +69,28 @@ function getStatusClassName(status: string): string {
     case "posted":
       return "bg-emerald-100 text-emerald-800 border-emerald-200"
 
+    // Procurement method badges
+    case "svp":
+      return "bg-cyan-100 text-cyan-800 border-cyan-200"
+    case "shopping":
+      return "bg-teal-100 text-teal-800 border-teal-200"
+
+    // Procurement stages
+    case "rfq_preparation":
+    case "rfq_sent":
+    case "canvass_preparation":
+    case "canvass_sent":
+    case "quotations_received":
+    case "canvass_received":
+    case "evaluation":
+    case "comparison":
+    case "abstract_prepared":
+      return "bg-blue-100 text-blue-800 border-blue-200"
+    case "award_recommended":
+      return "bg-yellow-100 text-yellow-800 border-yellow-200"
+    case "award_approved":
+      return "bg-green-100 text-green-800 border-green-200"
+
     default:
       return "bg-gray-100 text-gray-700 border-gray-200"
   }

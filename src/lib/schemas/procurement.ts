@@ -166,3 +166,143 @@ export const BUSINESS_TYPE_OPTIONS = [
   "Government Agency",
   "Foreign Corporation",
 ] as const
+
+// ============================================================
+// Phase 8: Procurement Activity schemas
+// ============================================================
+
+export const createProcurementSchema = z.object({
+  purchase_request_id: z.string().uuid("Purchase Request is required"),
+  procurement_method: z.enum(["svp", "shopping"], {
+    message: "Procurement method is required",
+  }),
+})
+
+export type CreateProcurementInput = z.infer<typeof createProcurementSchema>
+
+export const bidItemSchema = z.object({
+  pr_item_id: z.string().uuid(),
+  offered_unit_cost: z
+    .string()
+    .refine((v) => !isNaN(parseFloat(v)) && parseFloat(v) > 0, {
+      message: "Offered unit cost must be greater than zero",
+    }),
+  offered_total_cost: z
+    .string()
+    .refine((v) => !isNaN(parseFloat(v)) && parseFloat(v) > 0, {
+      message: "Offered total cost must be greater than zero",
+    }),
+  brand_model: z.string().nullable().optional(),
+  specifications: z.string().nullable().optional(),
+  remarks: z.string().nullable().optional(),
+})
+
+export type BidItemInput = z.infer<typeof bidItemSchema>
+
+export const recordBidSchema = z.object({
+  procurement_id: z.string().uuid(),
+  supplier_id: z.string().uuid("Supplier is required"),
+  items: z.array(bidItemSchema).min(1, "At least one bid item is required"),
+})
+
+export type RecordBidInput = z.infer<typeof recordBidSchema>
+
+export const bidEvaluationItemSchema = z.object({
+  bid_id: z.string().uuid(),
+  is_responsive: z.boolean(),
+  is_eligible: z.boolean(),
+  is_compliant: z.boolean(),
+  evaluation_score: z
+    .string()
+    .refine((v) => v === "" || (!isNaN(parseFloat(v)) && parseFloat(v) >= 0 && parseFloat(v) <= 100), {
+      message: "Score must be between 0 and 100",
+    })
+    .nullable()
+    .optional(),
+  remarks: z.string().nullable().optional(),
+})
+
+export const evaluateBidsSchema = z.object({
+  procurement_id: z.string().uuid(),
+  evaluations: z.array(bidEvaluationItemSchema).min(1, "At least one evaluation is required"),
+})
+
+export type EvaluateBidsInput = z.infer<typeof evaluateBidsSchema>
+
+export const awardProcurementSchema = z.object({
+  procurement_id: z.string().uuid(),
+  bid_id: z.string().uuid("Winning bid is required"),
+})
+
+export type AwardProcurementInput = z.infer<typeof awardProcurementSchema>
+
+export const approveAwardSchema = z.object({
+  notes: z.string().nullable().optional(),
+})
+
+export type ApproveAwardInput = z.infer<typeof approveAwardSchema>
+
+export const failProcurementSchema = z.object({
+  reason: z.string().min(5, "A reason of at least 5 characters is required"),
+})
+
+export type FailProcurementInput = z.infer<typeof failProcurementSchema>
+
+export const advanceStageSchema = z.object({
+  next_stage: z.string().min(1, "Target stage is required"),
+  notes: z.string().nullable().optional(),
+})
+
+export type AdvanceStageInput = z.infer<typeof advanceStageSchema>
+
+// ============================================================
+// Procurement Activity labels
+// ============================================================
+
+export const PROCUREMENT_METHOD_LABELS: Record<string, string> = {
+  svp:                  "Small Value Procurement",
+  shopping:             "Shopping",
+  competitive_bidding:  "Competitive Bidding",
+  direct_contracting:   "Direct Contracting",
+  repeat_order:         "Repeat Order",
+  emergency:            "Emergency Purchase",
+  negotiated:           "Negotiated Procurement",
+  agency_to_agency:     "Agency-to-Agency",
+}
+
+export const PROCUREMENT_STATUS_LABELS: Record<string, string> = {
+  active:    "Active",
+  completed: "Completed",
+  failed:    "Failed",
+  cancelled: "Cancelled",
+}
+
+export const BID_STATUS_LABELS: Record<string, string> = {
+  submitted:     "Submitted",
+  evaluated:     "Evaluated",
+  awarded:       "Awarded",
+  disqualified:  "Disqualified",
+}
+
+export const SVP_STAGE_LABELS: Record<string, string> = {
+  created:              "Created",
+  rfq_preparation:      "RFQ Preparation",
+  rfq_sent:             "RFQ Sent",
+  quotations_received:  "Quotations Received",
+  evaluation:           "Evaluation",
+  abstract_prepared:    "Abstract Prepared",
+  award_recommended:    "Award Recommended",
+  award_approved:       "Award Approved",
+  completed:            "Completed",
+}
+
+export const SHOPPING_STAGE_LABELS: Record<string, string> = {
+  created:              "Created",
+  canvass_preparation:  "Canvass Preparation",
+  canvass_sent:         "Canvass Sent",
+  canvass_received:     "Canvass Received",
+  comparison:           "Price Comparison",
+  award_recommended:    "Award Recommended",
+  award_approved:       "Award Approved",
+  completed:            "Completed",
+}

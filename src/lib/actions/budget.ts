@@ -43,6 +43,42 @@ export async function getFiscalYears(): Promise<FiscalYear[]> {
 }
 
 // ============================================================
+// Obligation totals (from certified OBRs — source of truth)
+// ============================================================
+
+export async function getCertifiedObligationsTotal(
+  fiscalYearId: string
+): Promise<number> {
+  const supabase = await createClient()
+
+  // obligation_requests has no fiscal_year_id; resolve through purchase_requests
+  const { data: prs, error: prErr } = await supabase
+    .schema("procurements")
+    .from("purchase_requests")
+    .select("id")
+    .eq("fiscal_year_id", fiscalYearId)
+    .is("deleted_at", null)
+
+  if (prErr || !prs?.length) return 0
+
+  const prIds = prs.map((p) => p.id)
+
+  const { data, error } = await supabase
+    .schema("procurements")
+    .from("obligation_requests")
+    .select("amount")
+    .in("purchase_request_id", prIds)
+    .in("status", ["certified", "obligated"])
+    .is("deleted_at", null)
+
+  if (error) {
+    console.error("getCertifiedObligationsTotal error:", error)
+    return 0
+  }
+  return (data ?? []).reduce((sum, row) => sum + parseFloat(row.amount ?? 0), 0)
+}
+
+// ============================================================
 // Budget Allocations
 // ============================================================
 

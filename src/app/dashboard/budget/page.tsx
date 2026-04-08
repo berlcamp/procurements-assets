@@ -4,6 +4,7 @@ import {
   getBudgetAllocations,
   getBudgetAdjustments,
   getBudgetUtilizationByOffice,
+  getCertifiedObligationsTotal,
 } from "@/lib/actions/budget"
 import {
   Card,
@@ -21,27 +22,31 @@ import { PlusIcon, LayoutListIcon, ArrowRightLeftIcon, FileBarChartIcon } from "
 export default async function BudgetDashboardPage() {
   const fiscalYear = await getActiveFiscalYear()
 
-  const [allocations, pendingAdjustments, utilization] = await Promise.all([
-    fiscalYear ? getBudgetAllocations(fiscalYear.id) : Promise.resolve([]),
-    fiscalYear
-      ? getBudgetAdjustments(fiscalYear.id, "pending")
-      : Promise.resolve([]),
-    fiscalYear
-      ? getBudgetUtilizationByOffice(fiscalYear.id)
-      : Promise.resolve([]),
-  ])
+  const [allocations, pendingAdjustments, utilization, certifiedObligated] =
+    await Promise.all([
+      fiscalYear ? getBudgetAllocations(fiscalYear.id) : Promise.resolve([]),
+      fiscalYear
+        ? getBudgetAdjustments(fiscalYear.id, "pending")
+        : Promise.resolve([]),
+      fiscalYear
+        ? getBudgetUtilizationByOffice(fiscalYear.id)
+        : Promise.resolve([]),
+      fiscalYear
+        ? getCertifiedObligationsTotal(fiscalYear.id)
+        : Promise.resolve(0),
+    ])
 
   const totals = allocations.reduce(
     (acc, a) => {
       acc.adjusted += parseFloat(a.adjusted_amount)
-      acc.obligated += parseFloat(a.obligated_amount)
       acc.disbursed += parseFloat(a.disbursed_amount)
       return acc
     },
-    { adjusted: 0, obligated: 0, disbursed: 0 }
+    { adjusted: 0, disbursed: 0 }
   )
 
-  const available = totals.adjusted - totals.obligated
+  const obligated = certifiedObligated
+  const available = totals.adjusted - obligated
 
   return (
     <div className="space-y-6">
@@ -92,7 +97,7 @@ export default async function BudgetDashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <AmountDisplay amount={totals.obligated} className="text-xl font-bold" />
+            <AmountDisplay amount={obligated} className="text-xl font-bold" />
           </CardContent>
         </Card>
         <Card>

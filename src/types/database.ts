@@ -756,6 +756,7 @@ export interface PurchaseRequest {
   app_item_id: string | null
   lot_id: string | null
   total_estimated_cost: string
+  procurement_id: string | null
   status: PrStatus
   budget_certified_by: string | null
   budget_certified_at: string | null
@@ -838,4 +839,105 @@ export interface SplitContractWarning {
   cumulative_amount: number
   threshold: number
   pr_count: number
+}
+
+// ── Phase 8: Procurement Activities (SVP + Shopping) ─────────
+
+export type ProcurementMethod = 'svp' | 'shopping' | 'competitive_bidding' | 'direct_contracting' | 'repeat_order' | 'emergency' | 'negotiated' | 'agency_to_agency'
+export type ProcurementActivityStatus = 'active' | 'completed' | 'failed' | 'cancelled'
+export type BidStatus = 'submitted' | 'evaluated' | 'awarded' | 'disqualified'
+export type ProcurementStageStatus = 'completed' | 'current' | 'skipped'
+
+export interface ProcurementActivity {
+  id: string
+  division_id: string
+  procurement_number: string
+  office_id: string
+  fiscal_year_id: string
+  purchase_request_id: string
+  procurement_method: ProcurementMethod
+  abc_amount: string
+  current_stage: string
+  awarded_supplier_id: string | null
+  contract_amount: string | null
+  savings_amount: string | null
+  failure_reason: string | null
+  failure_count: number
+  philgeps_reference: string | null
+  status: ProcurementActivityStatus
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+export interface ProcurementActivityWithDetails extends ProcurementActivity {
+  purchase_request?: PurchaseRequestWithDetails
+  supplier?: Pick<Supplier, 'id' | 'name' | 'trade_name' | 'tin'> | null
+  office?: Pick<Office, 'id' | 'name' | 'code'>
+  fiscal_year?: Pick<FiscalYear, 'id' | 'year' | 'status'>
+  stages?: ProcurementStage[]
+  bids?: BidWithDetails[]
+}
+
+export interface ProcurementStage {
+  id: string
+  procurement_id: string
+  stage: string
+  status: ProcurementStageStatus
+  started_at: string
+  completed_at: string | null
+  completed_by: string | null
+  notes: string | null
+  office_id: string | null
+  created_at: string
+}
+
+export interface Bid {
+  id: string
+  procurement_id: string
+  supplier_id: string
+  bid_amount: string
+  bid_date: string
+  is_responsive: boolean
+  is_eligible: boolean
+  is_compliant: boolean
+  rank: number | null
+  evaluation_score: string | null
+  status: BidStatus
+  disqualification_reason: string | null
+  remarks: string | null
+  office_id: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface BidWithDetails extends Bid {
+  supplier?: Pick<Supplier, 'id' | 'name' | 'trade_name' | 'tin'>
+  items?: BidItem[]
+}
+
+export interface BidItem {
+  id: string
+  bid_id: string
+  pr_item_id: string
+  offered_unit_cost: string
+  offered_total_cost: string
+  brand_model: string | null
+  specifications: string | null
+  remarks: string | null
+  created_at: string
+}
+
+export interface ProcurementSummary {
+  total: number
+  active: number
+  completed: number
+  failed: number
+  svp_count: number
+  shopping_count: number
+  total_abc: string
+  total_awarded: string
+  total_savings: string
 }

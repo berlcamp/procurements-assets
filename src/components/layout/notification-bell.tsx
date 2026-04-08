@@ -33,6 +33,10 @@ function referenceHref(n: Notification): string | null {
     return `/dashboard/planning/ppmp/${n.reference_id}`
   if (n.reference_type === "app" && n.reference_id)
     return `/dashboard/planning/app/${n.reference_id}`
+  if (n.reference_type === "pr" && n.reference_id)
+    return `/dashboard/procurement/purchase-requests/${n.reference_id}`
+  if (n.reference_type === "procurement" && n.reference_id)
+    return `/dashboard/procurement/activities/${n.reference_id}`
   return null
 }
 

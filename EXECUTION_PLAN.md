@@ -16,7 +16,7 @@
 | [x]    | 4     | **Budget Management**                           | Sonnet   | Fiscal years, budget allocations, adjustments, utilization                                                                      | Planning and procurement require budget to validate against      |
 | [x]    | 5     | **Planning Module (PPMP)**                      | **Opus** | PPMP creation by End User, multi-step approval (Chief→Budget Officer→HOPE), INDICATIVE/FINAL versioning, auto-population to APP | PPMP feeds into APP; must be done before APP                     |
 | [x]    | 6     | **Planning Module (APP)**                       | **Opus** | APP auto-populated from approved PPMPs, HOPE row-level review, BAC lot finalization, INDICATIVE/FINAL, PR enablement            | APP must exist before procurement can reference it               |
-| [ ]    | 7     | **Procurement Core (PR + Suppliers)**           | Sonnet   | Purchase Requests, supplier registry, budget certification                                                                      | PR is the entry point for all procurement methods                |
+| [x]    | 7     | **Procurement Core (PR + Suppliers)**           | Sonnet   | Purchase Requests, supplier registry, budget certification                                                                      | PR is the entry point for all procurement methods                |
 | [ ]    | 8     | **Procurement Workflows (SVP + Shopping)**      | **Opus** | Small Value Procurement and Shopping workflows end-to-end                                                                       | Most common methods in DepEd; quickest to deliver value          |
 | [ ]    | 9     | **Procurement Workflows (Competitive Bidding)** | **Opus** | Full competitive bidding with BAC evaluation                                                                                    | Most complex method; requires all procurement infrastructure     |
 | [ ]    | 10    | **Procurement Workflows (Other Methods)**       | Sonnet   | Direct contracting, repeat order, emergency, negotiated, agency-to-agency                                                       | Completes RA 12009 coverage                                      |
@@ -835,7 +835,7 @@ app_lots (id, app_id, app_version_id, lot_number, lot_name, description, procure
 
 ---
 
-## [ ] PHASE 7: Procurement Core (PR + Suppliers)
+## [x] PHASE 7: Procurement Core (PR + Suppliers)
 
 ### A. Scope
 

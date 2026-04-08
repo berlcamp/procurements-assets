@@ -105,6 +105,7 @@ export function SidebarProvider({
 
 const PLANNING_HREF = "/dashboard/planning"
 const PR_HREF = "/dashboard/procurement/purchase-requests"
+const ACTIVITIES_HREF = "/dashboard/procurement/activities"
 
 /** Single active item: longest matching href wins (e.g. /dashboard/planning over /dashboard). */
 function computeActiveNavHref(pathname: string, navGroups: NavGroup[]): string | null {
@@ -126,11 +127,12 @@ function NavLink({
   activeHref: string | null
 }) {
   const isActive = activeHref === item.href
-  const { ppmp, app, pr } = useActionCounts()
+  const { ppmp, app, pr, procurement } = useActionCounts()
   const planningCount = ppmp + app
   const badge =
     item.href === PLANNING_HREF && planningCount > 0 ? planningCount :
     item.href === PR_HREF && pr > 0 ? pr :
+    item.href === ACTIVITIES_HREF && procurement > 0 ? procurement :
     0
 
   const linkClassName = cn(

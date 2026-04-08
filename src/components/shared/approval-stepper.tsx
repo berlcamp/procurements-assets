@@ -56,6 +56,67 @@ export const PROCUREMENT_PIPELINE_STEPS: Omit<WorkflowStep, "status">[] = [
   { id: "proc", label: "Procurement", description: "BAC & awarding" },
 ]
 
+export const SVP_STEPS: Omit<WorkflowStep, "status">[] = [
+  { id: "created",             label: "Created",             description: "Procurement activity initiated" },
+  { id: "rfq_preparation",    label: "RFQ Preparation",     description: "Prepare Request for Quotation" },
+  { id: "rfq_sent",           label: "RFQ Sent",            description: "RFQ sent to ≥3 suppliers" },
+  { id: "quotations_received",label: "Quotations Received", description: "Supplier quotations recorded" },
+  { id: "evaluation",         label: "Evaluation",          description: "BAC evaluates quotations" },
+  { id: "abstract_prepared",  label: "Abstract Prepared",   description: "Abstract of Canvass completed" },
+  { id: "award_recommended",  label: "Award Recommended",   description: "BAC recommends lowest bidder" },
+  { id: "award_approved",     label: "Award Approved",      description: "HOPE approves award" },
+  { id: "completed",          label: "Completed",           description: "Ready for Purchase Order" },
+]
+
+export const SHOPPING_STEPS: Omit<WorkflowStep, "status">[] = [
+  { id: "created",              label: "Created",              description: "Procurement activity initiated" },
+  { id: "canvass_preparation", label: "Canvass Preparation",  description: "Prepare canvass sheets" },
+  { id: "canvass_sent",       label: "Canvass Sent",         description: "Sent to ≥3 suppliers" },
+  { id: "canvass_received",   label: "Canvass Received",     description: "Supplier responses recorded" },
+  { id: "comparison",         label: "Price Comparison",     description: "Compare supplier prices" },
+  { id: "award_recommended",  label: "Award Recommended",    description: "Recommend lowest price" },
+  { id: "award_approved",     label: "Award Approved",       description: "HOPE approves award" },
+  { id: "completed",          label: "Completed",            description: "Ready for Purchase Order" },
+]
+
+/**
+ * Build step statuses for a procurement activity based on its method and current stage.
+ */
+export function buildProcurementSteps(
+  method: string,
+  currentStage: string,
+  stageHistory: { stage: string; status: string; completed_at: string | null; completed_by: string | null; notes: string | null }[] = []
+): WorkflowStep[] {
+  const template = method === "svp" ? SVP_STEPS : SHOPPING_STEPS
+  const historyMap = new Map(stageHistory.map(s => [s.stage, s]))
+
+  let foundCurrent = false
+  return template.map(step => {
+    const history = historyMap.get(step.id)
+
+    if (history?.status === "completed") {
+      return {
+        ...step,
+        status: "completed" as StepStatus,
+        timestamp: history.completed_at || undefined,
+        remarks: history.notes || undefined,
+      }
+    }
+
+    if (step.id === currentStage) {
+      foundCurrent = true
+      return { ...step, status: "current" as StepStatus }
+    }
+
+    if (!foundCurrent) {
+      // Stages before current that aren't in history — completed implicitly
+      return { ...step, status: "completed" as StepStatus }
+    }
+
+    return { ...step, status: "pending" as StepStatus }
+  })
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function StepIcon({ status, index }: { status: StepStatus; index: number }) {
