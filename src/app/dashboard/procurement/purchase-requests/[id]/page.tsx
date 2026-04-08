@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/shared/status-badge"
 import { AmountDisplay } from "@/components/shared/amount-display"
 import { ApprovalStepper } from "@/components/shared/approval-stepper"
 import { PrItemsView } from "@/components/procurement/pr-items-table"
+import { PrDraftItemsEditor } from "@/components/procurement/pr-draft-items-editor"
 import { PrReviewActions } from "@/components/procurement/pr-review-actions"
 import { getPurchaseRequestById, getPrUserPermissions } from "@/lib/actions/procurement"
 import { format } from "date-fns"
@@ -128,69 +129,46 @@ export default async function PurchaseRequestDetailPage({
             <CardContent className="space-y-3 text-sm">
               <p>{pr.purpose}</p>
               <Separator />
-              {pr.app_item && (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">APP Item</p>
-                  <div className="grid gap-1.5">
-                    <div>
-                      <span className="text-muted-foreground">Description: </span>
-                      <span className="font-medium">{pr.app_item.general_description}</span>
-                    </div>
-                    {pr.app_item.item_number && (
-                      <div>
-                        <span className="text-muted-foreground">Item No.: </span>
-                        <span>{pr.app_item.item_number}</span>
-                      </div>
-                    )}
-                    {pr.app_item.project_type && (
-                      <div>
-                        <span className="text-muted-foreground">Type: </span>
-                        <span className="capitalize">{pr.app_item.project_type}</span>
-                      </div>
-                    )}
-                    {pr.app_item.procurement_mode && (
-                      <div>
-                        <span className="text-muted-foreground">Mode of Procurement: </span>
-                        <span>{pr.app_item.procurement_mode}</span>
-                      </div>
-                    )}
-                    {pr.app_item.source_of_funds && (
-                      <div>
-                        <span className="text-muted-foreground">Source of Funds: </span>
-                        <span>{pr.app_item.source_of_funds}</span>
-                      </div>
-                    )}
-                    {(pr.app_item.procurement_start || pr.app_item.procurement_end) && (
-                      <div>
-                        <span className="text-muted-foreground">Procurement Schedule: </span>
-                        <span>
-                          {pr.app_item.procurement_start
-                            ? format(new Date(pr.app_item.procurement_start), "MMM yyyy")
-                            : "—"}
-                          {" – "}
-                          {pr.app_item.procurement_end
-                            ? format(new Date(pr.app_item.procurement_end), "MMM yyyy")
-                            : "—"}
-                        </span>
-                      </div>
-                    )}
-                    {pr.app_item.delivery_period && (
-                      <div>
-                        <span className="text-muted-foreground">Delivery Period: </span>
-                        <span>{pr.app_item.delivery_period}</span>
-                      </div>
-                    )}
-                    <div>
-                      <span className="text-muted-foreground">APP Budget: </span>
-                      <span className="font-medium"><AmountDisplay amount={pr.app_item.estimated_budget} /></span>
-                    </div>
+              <div className="grid gap-1.5">
+                {pr.procurement_mode && (
+                  <div>
+                    <span className="text-muted-foreground">Procurement Mode: </span>
+                    <span className="font-medium capitalize">{pr.procurement_mode.replace(/_/g, " ")}</span>
                   </div>
-                </div>
-              )}
-              {pr.lot && (
-                <div>
-                  <span className="text-muted-foreground">Lot: </span>
-                  <span>Lot {pr.lot.lot_number} — {pr.lot.lot_name}</span>
+                )}
+                {pr.abc_ceiling && (
+                  <div>
+                    <span className="text-muted-foreground">ABC Ceiling: </span>
+                    <span><AmountDisplay amount={pr.abc_ceiling} /></span>
+                  </div>
+                )}
+              </div>
+
+              {/* Bundled APP items */}
+              {pr.pr_items && pr.pr_items.some(i => i.app_item) && (
+                <div className="space-y-2 pt-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Bundled APP Items ({pr.pr_items.filter(i => i.app_item).length})
+                  </p>
+                  <div className="rounded-md border divide-y">
+                    {pr.pr_items
+                      .filter(i => i.app_item)
+                      .map(item => (
+                        <div key={item.id} className="flex items-start justify-between gap-3 p-2.5 text-xs">
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{item.app_item!.general_description}</p>
+                            <p className="text-muted-foreground">
+                              {item.app_item!.procurement_mode}
+                              {item.app_item!.project_type && ` · ${item.app_item!.project_type}`}
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <AmountDisplay amount={item.app_item!.estimated_budget} className="font-medium" />
+                            <p className="text-[10px] text-muted-foreground">APP budget</p>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
                 </div>
               )}
               {pr.fund_source && (
@@ -216,7 +194,17 @@ export default async function PurchaseRequestDetailPage({
               <CardTitle className="text-base">Line Items</CardTitle>
             </CardHeader>
             <CardContent>
-              <PrItemsView items={pr.pr_items ?? []} />
+              {pr.status === "draft" && permissions.isOwner ? (
+                <PrDraftItemsEditor
+                  prId={pr.id}
+                  officeId={pr.office_id}
+                  fiscalYearId={pr.fiscal_year_id}
+                  procurementMode={pr.procurement_mode}
+                  items={pr.pr_items ?? []}
+                />
+              ) : (
+                <PrItemsView items={pr.pr_items ?? []} />
+              )}
             </CardContent>
           </Card>
 

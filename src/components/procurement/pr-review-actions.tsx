@@ -162,7 +162,7 @@ export function PrReviewActions({
         )}
 
         {/* Cancel */}
-        {canCancel && isCancellable && !isDraft && (
+        {canCancel && isCancellable && (
           <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10"
             onClick={() => openDialog("cancel")}>
             Cancel PR

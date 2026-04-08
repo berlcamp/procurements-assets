@@ -50,6 +50,7 @@ export type SupplierBlacklistInput = z.infer<typeof supplierBlacklistSchema>
 
 export const prItemSchema = z.object({
   item_number: z.number().int().positive(),
+  app_item_id: z.string().uuid("APP item is required"),
   description: z.string().min(3, "Description is required (min 3 characters)"),
   unit: z.string().min(1, "Unit is required"),
   quantity: z
@@ -75,7 +76,6 @@ export const createPrSchema = z.object({
   office_id: z.string().uuid("Office is required"),
   fiscal_year_id: z.string().uuid("Fiscal year is required"),
   purpose: z.string().min(10, "Purpose must be at least 10 characters"),
-  app_item_id: z.string().uuid("APP item is required"),
   fund_source_id: z.string().uuid().nullable().optional(),
   budget_allocation_id: z.string().uuid().nullable().optional(),
   items: z.array(prItemSchema).min(1, "At least one line item is required"),

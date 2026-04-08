@@ -31,15 +31,12 @@ import {
 
 const PROCUREMENT_SELECT = `
   *,
-  purchase_request:purchase_requests(
+  purchase_request:purchase_requests!procurement_activities_purchase_request_id_fkey(
     *,
     office:offices(id, name, code),
     fiscal_year:fiscal_years(id, year, status),
     fund_source:fund_sources(id, name, code),
-    budget_allocation:budget_allocations(id, adjusted_amount, obligated_amount),
-    app_item:app_items(id, item_number, general_description, estimated_budget, procurement_mode, project_type, source_of_funds),
-    lot:app_lots(id, lot_name, lot_number),
-    requester:user_profiles!purchase_requests_requested_by_fkey(id, first_name, last_name, position)
+    budget_allocation:budget_allocations(id, adjusted_amount, obligated_amount)
   ),
   supplier:suppliers(id, name, trade_name, tin),
   office:offices(id, name, code),
@@ -91,7 +88,24 @@ export async function getProcurementActivityById(
     .single()
 
   if (error) return null
-  return data as ProcurementActivityWithDetails
+
+  // Backfill requester separately — purchase_requests.requested_by FKs auth.users,
+  // not user_profiles, so PostgREST cannot embed it.
+  const activity = data as ProcurementActivityWithDetails
+  const requesterId = activity.purchase_request?.requested_by
+  if (requesterId) {
+    const { data: requester } = await supabase
+      .schema("procurements")
+      .from("user_profiles")
+      .select("id, first_name, last_name, position")
+      .eq("id", requesterId)
+      .maybeSingle()
+    if (requester && activity.purchase_request) {
+      activity.purchase_request.requester = requester as PurchaseRequestWithDetails["requester"]
+    }
+  }
+
+  return activity
 }
 
 export async function getProcurementsRequiringMyAction(): Promise<ProcurementActivityWithDetails[]> {
@@ -215,9 +229,10 @@ export async function getApprovedPrsForProcurement(): Promise<PurchaseRequestWit
       *,
       office:offices(id, name, code),
       fiscal_year:fiscal_years(id, year, status),
-      app_item:app_items(id, item_number, general_description, estimated_budget, procurement_mode, project_type),
-      lot:app_lots(id, lot_name, lot_number),
-      requester:user_profiles!purchase_requests_requested_by_fkey(id, first_name, last_name, position)
+      pr_items:pr_items(
+        id, app_item_id,
+        app_item:app_items(id, general_description, procurement_mode, project_type)
+      )
     `)
     .eq("status", "approved")
     .is("procurement_id", null)
@@ -294,7 +309,7 @@ async function getProcMeta(procId: string) {
   const { data } = await admin
     .schema("procurements")
     .from("procurement_activities")
-    .select("id, procurement_number, division_id, office_id, purchase_request_id, purchase_requests(created_by)")
+    .select("id, procurement_number, division_id, office_id, purchase_request_id, purchase_requests!procurement_activities_purchase_request_id_fkey(created_by)")
     .eq("id", procId)
     .single()
   return data as {

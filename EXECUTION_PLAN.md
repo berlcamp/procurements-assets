@@ -17,7 +17,7 @@
 | [x]    | 5     | **Planning Module (PPMP)**                      | **Opus** | PPMP creation by End User, multi-step approval (Chief→Budget Officer→HOPE), INDICATIVE/FINAL versioning, auto-population to APP | PPMP feeds into APP; must be done before APP                     |
 | [x]    | 6     | **Planning Module (APP)**                       | **Opus** | APP auto-populated from approved PPMPs, HOPE row-level review, BAC lot finalization, INDICATIVE/FINAL, PR enablement            | APP must exist before procurement can reference it               |
 | [x]    | 7     | **Procurement Core (PR + Suppliers)**           | Sonnet   | Purchase Requests, supplier registry, budget certification                                                                      | PR is the entry point for all procurement methods                |
-| [ ]    | 8     | **Procurement Workflows (SVP + Shopping)**      | **Opus** | Small Value Procurement and Shopping workflows end-to-end                                                                       | Most common methods in DepEd; quickest to deliver value          |
+| [x]    | 8     | **Procurement Workflows (SVP + Shopping)**      | **Opus** | Small Value Procurement and Shopping workflows end-to-end                                                                       | Most common methods in DepEd; quickest to deliver value          |
 | [ ]    | 9     | **Procurement Workflows (Competitive Bidding)** | **Opus** | Full competitive bidding with BAC evaluation                                                                                    | Most complex method; requires all procurement infrastructure     |
 | [ ]    | 10    | **Procurement Workflows (Other Methods)**       | Sonnet   | Direct contracting, repeat order, emergency, negotiated, agency-to-agency                                                       | Completes RA 12009 coverage                                      |
 | [ ]    | 11    | **Purchase Orders & Delivery**                  | Sonnet   | PO creation, delivery recording, inspection, obligation tracking                                                                | Bridges procurement to asset management                          |
@@ -949,7 +949,7 @@ obligation_requests (id, division_id, obr_number, purchase_request_id, procureme
 
 ---
 
-## [ ] PHASE 8: Procurement Workflows (SVP + Shopping)
+## [x] PHASE 8: Procurement Workflows (SVP + Shopping)
 
 ### A. Scope
 

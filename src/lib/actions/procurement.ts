@@ -228,9 +228,7 @@ const PR_SELECT = `
   office:offices(id, name, code),
   fiscal_year:fiscal_years(id, year, status),
   fund_source:fund_sources(id, name, code),
-  budget_allocation:budget_allocations(id, adjusted_amount, obligated_amount),
-  app_item:app_items(id, item_number, general_description, estimated_budget, procurement_mode, project_type, source_of_funds, procurement_start, procurement_end, delivery_period),
-  lot:app_lots(id, lot_name, lot_number)
+  budget_allocation:budget_allocations(id, adjusted_amount, obligated_amount)
 ` as const
 
 export async function getPurchaseRequests(
@@ -276,7 +274,13 @@ export async function getPurchaseRequestById(
     supabase
       .schema("procurements")
       .from("pr_items")
-      .select("*")
+      .select(`
+        *,
+        app_item:app_items(
+          id, item_number, general_description, estimated_budget,
+          procurement_mode, project_type, source_of_funds
+        )
+      `)
       .eq("purchase_request_id", id)
       .is("deleted_at", null)
       .order("item_number"),
@@ -443,8 +447,24 @@ export async function getApprovedAppItemsForOffice(
 
   const { data, error } = await query
   if (error) return []
+
+  const items = (data ?? []) as Array<Record<string, unknown> & { id: string }>
+  if (items.length === 0) return []
+
+  // Find which items already have an active PR (not cancelled, not soft-deleted)
+  const itemIds = items.map(i => i.id)
+  const { data: takenRows } = await supabase
+    .schema("procurements")
+    .from("purchase_requests")
+    .select("app_item_id")
+    .in("app_item_id", itemIds)
+    .neq("status", "cancelled")
+    .is("deleted_at", null)
+
+  const takenSet = new Set((takenRows ?? []).map(r => r.app_item_id as string))
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []) as any[]
+  return items.map(i => ({ ...i, has_active_pr: takenSet.has(i.id) })) as any[]
 }
 
 export async function getProcurementDashboardStats(
@@ -475,7 +495,6 @@ export async function createPurchaseRequest(
     .schema("procurements")
     .rpc("create_purchase_request", {
       p_office_id:      input.office_id,
-      p_app_item_id:    input.app_item_id,
       p_purpose:        input.purpose,
       p_fiscal_year_id: input.fiscal_year_id,
       p_items:          input.items,
@@ -485,6 +504,77 @@ export async function createPurchaseRequest(
 
   revalidatePath("/dashboard/procurement/purchase-requests")
   return { id: data as string, error: null }
+}
+
+export async function addPrItem(
+  prId: string,
+  input: {
+    app_item_id: string
+    description: string
+    unit: string
+    quantity: string
+    estimated_unit_cost: string
+    remarks?: string | null
+  }
+): Promise<{ id: string | null; error: string | null }> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .schema("procurements")
+    .rpc("add_pr_item", {
+      p_pr_id:               prId,
+      p_app_item_id:         input.app_item_id,
+      p_description:         input.description,
+      p_unit:                input.unit,
+      p_quantity:            parseFloat(input.quantity),
+      p_estimated_unit_cost: parseFloat(input.estimated_unit_cost),
+      p_remarks:             input.remarks ?? null,
+    })
+
+  if (error) return { id: null, error: error.message }
+  revalidatePath(`/dashboard/procurement/purchase-requests/${prId}`)
+  return { id: data as string, error: null }
+}
+
+export async function removePrItem(
+  prItemId: string,
+  prId: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .schema("procurements")
+    .rpc("remove_pr_item", { p_pr_item_id: prItemId })
+
+  if (error) return { error: error.message }
+  revalidatePath(`/dashboard/procurement/purchase-requests/${prId}`)
+  return { error: null }
+}
+
+export async function updatePrItem(
+  prItemId: string,
+  prId: string,
+  input: {
+    description: string
+    unit: string
+    quantity: string
+    estimated_unit_cost: string
+    remarks?: string | null
+  }
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .schema("procurements")
+    .rpc("update_pr_item", {
+      p_pr_item_id:          prItemId,
+      p_description:         input.description,
+      p_unit:                input.unit,
+      p_quantity:            parseFloat(input.quantity),
+      p_estimated_unit_cost: parseFloat(input.estimated_unit_cost),
+      p_remarks:             input.remarks ?? null,
+    })
+
+  if (error) return { error: error.message }
+  revalidatePath(`/dashboard/procurement/purchase-requests/${prId}`)
+  return { error: null }
 }
 
 export async function updatePrItems(

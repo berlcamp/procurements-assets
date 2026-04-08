@@ -752,11 +752,10 @@ export interface PurchaseRequest {
   requested_at: string | null
   fund_source_id: string | null
   budget_allocation_id: string | null
-  ppmp_item_id: string | null
-  app_item_id: string | null
-  lot_id: string | null
   total_estimated_cost: string
   procurement_id: string | null
+  procurement_mode: string | null
+  abc_ceiling: string | null
   status: PrStatus
   budget_certified_by: string | null
   budget_certified_at: string | null
@@ -787,6 +786,7 @@ export interface PrItem {
   deleted_at: string | null
   created_at: string
   updated_at: string
+  app_item?: Pick<AppItem, 'id' | 'item_number' | 'general_description' | 'estimated_budget' | 'procurement_mode' | 'project_type' | 'source_of_funds'> | null
 }
 
 export interface ObligationRequest {
@@ -816,8 +816,6 @@ export interface PurchaseRequestWithDetails extends PurchaseRequest {
   fiscal_year?: Pick<FiscalYear, 'id' | 'year' | 'status'>
   fund_source?: Pick<FundSource, 'id' | 'name' | 'code'> | null
   budget_allocation?: Pick<BudgetAllocation, 'id' | 'adjusted_amount' | 'obligated_amount'> | null
-  app_item?: Pick<AppItem, 'id' | 'item_number' | 'general_description' | 'estimated_budget' | 'procurement_mode' | 'project_type' | 'source_of_funds' | 'procurement_start' | 'procurement_end' | 'delivery_period'> | null
-  lot?: Pick<AppLot, 'id' | 'lot_name' | 'lot_number'> | null
   pr_items?: PrItem[]
   obr?: ObligationRequest | null
   requester?: Pick<UserProfile, 'id' | 'first_name' | 'last_name' | 'position'> | null

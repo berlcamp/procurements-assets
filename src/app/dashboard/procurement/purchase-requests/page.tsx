@@ -44,10 +44,7 @@ function PrTable({ prs }: { prs: PurchaseRequestWithDetails[] }) {
             <TableCell className="font-mono text-sm">{pr.pr_number}</TableCell>
             <TableCell className="text-sm">{pr.office?.name ?? "—"}</TableCell>
             <TableCell className="text-sm max-w-xs truncate">
-              {pr.app_item?.general_description
-                ? pr.app_item.general_description.slice(0, 50) +
-                  (pr.app_item.general_description.length > 50 ? "…" : "")
-                : "—"}
+              {pr.purpose.slice(0, 60) + (pr.purpose.length > 60 ? "…" : "")}
             </TableCell>
             <TableCell className="text-right">
               <AmountDisplay amount={pr.total_estimated_cost} />

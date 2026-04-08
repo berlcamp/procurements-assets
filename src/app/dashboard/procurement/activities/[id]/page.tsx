@@ -103,10 +103,10 @@ export default async function ProcurementActivityDetailPage({
                     <span>{pr.requester.first_name} {pr.requester.last_name}</span>
                   </div>
                 )}
-                {pr.app_item && (
+                {pr.procurement_mode && (
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">APP Item</span>
-                    <span className="text-right max-w-xs truncate">{pr.app_item.general_description}</span>
+                    <span className="text-muted-foreground">Procurement Mode</span>
+                    <span className="capitalize">{pr.procurement_mode.replace(/_/g, " ")}</span>
                   </div>
                 )}
                 <div className="flex justify-between">

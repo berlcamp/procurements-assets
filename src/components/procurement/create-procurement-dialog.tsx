@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Plus } from "lucide-react"
+import { AlertTriangle, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -20,7 +20,8 @@ import {
   getApprovedPrsForProcurement,
   createProcurementActivity,
 } from "@/lib/actions/procurement-activities"
-import type { PurchaseRequestWithDetails } from "@/types/database"
+import { checkSplitContract } from "@/lib/actions/procurement"
+import type { PurchaseRequestWithDetails, SplitContractWarning } from "@/types/database"
 
 export function CreateProcurementDialog() {
   const [open, setOpen] = useState(false)
@@ -28,6 +29,7 @@ export function CreateProcurementDialog() {
   const [prs, setPrs] = useState<PurchaseRequestWithDetails[]>([])
   const [selectedPrId, setSelectedPrId] = useState("")
   const [method, setMethod] = useState<"svp" | "shopping">("svp")
+  const [splitWarning, setSplitWarning] = useState<SplitContractWarning | null>(null)
   const router = useRouter()
 
   async function handleOpen(isOpen: boolean) {
@@ -37,10 +39,41 @@ export function CreateProcurementDialog() {
       setPrs(data)
       setSelectedPrId("")
       setMethod("svp")
+      setSplitWarning(null)
     }
   }
 
   const selectedPr = prs.find(p => p.id === selectedPrId)
+
+  // Default the method to the PR's procurement_mode when it matches svp/shopping
+  useEffect(() => {
+    if (!selectedPr) return
+    const planned = selectedPr.procurement_mode?.toLowerCase().trim()
+    if (planned === "svp") setMethod("svp")
+    else if (planned === "shopping") setMethod("shopping")
+  }, [selectedPr])
+
+  useEffect(() => {
+    if (!selectedPr) {
+      setSplitWarning(null)
+      return
+    }
+    let cancelled = false
+    const officeId = selectedPr.office_id
+    const firstItemCategory = selectedPr.pr_items?.find(i => i.app_item)?.app_item?.project_type
+    const category = firstItemCategory ?? "goods"
+    const amount = parseFloat(selectedPr.total_estimated_cost) || 0
+    if (!officeId || amount <= 0) {
+      setSplitWarning(null)
+      return
+    }
+    checkSplitContract(officeId, category, amount).then(result => {
+      if (!cancelled) setSplitWarning(result)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedPr])
 
   async function handleSubmit() {
     if (!selectedPrId) {
@@ -93,7 +126,7 @@ export function CreateProcurementDialog() {
                 <option value="">Select a PR...</option>
                 {prs.map(pr => (
                   <option key={pr.id} value={pr.id}>
-                    {pr.pr_number} — {pr.app_item?.general_description?.slice(0, 40) ?? pr.purpose.slice(0, 40)}
+                    {pr.pr_number} — {pr.purpose.slice(0, 50)}
                   </option>
                 ))}
               </select>
@@ -115,14 +148,56 @@ export function CreateProcurementDialog() {
                 <span className="text-muted-foreground">Total Amount</span>
                 <AmountDisplay amount={selectedPr.total_estimated_cost} className="font-semibold" />
               </div>
-              {selectedPr.app_item && (
+              {selectedPr.pr_items && selectedPr.pr_items.length > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">APP Item</span>
-                  <span className="text-right max-w-[200px] truncate">
-                    {selectedPr.app_item.general_description}
-                  </span>
+                  <span className="text-muted-foreground">Bundled Items</span>
+                  <span className="font-medium">{selectedPr.pr_items.length}</span>
                 </div>
               )}
+              {selectedPr.procurement_mode && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Planned Mode</span>
+                  <span className="font-medium capitalize">{selectedPr.procurement_mode.replace(/_/g, " ")}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Planned-mode mismatch warning */}
+          {selectedPr?.procurement_mode &&
+            (() => {
+              const planned = selectedPr.procurement_mode.toLowerCase().trim()
+              if (planned !== method && (planned === "svp" || planned === "shopping")) {
+                return (
+                  <div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                    <p>
+                      This PR was planned under{" "}
+                      <span className="font-semibold capitalize">{planned.replace(/_/g, " ")}</span> but you
+                      selected <span className="font-semibold">{method.toUpperCase()}</span>. Make sure the
+                      change is justified.
+                    </p>
+                  </div>
+                )
+              }
+              return null
+            })()}
+
+          {/* Split-contract advisory */}
+          {splitWarning?.warning && (
+            <div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <div className="space-y-1">
+                <p className="font-medium">Possible contract splitting</p>
+                <p className="text-xs">
+                  This office has{" "}
+                  <span className="font-semibold">{splitWarning.pr_count}</span> recent PR(s) in this category
+                  totaling <AmountDisplay amount={splitWarning.cumulative_amount} className="font-semibold" />,
+                  exceeding the threshold of{" "}
+                  <AmountDisplay amount={splitWarning.threshold} className="font-semibold" />. Review whether
+                  these should be consolidated under a single competitive method.
+                </p>
+              </div>
             </div>
           )}
 

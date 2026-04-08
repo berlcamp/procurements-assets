@@ -1,8 +1,6 @@
 "use client"
 
 import { useFieldArray, Control } from "react-hook-form"
-import { Trash2, Plus } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
   FormControl,
@@ -102,7 +100,7 @@ interface PrItemsEditProps {
 }
 
 export function PrItemsEdit({ control, watchItems = [] }: PrItemsEditProps) {
-  const { fields, append, remove } = useFieldArray({ control, name: "items" })
+  const { fields } = useFieldArray({ control, name: "items" })
 
   const grandTotal = watchItems.reduce((sum, item) => {
     const qty  = parseFloat(item.quantity || "0")
@@ -121,7 +119,6 @@ export function PrItemsEdit({ control, watchItems = [] }: PrItemsEditProps) {
             <TableHead className="w-28">Qty *</TableHead>
             <TableHead className="w-36">Unit Cost *</TableHead>
             <TableHead className="w-36 text-right">Total</TableHead>
-            <TableHead className="w-10" />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -192,18 +189,6 @@ export function PrItemsEdit({ control, watchItems = [] }: PrItemsEditProps) {
                 <TableCell className="text-right font-medium text-sm">
                   <AmountDisplay amount={rowTotal.toString()} />
                 </TableCell>
-                <TableCell>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => remove(index)}
-                    disabled={fields.length <= 1}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </TableCell>
               </TableRow>
             )
           })}
@@ -216,20 +201,13 @@ export function PrItemsEdit({ control, watchItems = [] }: PrItemsEditProps) {
             <td className="px-4 py-2 text-right font-bold">
               <AmountDisplay amount={grandTotal.toString()} />
             </td>
-            <td />
           </tr>
         </tfoot>
       </Table>
 
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => append({ item_number: fields.length + 1, description: "", unit: "", quantity: "1", estimated_unit_cost: "0" })}
-      >
-        <Plus className="mr-1.5 h-3.5 w-3.5" />
-        Add Item
-      </Button>
+      <p className="text-xs text-muted-foreground">
+        To add or remove items, toggle the APP item selection above.
+      </p>
     </div>
   )
 }
