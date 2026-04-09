@@ -23,6 +23,7 @@ import { PROCUREMENT_METHOD_LABELS } from "@/lib/schemas/procurement"
 import { RecordBidDialog } from "@/components/procurement/record-bid-dialog"
 import { BidEvaluationForm } from "@/components/procurement/bid-evaluation-form"
 import { AbstractOfCanvass } from "@/components/procurement/abstract-of-canvass"
+import { RecommendAwardButton } from "@/components/procurement/recommend-award-button"
 import type { BidWithDetails, PrItem } from "@/types/database"
 
 function BoolIcon({ value }: { value: boolean }) {
@@ -57,6 +58,10 @@ export default async function BidsPage({
   const canEvaluate = permissions.canEvaluate && activity.status === "active" &&
     ["quotations_received", "canvass_received", "evaluation", "comparison", "abstract_prepared"].includes(activity.current_stage)
   const hasEvaluatedBids = bids.some(b => b.status === "evaluated" || b.status === "awarded")
+  // Recommend Award available from evaluation through award_recommended (so users can recover
+  // from manual stage advances that bypassed the actual award action).
+  const canRecommend = permissions.canRecommendAward && activity.status === "active" &&
+    ["evaluation", "abstract_prepared", "comparison", "post_qualification", "award_recommended"].includes(activity.current_stage)
 
   return (
     <div className="space-y-6">
@@ -114,33 +119,51 @@ export default async function BidsPage({
                   <TableHead className="text-center">Compliant</TableHead>
                   <TableHead className="text-center">Rank</TableHead>
                   <TableHead>Status</TableHead>
+                  {canRecommend && <TableHead className="w-44" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {bids.map(bid => (
-                  <TableRow key={bid.id} className={bid.status === "awarded" ? "bg-green-50" : undefined}>
-                    <TableCell>
-                      <div>
-                        <span className="font-medium text-sm">{bid.supplier?.name ?? "—"}</span>
-                        {bid.supplier?.tin && (
-                          <span className="block text-xs text-muted-foreground font-mono">{bid.supplier.tin}</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <AmountDisplay amount={bid.bid_amount} />
-                    </TableCell>
-                    <TableCell className="text-center"><BoolIcon value={bid.is_responsive} /></TableCell>
-                    <TableCell className="text-center"><BoolIcon value={bid.is_eligible} /></TableCell>
-                    <TableCell className="text-center"><BoolIcon value={bid.is_compliant} /></TableCell>
-                    <TableCell className="text-center font-mono">
-                      {bid.rank ?? "—"}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={bid.status} />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {bids.map(bid => {
+                  const isAwardEligible = bid.is_responsive && bid.is_eligible && bid.is_compliant
+                  const isAwarded = bid.status === "awarded"
+                  return (
+                    <TableRow key={bid.id} className={isAwarded ? "bg-green-50" : undefined}>
+                      <TableCell>
+                        <div>
+                          <span className="font-medium text-sm">{bid.supplier?.name ?? "—"}</span>
+                          {bid.supplier?.tin && (
+                            <span className="block text-xs text-muted-foreground font-mono">{bid.supplier.tin}</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <AmountDisplay amount={bid.bid_amount} />
+                      </TableCell>
+                      <TableCell className="text-center"><BoolIcon value={bid.is_responsive} /></TableCell>
+                      <TableCell className="text-center"><BoolIcon value={bid.is_eligible} /></TableCell>
+                      <TableCell className="text-center"><BoolIcon value={bid.is_compliant} /></TableCell>
+                      <TableCell className="text-center font-mono">
+                        {bid.rank ?? "—"}
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={bid.status} />
+                      </TableCell>
+                      {canRecommend && (
+                        <TableCell>
+                          {isAwardEligible && (
+                            <RecommendAwardButton
+                              procurementId={id}
+                              bidId={bid.id}
+                              supplierName={bid.supplier?.name ?? "Supplier"}
+                              bidAmount={bid.bid_amount}
+                              isAlreadyAwarded={isAwarded}
+                            />
+                          )}
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           )}

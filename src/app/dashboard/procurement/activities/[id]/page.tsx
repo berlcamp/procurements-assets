@@ -78,6 +78,26 @@ export default async function ProcurementActivityDetailPage({
         </Button>
       </div>
 
+      {/* No-bid-selected at award_recommended banner */}
+      {activity.status === "active" &&
+        activity.current_stage === "award_recommended" &&
+        !activity.awarded_supplier_id && (
+          <Card className="border-red-300 bg-red-50">
+            <CardContent className="flex items-start justify-between gap-3 py-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-red-900">No bid has been recommended yet</p>
+                <p className="text-xs text-red-800">
+                  This procurement is at the &quot;Award Recommended&quot; stage but no supplier has been
+                  selected. The BAC Chair must go to the Bids page and click <strong>Recommend Award</strong> on the winning bid before HOPE can approve.
+                </p>
+              </div>
+              <Button size="sm" nativeButton={false} render={<Link href={`/dashboard/procurement/activities/${id}/bids`} />}>
+                Go to Bids
+              </Button>
+            </CardContent>
+          </Card>
+      )}
+
       {/* PhilGEPS reference required banner */}
       {!activity.philgeps_reference &&
         activity.status === "active" &&
