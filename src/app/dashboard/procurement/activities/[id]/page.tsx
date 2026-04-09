@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/shared/status-badge"
 import { AmountDisplay } from "@/components/shared/amount-display"
 import { ApprovalStepper, buildProcurementSteps } from "@/components/shared/approval-stepper"
 import { ProcurementReviewActions } from "@/components/procurement/procurement-review-actions"
+import { PhilgepsReferenceDialog } from "@/components/procurement/philgeps-reference-dialog"
 import {
   getProcurementActivityById,
   getProcurementStages,
@@ -51,8 +52,8 @@ export default async function ProcurementActivityDetailPage({
   const hasAction =
     (permissions.canAdvance && activity.status === "active") ||
     (permissions.canRecordBid && activity.status === "active") ||
-    (permissions.canEvaluate && ["quotations_received", "canvass_received", "evaluation", "comparison"].includes(activity.current_stage)) ||
-    (permissions.canRecommendAward && ["evaluation", "abstract_prepared", "comparison"].includes(activity.current_stage)) ||
+    (permissions.canEvaluate && ["quotations_received", "canvass_received", "evaluation", "comparison", "post_qualification"].includes(activity.current_stage)) ||
+    (permissions.canRecommendAward && ["evaluation", "abstract_prepared", "comparison", "post_qualification"].includes(activity.current_stage)) ||
     (permissions.canApproveAward && activity.current_stage === "award_recommended") ||
     (permissions.canFail && activity.status === "active")
 
@@ -76,6 +77,30 @@ export default async function ProcurementActivityDetailPage({
           Back
         </Button>
       </div>
+
+      {/* PhilGEPS reference required banner */}
+      {!activity.philgeps_reference &&
+        activity.status === "active" &&
+        ["created", "rfq_preparation", "canvass_preparation"].includes(activity.current_stage) &&
+        permissions.canManage && (
+          <Card className="border-amber-300 bg-amber-50">
+            <CardContent className="flex items-start justify-between gap-3 py-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-amber-900">
+                  PhilGEPS reference required
+                </p>
+                <p className="text-xs text-amber-800">
+                  RA 12009 requires opportunities to be published on PhilGEPS before the RFQ/canvass can be sent.
+                  Set the reference number now to unblock the next stage.
+                </p>
+              </div>
+              <PhilgepsReferenceDialog
+                procurementId={activity.id}
+                currentReference={activity.philgeps_reference}
+              />
+            </CardContent>
+          </Card>
+        )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main content */}
@@ -277,6 +302,42 @@ export default async function ProcurementActivityDetailPage({
                 <span className="text-muted-foreground">Current Stage</span>
                 <StatusBadge status={activity.current_stage} />
               </div>
+              <Separator />
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">PhilGEPS Ref</span>
+                {activity.philgeps_reference ? (
+                  <span className="flex items-center gap-1">
+                    <span className="font-mono text-xs">{activity.philgeps_reference}</span>
+                    {permissions.canManage && (
+                      <PhilgepsReferenceDialog
+                        procurementId={activity.id}
+                        currentReference={activity.philgeps_reference}
+                        variant="icon"
+                      />
+                    )}
+                  </span>
+                ) : permissions.canManage ? (
+                  <PhilgepsReferenceDialog
+                    procurementId={activity.id}
+                    currentReference={null}
+                    variant="icon"
+                  />
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+              </div>
+              {activity.submission_deadline && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Submission Deadline</span>
+                  <span className={
+                    new Date(activity.submission_deadline) > new Date()
+                      ? "text-amber-700 text-xs"
+                      : "text-green-700 text-xs"
+                  }>
+                    {format(new Date(activity.submission_deadline), "MMM d, yyyy h:mm a")}
+                  </span>
+                </div>
+              )}
               <Separator />
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Created</span>

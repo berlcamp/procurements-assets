@@ -38,14 +38,16 @@ interface ProcurementReviewActionsProps {
   canFail: boolean
 }
 
-// Next stage mapping per method
+// Next stage mapping per method (must mirror advance_procurement_stage)
 const SVP_STAGE_ORDER = [
   "created", "rfq_preparation", "rfq_sent", "quotations_received",
-  "evaluation", "abstract_prepared", "award_recommended", "award_approved", "completed",
+  "evaluation", "abstract_prepared", "post_qualification",
+  "award_recommended", "award_approved", "completed",
 ]
 const SHOPPING_STAGE_ORDER = [
   "created", "canvass_preparation", "canvass_sent", "canvass_received",
-  "comparison", "award_recommended", "award_approved", "completed",
+  "comparison", "post_qualification",
+  "award_recommended", "award_approved", "completed",
 ]
 
 function getNextStage(method: string, current: string): string | null {

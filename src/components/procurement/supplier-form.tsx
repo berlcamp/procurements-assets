@@ -108,7 +108,10 @@ export function SupplierForm({ defaultValues }: SupplierFormProps) {
             <FormField control={form.control} name="business_type" render={({ field }) => (
               <FormItem>
                 <FormLabel>Business Type</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value ?? ""}>
+                <Select
+                  value={field.value ?? ""}
+                  onValueChange={field.onChange}
+                >
                   <FormControl>
                     <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                   </FormControl>

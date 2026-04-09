@@ -132,7 +132,11 @@ export async function getProcurementsRequiringMyAction(): Promise<ProcurementAct
 
   const stages: string[] = []
   if (isManager) stages.push("rfq_preparation", "rfq_sent", "canvass_preparation", "canvass_sent")
-  if (isEvaluator) stages.push("quotations_received", "canvass_received", "evaluation", "comparison", "abstract_prepared")
+  if (isEvaluator) stages.push(
+    "quotations_received", "canvass_received",
+    "evaluation", "comparison", "abstract_prepared",
+    "post_qualification"
+  )
   if (isApprover) stages.push("award_recommended")
 
   const { data, error } = await supabase
@@ -381,6 +385,7 @@ export async function recordBid(
       p_procurement_id: input.procurement_id,
       p_supplier_id: input.supplier_id,
       p_items: rpcItems,
+      p_lot_id: (input as { lot_id?: string }).lot_id ?? null,
     }
   )
 
@@ -544,6 +549,30 @@ export async function approveAward(
   }
 
   revalidatePath("/dashboard/procurement")
+  return { error: null }
+}
+
+export async function setPhilgepsReference(
+  procurementId: string,
+  philgepsReference: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  const trimmed = philgepsReference.trim()
+  if (trimmed.length < 3) {
+    return { error: "PhilGEPS reference must be at least 3 characters" }
+  }
+
+  const { error } = await supabase
+    .schema("procurements")
+    .from("procurement_activities")
+    .update({
+      philgeps_reference: trimmed,
+      philgeps_published_at: new Date().toISOString(),
+    })
+    .eq("id", procurementId)
+
+  if (error) return { error: error.message }
+  revalidatePath(`/dashboard/procurement/activities/${procurementId}`)
   return { error: null }
 }
 

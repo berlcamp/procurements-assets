@@ -841,6 +841,108 @@ export interface SplitContractWarning {
 
 // ── Phase 8: Procurement Activities (SVP + Shopping) ─────────
 
+export interface ProcurementLot {
+  id: string
+  procurement_id: string
+  lot_number: number
+  lot_name: string
+  description: string | null
+  abc_amount: string
+  awarded_supplier_id: string | null
+  awarded_amount: string | null
+  status: 'open' | 'awarded' | 'failed' | 'cancelled'
+  failure_reason: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+export interface SupplierDocumentType {
+  code: string
+  display_name: string
+  required_for_bidding: boolean
+  required_for_svp: boolean
+  ngpa_section: string | null
+  notes: string | null
+  sort_order: number
+}
+
+export interface SupplierDocument {
+  id: string
+  supplier_id: string
+  document_type: string
+  document_number: string | null
+  document_url: string | null
+  issuing_authority: string | null
+  issue_date: string | null
+  expiry_date: string | null
+  verified_by: string | null
+  verified_at: string | null
+  notes: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+export interface SupplierEligibilityCheck {
+  is_eligible: boolean
+  missing: string[]
+  expired: string[]
+}
+
+export interface ProcurementMethodCeiling {
+  procurement_mode: string
+  ceiling_amount: string | null
+  effective_from: string
+  ra_reference: string | null
+  notes: string | null
+  min_quotations: number | null
+  min_posting_days: number | null
+  requires_philgeps_publication: boolean
+  ngpa_section: string | null
+  display_name: string | null
+  requires_bid_security: boolean
+  bid_security_percentage: string | null
+  requires_performance_security: boolean
+  performance_security_percentage: string | null
+  min_bac_quorum: number | null
+}
+
+export interface BidEvaluation {
+  id: string
+  bid_id: string
+  evaluator_id: string
+  is_responsive: boolean
+  is_eligible: boolean
+  is_compliant: boolean
+  technical_pass: boolean | null
+  financial_pass: boolean | null
+  evaluation_score: string | null
+  remarks: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type SecurityForm =
+  | 'cash'
+  | 'bank_draft'
+  | 'managers_check'
+  | 'irrevocable_loc'
+  | 'surety_bond'
+  | 'bank_guarantee'
+
+export interface BidSecurityStatus {
+  required: boolean
+  posted: boolean
+  sufficient: boolean
+  required_amount: string | null
+  posted_amount: string | null
+  form?: SecurityForm | null
+  error?: string
+}
+
 export type ProcurementMethod = 'svp' | 'shopping' | 'competitive_bidding' | 'direct_contracting' | 'repeat_order' | 'emergency' | 'negotiated' | 'agency_to_agency'
 export type ProcurementActivityStatus = 'active' | 'completed' | 'failed' | 'cancelled'
 export type BidStatus = 'submitted' | 'evaluated' | 'awarded' | 'disqualified'
@@ -862,6 +964,16 @@ export interface ProcurementActivity {
   failure_reason: string | null
   failure_count: number
   philgeps_reference: string | null
+  posting_date: string | null
+  submission_deadline: string | null
+  posting_required_days: number | null
+  philgeps_published_at: string | null
+  performance_security_required: boolean
+  performance_security_amount: string | null
+  performance_security_form: SecurityForm | null
+  performance_security_reference: string | null
+  performance_security_received_at: string | null
+  performance_security_returned_at: string | null
   status: ProcurementActivityStatus
   deleted_at: string | null
   created_at: string
@@ -895,6 +1007,7 @@ export interface Bid {
   id: string
   procurement_id: string
   supplier_id: string
+  lot_id: string | null
   bid_amount: string
   bid_date: string
   is_responsive: boolean
@@ -906,6 +1019,11 @@ export interface Bid {
   disqualification_reason: string | null
   remarks: string | null
   office_id: string | null
+  bid_security_amount: string | null
+  bid_security_form: SecurityForm | null
+  bid_security_reference: string | null
+  bid_security_received_at: string | null
+  bid_security_returned_at: string | null
   deleted_at: string | null
   created_at: string
   updated_at: string

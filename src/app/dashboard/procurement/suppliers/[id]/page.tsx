@@ -6,6 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { getSupplierById } from "@/lib/actions/procurement"
+import {
+  getSupplierDocuments,
+  getSupplierDocumentTypes,
+  getSupplierDocPermissions,
+} from "@/lib/actions/supplier-documents"
+import { SupplierDocumentsCard } from "@/components/procurement/supplier-documents-card"
 import { format } from "date-fns"
 
 export default async function SupplierDetailPage({
@@ -14,11 +20,16 @@ export default async function SupplierDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const supplier = await getSupplierById(id)
+  const [supplier, documents, documentTypes, docPerms] = await Promise.all([
+    getSupplierById(id),
+    getSupplierDocuments(id),
+    getSupplierDocumentTypes(),
+    getSupplierDocPermissions(),
+  ])
   if (!supplier) notFound()
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="max-w-3xl space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -90,6 +101,14 @@ export default async function SupplierDetailPage({
           </CardContent>
         </Card>
       )}
+
+      <SupplierDocumentsCard
+        supplierId={supplier.id}
+        documents={documents}
+        documentTypes={documentTypes}
+        canManage={docPerms.canManage}
+        canVerify={docPerms.canVerify}
+      />
 
       {(supplier.contact_person || supplier.contact_number || supplier.email) && (
         <Card>
