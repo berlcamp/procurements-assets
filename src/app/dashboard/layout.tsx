@@ -28,6 +28,11 @@ const navGroups: NavGroup[] = [
         href: "/dashboard",
         icon: <LayoutDashboard className="h-4 w-4" />,
       },
+    ],
+  },
+  {
+    label: "Planning & Budget",
+    items: [
       {
         label: "Planning",
         href: "/dashboard/planning",
@@ -38,6 +43,11 @@ const navGroups: NavGroup[] = [
         href: "/dashboard/budget",
         icon: <Wallet className="h-4 w-4" />,
       },
+    ],
+  },
+  {
+    label: "Procurement",
+    items: [
       {
         label: "Procurement",
         href: "/dashboard/procurement",
@@ -58,6 +68,11 @@ const navGroups: NavGroup[] = [
         href: "/dashboard/procurement/activities",
         icon: <Gavel className="h-4 w-4" />,
       },
+    ],
+  },
+  {
+    label: "Inventory",
+    items: [
       {
         label: "Assets",
         href: "/dashboard/assets",

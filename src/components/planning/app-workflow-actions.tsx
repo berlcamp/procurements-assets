@@ -27,6 +27,7 @@ export function AppWorkflowActions({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [finalizeOpen, setFinalizeOpen] = useState(false)
   const [approveOpen, setApproveOpen] = useState(false)
   const [notes, setNotes] = useState("")
 
@@ -35,7 +36,10 @@ export function AppWorkflowActions({
     startTransition(async () => {
       const result = await finalizeApp(appId)
       if (result.error) setError(result.error)
-      else router.refresh()
+      else {
+        setFinalizeOpen(false)
+        router.refresh()
+      }
     })
   }
 
@@ -63,7 +67,7 @@ export function AppWorkflowActions({
       )}
 
       {showFinalize && (
-        <Button onClick={handleFinalize} disabled={isPending} className="w-full">
+        <Button onClick={() => setFinalizeOpen(true)} disabled={isPending} className="w-full">
           <Shield className="mr-1.5 h-4 w-4" />
           Finalize APP (Mark as FINAL)
         </Button>
@@ -80,6 +84,23 @@ export function AppWorkflowActions({
         {showFinalize && "Finalization requires all items reviewed and all approved items assigned to finalized lots."}
         {showApprove && "Approval enables End Users to create Purchase Requests for their PPMP items."}
       </p>
+
+      <Dialog open={finalizeOpen} onOpenChange={setFinalizeOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Finalize APP</DialogTitle>
+            <DialogDescription>
+              This will mark the APP as FINAL. All items must be reviewed and all approved items assigned to finalized lots. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFinalizeOpen(false)} disabled={isPending}>Cancel</Button>
+            <Button onClick={handleFinalize} disabled={isPending}>
+              Confirm Finalization
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={approveOpen} onOpenChange={setApproveOpen}>
         <DialogContent>

@@ -22,7 +22,7 @@ import {
 import { AppLotCard } from "./app-lot-card"
 import { PlusIcon, CheckCircle2, MoveRight } from "lucide-react"
 import {
-  createAppLot, assignItemsToLot, unassignItemsFromLot, finalizeLot, deleteAppLot,
+  createAppLot, updateAppLot, assignItemsToLot, unassignItemsFromLot, finalizeLot, deleteAppLot,
 } from "@/lib/actions/app"
 import { PROCUREMENT_MODES } from "@/lib/schemas/ppmp"
 import type { AppItemWithOffice, AppLotWithItems } from "@/types/database"
@@ -195,6 +195,14 @@ export function AppLotManager({
       if (result.error) setError(result.error)
       else router.refresh()
     })
+  }
+
+  const handleUpdateLot = async (lotId: string, fields: { lot_name?: string; description?: string; procurement_method?: string }) => {
+    setError(null)
+    const result = await updateAppLot(lotId, fields)
+    if (result.error) setError(result.error)
+    else router.refresh()
+    return result
   }
 
   const handleDeleteLot = () => {
@@ -465,6 +473,7 @@ export function AppLotManager({
                     lot={lot}
                     isPending={isPending}
                     onDelete={canManageLots ? () => setDeleteLotId(lot.id) : undefined}
+                    onUpdate={canManageLots ? (fields) => handleUpdateLot(lot.id, fields) : undefined}
                     onFinalize={
                       canFinalizeLot && lot.status === "draft" && (lot.app_items?.length ?? 0) > 0
                         ? () => handleFinalizeLot(lot.id)

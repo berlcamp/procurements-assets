@@ -43,6 +43,63 @@ async function getUserRoleContext(supabase: Awaited<ReturnType<typeof createClie
   return { user, profile, roleNames }
 }
 
+const LOTS_LOCKED_STATUSES = ["final", "approved", "posted"]
+
+async function isAppLotsLocked(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  appId: string
+): Promise<boolean> {
+  const { data } = await supabase
+    .schema("procurements")
+    .from("apps")
+    .select("status")
+    .eq("id", appId)
+    .single()
+  return LOTS_LOCKED_STATUSES.includes(data?.status ?? "")
+}
+
+async function isAppLotsLockedByLot(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  lotId: string
+): Promise<boolean> {
+  const { data: lot } = await supabase
+    .schema("procurements")
+    .from("app_lots")
+    .select("app_version_id")
+    .eq("id", lotId)
+    .single()
+  if (!lot) return true
+  const { data: version } = await supabase
+    .schema("procurements")
+    .from("app_versions")
+    .select("app_id")
+    .eq("id", lot.app_version_id)
+    .single()
+  if (!version) return true
+  return isAppLotsLocked(supabase, version.app_id)
+}
+
+async function isAppLotsLockedByItem(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  appItemId: string
+): Promise<boolean> {
+  const { data: item } = await supabase
+    .schema("procurements")
+    .from("app_items")
+    .select("app_version_id")
+    .eq("id", appItemId)
+    .single()
+  if (!item) return true
+  const { data: version } = await supabase
+    .schema("procurements")
+    .from("app_versions")
+    .select("app_id")
+    .eq("id", item.app_version_id)
+    .single()
+  if (!version) return true
+  return isAppLotsLocked(supabase, version.app_id)
+}
+
 // ============================================================
 // APP queries
 // ============================================================
@@ -211,19 +268,25 @@ export async function getAppUserPermissions(appId: string): Promise<{
   canApproveApp: boolean
 }> {
   const supabase = await createClient()
-  const ctx = await getUserRoleContext(supabase)
+  const [ctx, { data: app }] = await Promise.all([
+    getUserRoleContext(supabase),
+    supabase.schema("procurements").from("apps").select("status").eq("id", appId).single(),
+  ])
   if (!ctx) return { canHopeReview: false, canViewLots: false, canManageLots: false, canFinalizeLot: false, canFinalizeApp: false, canApproveApp: false }
 
   const { roleNames } = ctx
   const isHope = roleNames.includes("hope") || roleNames.includes("division_admin")
   const isBac = roleNames.some(r => ["bac_chair", "bac_member", "bac_secretariat", "division_admin"].includes(r))
-  const canFinalizeLot = roleNames.some(r => ["bac_chair", "bac_secretariat", "division_admin"].includes(r))
+  const canFinalizeLotRole = roleNames.some(r => ["bac_chair", "bac_secretariat", "division_admin"].includes(r))
+
+  // Lot editing is locked once the APP reaches final or beyond
+  const lotsLocked = LOTS_LOCKED_STATUSES.includes(app?.status ?? "")
 
   return {
     canHopeReview: isHope,
     canViewLots: isHope || isBac,
-    canManageLots: isBac,
-    canFinalizeLot,
+    canManageLots: isBac && !lotsLocked,
+    canFinalizeLot: canFinalizeLotRole && !lotsLocked,
     canFinalizeApp: isHope,
     canApproveApp: isHope,
   }
@@ -249,6 +312,7 @@ export async function getAppsRequiringMyAction(
 
   if (!isHope && !isBac) return []
 
+  // Status-based action queue (existing workflow logic)
   const hopeStatuses = ["indicative", "under_review", "bac_finalization", "final"]
   const bacStatuses = ["bac_finalization"]
   const statuses = isHope ? hopeStatuses : bacStatuses
@@ -269,7 +333,66 @@ export async function getAppsRequiringMyAction(
     console.error("getAppsRequiringMyAction error:", error)
     return []
   }
-  return (data ?? []) as AppWithDetails[]
+
+  let results = (data ?? []) as AppWithDetails[]
+
+  // For BAC roles, also surface APPs that have:
+  // 1) HOPE-approved items not yet assigned to a lot, OR
+  // 2) Lots still in draft (not yet finalized)
+  if (isBac) {
+    const [{ data: unassigned }, { data: draftLots }] = await Promise.all([
+      supabase
+        .schema("procurements")
+        .from("app_items")
+        .select("app_version_id")
+        .eq("hope_review_status", "approved")
+        .is("lot_id", null),
+      supabase
+        .schema("procurements")
+        .from("app_lots")
+        .select("app_version_id")
+        .eq("status", "draft")
+        .is("deleted_at", null),
+    ])
+
+    const versionIdsFromItems = (unassigned ?? []).map(i => i.app_version_id)
+    const versionIdsFromLots = (draftLots ?? []).map(l => l.app_version_id)
+    const allVersionIds = [...new Set([...versionIdsFromItems, ...versionIdsFromLots])]
+
+    if (allVersionIds.length) {
+      const { data: versions } = await supabase
+        .schema("procurements")
+        .from("app_versions")
+        .select("app_id")
+        .in("id", allVersionIds)
+
+      if (versions?.length) {
+        const existingIds = new Set(results.map(a => a.id))
+        const newAppIds = [...new Set(versions.map(v => v.app_id))]
+          .filter(id => !existingIds.has(id))
+
+        if (newAppIds.length) {
+          let extraQuery = supabase
+            .schema("procurements")
+            .from("apps")
+            .select(APP_SELECT)
+            .in("id", newAppIds)
+            .not("status", "in", '("approved","posted")')
+
+          if (fiscalYearId) {
+            extraQuery = extraQuery.eq("fiscal_year_id", fiscalYearId)
+          }
+
+          const { data: extraApps } = await extraQuery
+          if (extraApps?.length) {
+            results = [...results, ...(extraApps as AppWithDetails[])]
+          }
+        }
+      }
+    }
+  }
+
+  return results
 }
 
 // ============================================================
@@ -358,6 +481,7 @@ export async function createAppLot(
   input: AppLotInput
 ): Promise<{ id: string | null; error: string | null }> {
   const supabase = await createClient()
+  if (await isAppLotsLocked(supabase, appId)) return { id: null, error: "Lot editing is locked — APP is final or approved" }
   const { data, error } = await supabase
     .schema("procurements")
     .rpc("create_app_lot", {
@@ -378,6 +502,7 @@ export async function assignItemsToLot(
   appItemIds: string[]
 ): Promise<{ count: number | null; error: string | null }> {
   const supabase = await createClient()
+  if (await isAppLotsLockedByLot(supabase, lotId)) return { count: null, error: "Lot editing is locked — APP is final or approved" }
   const { data, error } = await supabase
     .schema("procurements")
     .rpc("assign_items_to_lot", {
@@ -395,6 +520,7 @@ export async function unassignItemsFromLot(
   appItemIds: string[]
 ): Promise<{ count: number | null; error: string | null }> {
   const supabase = await createClient()
+  if (appItemIds.length > 0 && await isAppLotsLockedByItem(supabase, appItemIds[0])) return { count: null, error: "Lot editing is locked — APP is final or approved" }
   const { data, error } = await supabase
     .schema("procurements")
     .rpc("unassign_items_from_lot", {
@@ -411,9 +537,33 @@ export async function finalizeLot(
   lotId: string
 ): Promise<{ error: string | null }> {
   const supabase = await createClient()
+  if (await isAppLotsLockedByLot(supabase, lotId)) return { error: "Lot editing is locked — APP is final or approved" }
   const { error } = await supabase
     .schema("procurements")
     .rpc("finalize_lot", { p_lot_id: lotId })
+
+  if (error) return { error: error.message }
+
+  revalidatePath("/dashboard/planning/app")
+  return { error: null }
+}
+
+export async function updateAppLot(
+  lotId: string,
+  input: Partial<AppLotInput>
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  if (await isAppLotsLockedByLot(supabase, lotId)) return { error: "Lot editing is locked — APP is final or approved" }
+  const { error } = await supabase
+    .schema("procurements")
+    .from("app_lots")
+    .update({
+      ...(input.lot_name !== undefined && { lot_name: input.lot_name }),
+      ...(input.description !== undefined && { description: input.description || null }),
+      ...(input.procurement_method !== undefined && { procurement_method: input.procurement_method || null }),
+    })
+    .eq("id", lotId)
+    .eq("status", "draft")
 
   if (error) return { error: error.message }
 
@@ -425,6 +575,7 @@ export async function deleteAppLot(
   lotId: string
 ): Promise<{ error: string | null }> {
   const supabase = await createClient()
+  if (await isAppLotsLockedByLot(supabase, lotId)) return { error: "Lot editing is locked — APP is final or approved" }
   const { error } = await supabase
     .schema("procurements")
     .rpc("delete_app_lot", { p_lot_id: lotId })
