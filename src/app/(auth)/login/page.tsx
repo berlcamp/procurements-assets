@@ -1,31 +1,31 @@
-"use client"
+"use client";
 
-import { Suspense, useState } from "react"
-import { useSearchParams } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
-import { Button } from "@/components/ui/button"
-import { toast } from "sonner"
+import { Button } from "@/components/ui/button";
+import { createClient } from "@/lib/supabase/client";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
+import { toast } from "sonner";
 
 export default function LoginPage() {
   return (
     <Suspense>
       <LoginForm />
     </Suspense>
-  )
+  );
 }
 
 function LoginForm() {
-  const searchParams = useSearchParams()
-  const redirectedFrom = searchParams.get("redirectedFrom")
-  const [loading, setLoading] = useState(false)
+  const searchParams = useSearchParams();
+  const redirectedFrom = searchParams.get("redirectedFrom");
+  const [loading, setLoading] = useState(false);
 
   async function handleGoogleLogin() {
-    setLoading(true)
-    const supabase = createClient()
+    setLoading(true);
+    const supabase = createClient();
 
-    const callbackUrl = new URL("/auth/callback", window.location.origin)
+    const callbackUrl = new URL("/auth/callback", window.location.origin);
     if (redirectedFrom) {
-      callbackUrl.searchParams.set("redirectedFrom", redirectedFrom)
+      callbackUrl.searchParams.set("redirectedFrom", redirectedFrom);
     }
 
     const { error } = await supabase.auth.signInWithOAuth({
@@ -36,11 +36,11 @@ function LoginForm() {
           prompt: "select_account",
         },
       },
-    })
+    });
 
     if (error) {
-      toast.error(error.message)
-      setLoading(false)
+      toast.error(error.message);
+      setLoading(false);
     }
   }
 
@@ -68,7 +68,7 @@ function LoginForm() {
             <ShieldIcon className="h-5 w-5 text-white" />
           </div>
           <span className="text-lg font-semibold tracking-tight text-white">
-            DepEd PAS
+            PABMS
           </span>
         </div>
 
@@ -131,11 +131,9 @@ function LoginForm() {
 
         {/* Bottom — footer */}
         <div className="relative flex items-center justify-between border-t border-white/5 pt-6">
+          <p className="text-xs text-slate-600">Department of Education</p>
           <p className="text-xs text-slate-600">
-            Department of Education
-          </p>
-          <p className="text-xs text-slate-600">
-            © {new Date().getFullYear()} DepEd PAS
+            © {new Date().getFullYear()} PABMS
           </p>
         </div>
       </div>
@@ -147,7 +145,7 @@ function LoginForm() {
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600">
             <ShieldIcon className="h-5 w-5 text-white" />
           </div>
-          <span className="text-lg font-semibold tracking-tight">DepEd PAS</span>
+          <span className="text-lg font-semibold tracking-tight">PABMS</span>
         </div>
 
         <div className="w-full max-w-[360px] space-y-8">
@@ -175,7 +173,9 @@ function LoginForm() {
               Access is restricted to authorized DepEd personnel.
               <br />
               Use your{" "}
-              <span className="font-medium text-foreground">@deped.gov.ph</span>{" "}
+              <span className="font-medium text-foreground">
+                @deped.gov.ph
+              </span>{" "}
               account.
             </p>
           </div>
@@ -190,7 +190,7 @@ function LoginForm() {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 /* ─── Icons ─────────────────────────────────────────────────────────────── */
@@ -215,12 +215,17 @@ function GoogleIcon({ className }: { className?: string }) {
         fill="#EA4335"
       />
     </svg>
-  )
+  );
 }
 
 function ShieldIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
       <path
         d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C16.5 22.15 20 17.25 20 12V6l-8-4z"
         fill="currentColor"
@@ -235,31 +240,76 @@ function ShieldIcon({ className }: { className?: string }) {
         fill="none"
       />
     </svg>
-  )
+  );
 }
 
 function DocumentIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
-      <path d="M9 12h6M9 16h6M14 3v4a1 1 0 001 1h4" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z" strokeLinecap="round" strokeLinejoin="round" />
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      aria-hidden="true"
+    >
+      <path
+        d="M9 12h6M9 16h6M14 3v4a1 1 0 001 1h4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
-  )
+  );
 }
 
 function ChartIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
-      <path d="M18 20V10M12 20V4M6 20v-6" strokeLinecap="round" strokeLinejoin="round" />
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      aria-hidden="true"
+    >
+      <path
+        d="M18 20V10M12 20V4M6 20v-6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
-  )
+  );
 }
 
 function LockIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
-      <rect x="5" y="11" width="14" height="10" rx="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M8 11V7a4 4 0 118 0v4" strokeLinecap="round" strokeLinejoin="round" />
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      aria-hidden="true"
+    >
+      <rect
+        x="5"
+        y="11"
+        width="14"
+        height="10"
+        rx="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8 11V7a4 4 0 118 0v4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
-  )
+  );
 }

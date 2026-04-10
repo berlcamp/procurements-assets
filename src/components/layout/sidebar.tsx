@@ -1,88 +1,88 @@
-"use client"
+"use client";
 
+import { useActionCounts } from "@/components/layout/action-counts-provider";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { useDivision } from "@/lib/hooks/use-division";
+import { cn } from "@/lib/utils";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   createContext,
   useCallback,
   useContext,
   useMemo,
   useState,
-} from "react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { cn } from "@/lib/utils"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import {
-  Sheet,
-  SheetContent,
-  SheetTitle,
-} from "@/components/ui/sheet"
-import { useDivision } from "@/lib/hooks/use-division"
-import { useActionCounts } from "@/components/layout/action-counts-provider"
+} from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface NavItem {
-  label: string
-  href: string
-  icon?: React.ReactNode
+  label: string;
+  href: string;
+  icon?: React.ReactNode;
 }
 
 export interface NavGroup {
   /** Optional section label rendered above the group (hidden when collapsed). */
-  label?: string
-  items: NavItem[]
+  label?: string;
+  items: NavItem[];
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 interface SidebarContextValue {
-  collapsed: boolean
-  toggleCollapsed: () => void
-  mobileOpen: boolean
-  setMobileOpen: (open: boolean) => void
-  navGroups: NavGroup[]
-  sectionTitle: string
-  brandName: string
+  collapsed: boolean;
+  toggleCollapsed: () => void;
+  mobileOpen: boolean;
+  setMobileOpen: (open: boolean) => void;
+  navGroups: NavGroup[];
+  sectionTitle: string;
+  brandName: string;
 }
 
-const SidebarContext = createContext<SidebarContextValue | null>(null)
+const SidebarContext = createContext<SidebarContextValue | null>(null);
 
 export function useSidebar() {
-  const ctx = useContext(SidebarContext)
-  if (!ctx) throw new Error("useSidebar must be inside SidebarProvider")
-  return ctx
+  const ctx = useContext(SidebarContext);
+  if (!ctx) throw new Error("useSidebar must be inside SidebarProvider");
+  return ctx;
 }
 
 interface SidebarProviderProps {
-  children: React.ReactNode
-  navGroups: NavGroup[]
-  sectionTitle: string
-  brandName?: string
+  children: React.ReactNode;
+  navGroups: NavGroup[];
+  sectionTitle: string;
+  brandName?: string;
 }
 
 export function SidebarProvider({
   children,
   navGroups,
   sectionTitle,
-  brandName = "DepEd PAS",
+  brandName = "PABMS",
 }: SidebarProviderProps) {
   const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false
+    if (typeof window === "undefined") return false;
     try {
-      return localStorage.getItem("sidebar-collapsed") === "true"
+      return localStorage.getItem("sidebar-collapsed") === "true";
     } catch {
-      return false
+      return false;
     }
-  })
-  const [mobileOpen, setMobileOpen] = useState(false)
+  });
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed((prev) => {
-      const next = !prev
-      localStorage.setItem("sidebar-collapsed", String(next))
-      return next
-    })
-  }, [])
+      const next = !prev;
+      localStorage.setItem("sidebar-collapsed", String(next));
+      return next;
+    });
+  }, []);
 
   return (
     <SidebarContext.Provider
@@ -98,23 +98,26 @@ export function SidebarProvider({
     >
       {children}
     </SidebarContext.Provider>
-  )
+  );
 }
 
 // ─── Nav Link ─────────────────────────────────────────────────────────────────
 
-const PLANNING_HREF = "/dashboard/planning"
-const PR_HREF = "/dashboard/procurement/purchase-requests"
-const ACTIVITIES_HREF = "/dashboard/procurement/activities"
+const PLANNING_HREF = "/dashboard/planning";
+const PR_HREF = "/dashboard/procurement/purchase-requests";
+const ACTIVITIES_HREF = "/dashboard/procurement/activities";
 
 /** Single active item: longest matching href wins (e.g. /dashboard/planning over /dashboard). */
-function computeActiveNavHref(pathname: string, navGroups: NavGroup[]): string | null {
-  const hrefs = navGroups.flatMap((g) => g.items.map((i) => i.href))
+function computeActiveNavHref(
+  pathname: string,
+  navGroups: NavGroup[],
+): string | null {
+  const hrefs = navGroups.flatMap((g) => g.items.map((i) => i.href));
   const matches = hrefs.filter(
-    (href) => pathname === href || pathname.startsWith(href + "/")
-  )
-  if (matches.length === 0) return null
-  return matches.reduce((a, b) => (a.length >= b.length ? a : b))
+    (href) => pathname === href || pathname.startsWith(href + "/"),
+  );
+  if (matches.length === 0) return null;
+  return matches.reduce((a, b) => (a.length >= b.length ? a : b));
 }
 
 function NavLink({
@@ -122,34 +125,46 @@ function NavLink({
   collapsed,
   activeHref,
 }: {
-  item: NavItem
-  collapsed: boolean
-  activeHref: string | null
+  item: NavItem;
+  collapsed: boolean;
+  activeHref: string | null;
 }) {
-  const isActive = activeHref === item.href
-  const { ppmp, app, pr, procurement } = useActionCounts()
-  const planningCount = ppmp + app
+  const isActive = activeHref === item.href;
+  const { ppmp, app, pr, procurement } = useActionCounts();
+  const planningCount = ppmp + app;
   const badge =
-    item.href === PLANNING_HREF && planningCount > 0 ? planningCount :
-    item.href === PR_HREF && pr > 0 ? pr :
-    item.href === ACTIVITIES_HREF && procurement > 0 ? procurement :
-    0
+    item.href === PLANNING_HREF && planningCount > 0
+      ? planningCount
+      : item.href === PR_HREF && pr > 0
+        ? pr
+        : item.href === ACTIVITIES_HREF && procurement > 0
+          ? procurement
+          : 0;
 
   const linkClassName = cn(
     "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors duration-150",
     collapsed && "justify-center px-0 w-9 mx-auto",
     isActive
       ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-      : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-  )
+      : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
+  );
 
   if (collapsed) {
     return (
       <Tooltip>
-        <TooltipTrigger render={<Link href={item.href} className={linkClassName} />}>
+        <TooltipTrigger
+          render={<Link href={item.href} className={linkClassName} />}
+        >
           <span className="relative">
             {item.icon && (
-              <span className={cn("shrink-0", isActive ? "text-sidebar-accent-foreground" : "text-sidebar-foreground/60")}>
+              <span
+                className={cn(
+                  "shrink-0",
+                  isActive
+                    ? "text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground/60",
+                )}
+              >
                 {item.icon}
               </span>
             )}
@@ -161,16 +176,24 @@ function NavLink({
           </span>
         </TooltipTrigger>
         <TooltipContent side="right" sideOffset={12}>
-          {item.label}{badge > 0 ? ` (${badge})` : ""}
+          {item.label}
+          {badge > 0 ? ` (${badge})` : ""}
         </TooltipContent>
       </Tooltip>
-    )
+    );
   }
 
   return (
     <Link href={item.href} className={linkClassName}>
       {item.icon && (
-        <span className={cn("shrink-0", isActive ? "text-sidebar-accent-foreground" : "text-sidebar-foreground/50")}>
+        <span
+          className={cn(
+            "shrink-0",
+            isActive
+              ? "text-sidebar-accent-foreground"
+              : "text-sidebar-foreground/50",
+          )}
+        >
           {item.icon}
         </span>
       )}
@@ -181,7 +204,7 @@ function NavLink({
         </span>
       )}
     </Link>
-  )
+  );
 }
 
 // ─── Sidebar Inner (shared by desktop aside + mobile Sheet) ──────────────────
@@ -190,16 +213,16 @@ function SidebarInner({
   collapsed,
   footer,
 }: {
-  collapsed: boolean
-  footer?: React.ReactNode
+  collapsed: boolean;
+  footer?: React.ReactNode;
 }) {
-  const { navGroups, brandName } = useSidebar()
-  const pathname = usePathname()
+  const { navGroups, brandName } = useSidebar();
+  const pathname = usePathname();
   const activeNavHref = useMemo(
     () => computeActiveNavHref(pathname, navGroups),
-    [pathname, navGroups]
-  )
-  const { division } = useDivision()
+    [pathname, navGroups],
+  );
+  const { division } = useDivision();
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -207,12 +230,15 @@ function SidebarInner({
       <div
         className={cn(
           "shrink-0 flex items-center border-b border-sidebar-border/40",
-          collapsed ? "justify-center px-0 h-14" : "px-4 py-3 min-h-14"
+          collapsed ? "justify-center px-0 h-14" : "px-4 py-3 min-h-14",
         )}
       >
         <Link
           href="/"
-          className={cn("flex items-center gap-2.5 min-w-0", collapsed && "justify-center")}
+          className={cn(
+            "flex items-center gap-2.5 min-w-0",
+            collapsed && "justify-center",
+          )}
         >
           <div className="h-7 w-7 shrink-0 rounded-lg bg-sidebar-primary flex items-center justify-center">
             <span className="text-[11px] font-extrabold text-sidebar-primary-foreground tracking-tight">
@@ -268,24 +294,24 @@ function SidebarInner({
         <div
           className={cn(
             "shrink-0 border-t border-sidebar-border/40",
-            collapsed ? "px-2 py-3" : "px-3 py-3"
+            collapsed ? "px-2 py-3" : "px-3 py-3",
           )}
         >
           {footer}
         </div>
       )}
     </div>
-  )
+  );
 }
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 interface SidebarProps {
-  footer?: React.ReactNode
+  footer?: React.ReactNode;
 }
 
 export function Sidebar({ footer }: SidebarProps) {
-  const { collapsed, mobileOpen, setMobileOpen } = useSidebar()
+  const { collapsed, mobileOpen, setMobileOpen } = useSidebar();
 
   return (
     <>
@@ -295,7 +321,7 @@ export function Sidebar({ footer }: SidebarProps) {
           "hidden md:flex h-screen flex-col bg-sidebar overflow-hidden shrink-0",
           "border-r border-sidebar-border/30",
           "transition-[width] duration-200 ease-in-out",
-          collapsed ? "w-14" : "w-60"
+          collapsed ? "w-14" : "w-60",
         )}
       >
         <SidebarInner collapsed={collapsed} footer={footer} />
@@ -313,5 +339,5 @@ export function Sidebar({ footer }: SidebarProps) {
         </SheetContent>
       </Sheet>
     </>
-  )
+  );
 }

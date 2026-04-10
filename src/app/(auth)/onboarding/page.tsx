@@ -1,132 +1,145 @@
-"use client"
+"use client";
 
-import { useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
-import { completeOnboarding, getAvailableDivisions, getOfficesForDivision } from "@/lib/actions/onboarding"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { toast } from "sonner"
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  completeOnboarding,
+  getAvailableDivisions,
+  getOfficesForDivision,
+} from "@/lib/actions/onboarding";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 interface Division {
-  id: string
-  name: string
-  code: string
-  region: string
+  id: string;
+  name: string;
+  code: string;
+  region: string;
 }
 
 interface OfficeOption {
-  id: string
-  name: string
-  code: string
-  office_type: string
+  id: string;
+  name: string;
+  code: string;
+  office_type: string;
 }
 
 export default function OnboardingPage() {
-  const router = useRouter()
-  const [submitting, setSubmitting] = useState(false)
-  const [divisions, setDivisions] = useState<Division[]>([])
-  const [loadingDivisions, setLoadingDivisions] = useState(true)
+  const router = useRouter();
+  const [submitting, setSubmitting] = useState(false);
+  const [divisions, setDivisions] = useState<Division[]>([]);
+  const [loadingDivisions, setLoadingDivisions] = useState(true);
 
   // Profile fields
-  const [firstName, setFirstName] = useState("")
-  const [lastName, setLastName] = useState("")
-  const [middleName, setMiddleName] = useState("")
-  const [suffix, setSuffix] = useState("")
-  const [position, setPosition] = useState("")
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [middleName, setMiddleName] = useState("");
+  const [suffix, setSuffix] = useState("");
+  const [position, setPosition] = useState("");
 
   // Division selection
-  const [divisionTab, setDivisionTab] = useState("existing")
-  const [selectedDivisionId, setSelectedDivisionId] = useState("")
+  const [divisionTab, setDivisionTab] = useState("existing");
+  const [selectedDivisionId, setSelectedDivisionId] = useState("");
 
   // New division fields
-  const [divName, setDivName] = useState("")
-  const [divCode, setDivCode] = useState("")
-  const [divRegion, setDivRegion] = useState("")
+  const [divName, setDivName] = useState("");
+  const [divCode, setDivCode] = useState("");
+  const [divRegion, setDivRegion] = useState("");
 
   // Office selection
-  const [offices, setOffices] = useState<OfficeOption[]>([])
-  const [selectedOfficeId, setSelectedOfficeId] = useState("")
-  const [loadingOffices, setLoadingOffices] = useState(false)
+  const [offices, setOffices] = useState<OfficeOption[]>([]);
+  const [selectedOfficeId, setSelectedOfficeId] = useState("");
+  const [loadingOffices, setLoadingOffices] = useState(false);
 
   const divisionItems = useMemo(
-    () => Object.fromEntries(divisions.map((d) => [d.id, `${d.name} (${d.code}) — ${d.region}`])),
-    [divisions]
-  )
+    () =>
+      Object.fromEntries(
+        divisions.map((d) => [d.id, `${d.name} (${d.code}) — ${d.region}`]),
+      ),
+    [divisions],
+  );
 
   const officeItems = useMemo(
-    () => Object.fromEntries([
-      ["none", "— Not sure / Will set later —"],
-      ...offices.map((o) => [o.id, `${o.name} (${o.code})`]),
-    ]),
-    [offices]
-  )
+    () =>
+      Object.fromEntries([
+        ["none", "— Not sure / Will set later —"],
+        ...offices.map((o) => [o.id, `${o.name} (${o.code})`]),
+      ]),
+    [offices],
+  );
 
   useEffect(() => {
     async function loadDivisions() {
-      const list = await getAvailableDivisions()
-      setDivisions(list)
-      if (list.length === 0) setDivisionTab("new")
-      setLoadingDivisions(false)
+      const list = await getAvailableDivisions();
+      setDivisions(list);
+      if (list.length === 0) setDivisionTab("new");
+      setLoadingDivisions(false);
     }
-    loadDivisions()
-  }, [])
+    loadDivisions();
+  }, []);
 
   // Load offices when a division is selected
   useEffect(() => {
-    if (!selectedDivisionId) {
-      setOffices([])
-      setSelectedOfficeId("")
-      return
-    }
-    let cancelled = false
+    let cancelled = false;
     async function loadOffices() {
-      setLoadingOffices(true)
-      const list = await getOfficesForDivision(selectedDivisionId)
+      if (!selectedDivisionId) {
+        setOffices([]);
+        setSelectedOfficeId("");
+        return;
+      }
+      setLoadingOffices(true);
+      const list = await getOfficesForDivision(selectedDivisionId);
       if (!cancelled) {
-        setOffices(list)
-        setSelectedOfficeId("")
-        setLoadingOffices(false)
+        setOffices(list);
+        setSelectedOfficeId("");
+        setLoadingOffices(false);
       }
     }
-    loadOffices()
-    return () => { cancelled = true }
-  }, [selectedDivisionId])
+    loadOffices();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDivisionId]);
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+    e.preventDefault();
 
     if (!firstName.trim() || !lastName.trim()) {
-      toast.error("First name and last name are required.")
-      return
+      toast.error("First name and last name are required.");
+      return;
     }
 
     if (divisionTab === "existing" && !selectedDivisionId) {
-      toast.error("Please select a division.")
-      return
+      toast.error("Please select a division.");
+      return;
     }
 
-    if (divisionTab === "new" && (!divName.trim() || !divCode.trim() || !divRegion.trim())) {
-      toast.error("Division name, code, and region are required.")
-      return
+    if (
+      divisionTab === "new" &&
+      (!divName.trim() || !divCode.trim() || !divRegion.trim())
+    ) {
+      toast.error("Division name, code, and region are required.");
+      return;
     }
 
-    setSubmitting(true)
+    setSubmitting(true);
 
     const { error, requestSubmitted } = await completeOnboarding({
       first_name: firstName.trim(),
@@ -134,35 +147,44 @@ export default function OnboardingPage() {
       middle_name: middleName.trim() || undefined,
       suffix: suffix.trim() || undefined,
       position: position.trim() || undefined,
-      office_id: divisionTab === "existing" && selectedOfficeId ? selectedOfficeId : undefined,
+      office_id:
+        divisionTab === "existing" && selectedOfficeId
+          ? selectedOfficeId
+          : undefined,
       division_id: divisionTab === "existing" ? selectedDivisionId : undefined,
       new_division:
         divisionTab === "new"
-          ? { name: divName.trim(), code: divCode.trim(), region: divRegion.trim() }
+          ? {
+              name: divName.trim(),
+              code: divCode.trim(),
+              region: divRegion.trim(),
+            }
           : undefined,
-    })
+    });
 
     if (error) {
-      toast.error(error)
-      setSubmitting(false)
-      return
+      toast.error(error);
+      setSubmitting(false);
+      return;
     }
 
     if (requestSubmitted) {
-      toast.success("Your join request has been submitted for approval.")
-      router.push("/pending-approval")
-      return
+      toast.success("Your join request has been submitted for approval.");
+      router.push("/pending-approval");
+      return;
     }
 
-    toast.success("Welcome! Your account is ready.")
-    router.push("/dashboard")
+    toast.success("Welcome! Your account is ready.");
+    router.push("/dashboard");
   }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
       <div className="w-full max-w-lg space-y-4">
         <div className="text-center">
-          <h1 className="text-2xl font-bold tracking-tight">Welcome to DepEd PAS</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            Welcome to PABMS
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Complete your profile to get started.
           </p>
@@ -240,7 +262,9 @@ export default function OnboardingPage() {
             </CardHeader>
             <CardContent>
               {loadingDivisions ? (
-                <p className="text-sm text-muted-foreground">Loading divisions...</p>
+                <p className="text-sm text-muted-foreground">
+                  Loading divisions...
+                </p>
               ) : (
                 <Tabs value={divisionTab} onValueChange={setDivisionTab}>
                   {divisions.length > 0 && (
@@ -256,10 +280,14 @@ export default function OnboardingPage() {
 
                   <TabsContent value="existing" className="space-y-3">
                     <p className="text-sm text-muted-foreground">
-                      Joining an existing division requires approval from a division administrator.
+                      Joining an existing division requires approval from a
+                      division administrator.
                     </p>
                     <div className="space-y-2">
-                      <Label>Select Division <span className="text-destructive">*</span></Label>
+                      <Label>
+                        Select Division{" "}
+                        <span className="text-destructive">*</span>
+                      </Label>
                       <Select
                         value={selectedDivisionId}
                         onValueChange={(v) => setSelectedDivisionId(v ?? "")}
@@ -281,18 +309,24 @@ export default function OnboardingPage() {
                       <div className="space-y-2">
                         <Label>Office / School</Label>
                         {loadingOffices ? (
-                          <p className="text-sm text-muted-foreground">Loading offices...</p>
+                          <p className="text-sm text-muted-foreground">
+                            Loading offices...
+                          </p>
                         ) : offices.length > 0 ? (
                           <Select
                             value={selectedOfficeId}
-                            onValueChange={(v) => setSelectedOfficeId(v === "none" ? "" : v ?? "")}
+                            onValueChange={(v) =>
+                              setSelectedOfficeId(v === "none" ? "" : (v ?? ""))
+                            }
                             items={officeItems}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="Select your office or school" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="none">— Not sure / Will set later —</SelectItem>
+                              <SelectItem value="none">
+                                — Not sure / Will set later —
+                              </SelectItem>
                               {offices.map((o) => (
                                 <SelectItem key={o.id} value={o.id}>
                                   {o.name} ({o.code})
@@ -302,7 +336,8 @@ export default function OnboardingPage() {
                           </Select>
                         ) : (
                           <p className="text-sm text-muted-foreground">
-                            No offices configured yet. Your admin can assign one later.
+                            No offices configured yet. Your admin can assign one
+                            later.
                           </p>
                         )}
                       </div>
@@ -312,7 +347,8 @@ export default function OnboardingPage() {
                   <TabsContent value="new" className="space-y-3">
                     <div className="space-y-2">
                       <Label htmlFor="div_name">
-                        Division Name <span className="text-destructive">*</span>
+                        Division Name{" "}
+                        <span className="text-destructive">*</span>
                       </Label>
                       <Input
                         id="div_name"
@@ -357,5 +393,5 @@ export default function OnboardingPage() {
         </form>
       </div>
     </div>
-  )
+  );
 }

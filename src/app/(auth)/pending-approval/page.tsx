@@ -1,71 +1,72 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
-import { getMyJoinRequest, cancelJoinRequest } from "@/lib/actions/onboarding"
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
-import { toast } from "sonner"
-import { ClockIcon, XCircleIcon } from "lucide-react"
-import type { DivisionJoinRequestWithDivision } from "@/types/database"
+} from "@/components/ui/card";
+import { cancelJoinRequest, getMyJoinRequest } from "@/lib/actions/onboarding";
+import { createClient } from "@/lib/supabase/client";
+import type { DivisionJoinRequestWithDivision } from "@/types/database";
+import { ClockIcon, XCircleIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 export default function PendingApprovalPage() {
-  const router = useRouter()
-  const [request, setRequest] = useState<DivisionJoinRequestWithDivision | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [cancelling, setCancelling] = useState(false)
+  const router = useRouter();
+  const [request, setRequest] =
+    useState<DivisionJoinRequestWithDivision | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     async function load() {
-      const req = await getMyJoinRequest()
+      const req = await getMyJoinRequest();
 
       if (!req) {
         // No request found — redirect to onboarding
-        router.replace("/onboarding")
-        return
+        router.replace("/onboarding");
+        return;
       }
 
       if (req.status === "approved") {
-        toast.success("Your request has been approved!")
-        router.replace("/dashboard")
-        return
+        toast.success("Your request has been approved!");
+        router.replace("/dashboard");
+        return;
       }
 
       if (req.status === "rejected") {
-        setRequest(req)
-        setLoading(false)
-        return
+        setRequest(req);
+        setLoading(false);
+        return;
       }
 
-      setRequest(req)
-      setLoading(false)
+      setRequest(req);
+      setLoading(false);
     }
-    load()
-  }, [router])
+    load();
+  }, [router]);
 
   async function handleCancel() {
-    setCancelling(true)
-    const { error } = await cancelJoinRequest()
+    setCancelling(true);
+    const { error } = await cancelJoinRequest();
     if (error) {
-      toast.error(error)
-      setCancelling(false)
-      return
+      toast.error(error);
+      setCancelling(false);
+      return;
     }
-    toast.info("Request cancelled. You can try a different division.")
-    router.replace("/onboarding")
+    toast.info("Request cancelled. You can try a different division.");
+    router.replace("/onboarding");
   }
 
   async function handleSignOut() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.replace("/login")
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.replace("/login");
   }
 
   if (loading) {
@@ -73,16 +74,16 @@ export default function PendingApprovalPage() {
       <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
         <p className="text-sm text-muted-foreground">Loading...</p>
       </div>
-    )
+    );
   }
 
-  const isRejected = request?.status === "rejected"
+  const isRejected = request?.status === "rejected";
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
       <div className="w-full max-w-md space-y-4">
         <div className="text-center">
-          <h1 className="text-2xl font-bold tracking-tight">DepEd PAS</h1>
+          <h1 className="text-2xl font-bold tracking-tight">PABMS</h1>
         </div>
 
         <Card>
@@ -120,7 +121,9 @@ export default function PendingApprovalPage() {
           <CardContent className="space-y-4">
             {isRejected && request?.review_notes && (
               <div className="rounded-md border bg-muted/50 p-3">
-                <p className="text-xs font-medium text-muted-foreground">Reason</p>
+                <p className="text-xs font-medium text-muted-foreground">
+                  Reason
+                </p>
                 <p className="mt-1 text-sm">{request.review_notes}</p>
               </div>
             )}
@@ -154,5 +157,5 @@ export default function PendingApprovalPage() {
         </Card>
       </div>
     </div>
-  )
+  );
 }

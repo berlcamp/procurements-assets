@@ -1,4 +1,4 @@
-# DepEd PAS Design System
+# DepEd PABMS Design System
 
 Unified design reference for the DepEd Procurement, Asset & Budget Management System.
 Built on **Next.js 16 + Tailwind v4 + shadcn/ui + Geist**.
@@ -10,13 +10,13 @@ Built on **Next.js 16 + Tailwind v4 + shadcn/ui + Geist**.
 
 ## 1. Design Principles
 
-| # | Principle | Rationale |
-|---|-----------|-----------|
-| 1 | **Data density over decoration** | Government users scan tables of 50-200 rows daily |
-| 2 | **Status at a glance** | Procurement workflows have 5-8 approval states — color must communicate instantly |
-| 3 | **Consistent rhythm** | Uniform spacing creates visual hierarchy without cognitive overhead |
-| 4 | **Minimal custom CSS** | Everything through Tailwind utilities + CSS variables — no one-off styles |
-| 5 | **Progressive disclosure** | Show summary first, detail on click/expand |
+| #   | Principle                        | Rationale                                                                         |
+| --- | -------------------------------- | --------------------------------------------------------------------------------- |
+| 1   | **Data density over decoration** | Government users scan tables of 50-200 rows daily                                 |
+| 2   | **Status at a glance**           | Procurement workflows have 5-8 approval states — color must communicate instantly |
+| 3   | **Consistent rhythm**            | Uniform spacing creates visual hierarchy without cognitive overhead               |
+| 4   | **Minimal custom CSS**           | Everything through Tailwind utilities + CSS variables — no one-off styles         |
+| 5   | **Progressive disclosure**       | Show summary first, detail on click/expand                                        |
 
 ---
 
@@ -24,16 +24,16 @@ Built on **Next.js 16 + Tailwind v4 + shadcn/ui + Geist**.
 
 ### 2.1 Spacing Scale (Tailwind default, 4px base)
 
-| Token | Value | Use |
-|-------|-------|-----|
-| `1` | 4px | Icon-to-text gap, tight inline spacing |
-| `1.5` | 6px | Compact form field internal spacing |
-| `2` | 8px | Button icon gap, inline element spacing |
-| `3` | 12px | Table cell padding, compact card padding |
-| `4` | 16px | Card padding, grid gap, section element spacing |
-| `5` | 20px | Form field vertical spacing (`space-y-5`) |
-| `6` | 24px | Page section spacing (`space-y-6`), main content padding |
-| `8` | 32px | Large section breaks |
+| Token | Value | Use                                                      |
+| ----- | ----- | -------------------------------------------------------- |
+| `1`   | 4px   | Icon-to-text gap, tight inline spacing                   |
+| `1.5` | 6px   | Compact form field internal spacing                      |
+| `2`   | 8px   | Button icon gap, inline element spacing                  |
+| `3`   | 12px  | Table cell padding, compact card padding                 |
+| `4`   | 16px  | Card padding, grid gap, section element spacing          |
+| `5`   | 20px  | Form field vertical spacing (`space-y-5`)                |
+| `6`   | 24px  | Page section spacing (`space-y-6`), main content padding |
+| `8`   | 32px  | Large section breaks                                     |
 
 ### 2.2 Layout Spacing Rules
 
@@ -51,14 +51,14 @@ Inline badge gap:       gap-1.5
 
 ### 2.3 Container Widths
 
-| Context | Class | Approx Width |
-|---------|-------|-------------|
-| List page content | Full width (flex-1) | Fluid |
-| Detail page | `mx-auto max-w-3xl` | 768px |
-| Form page | `mx-auto max-w-2xl` | 672px |
-| Search input | `max-w-sm` | 384px |
-| Sidebar | `w-64` | 256px |
-| Topbar height | `h-14` | 56px |
+| Context           | Class               | Approx Width |
+| ----------------- | ------------------- | ------------ |
+| List page content | Full width (flex-1) | Fluid        |
+| Detail page       | `mx-auto max-w-3xl` | 768px        |
+| Form page         | `mx-auto max-w-2xl` | 672px        |
+| Search input      | `max-w-sm`          | 384px        |
+| Sidebar           | `w-64`              | 256px        |
+| Topbar height     | `h-14`              | 56px         |
 
 ---
 
@@ -67,30 +67,30 @@ Inline badge gap:       gap-1.5
 ### 3.1 Font Stack
 
 ```css
---font-sans: var(--font-geist-sans);    /* Body, headings, UI */
---font-mono: var(--font-geist-mono);    /* Code, IDs, reference numbers */
+--font-sans: var(--font-geist-sans); /* Body, headings, UI */
+--font-mono: var(--font-geist-mono); /* Code, IDs, reference numbers */
 ```
 
 ### 3.2 Type Scale
 
-| Role | Classes | Usage |
-|------|---------|-------|
-| **Page title** | `text-2xl font-bold tracking-tight` | Top of every page |
-| **Page subtitle** | `text-muted-foreground` (base size) | Below page title |
-| **Section heading** | `text-lg font-semibold` | Card titles, section headers |
-| **Card title** | Via `<CardTitle>` component | Auto-styled |
-| **Card description** | Via `<CardDescription>` | `text-sm text-muted-foreground` |
-| **Body text** | `text-sm` | Default for all content inside cards/tables |
-| **Table header** | `text-sm font-medium text-muted-foreground` | Via `<TableHead>` |
-| **Table cell** | `text-sm` | Via `<TableCell>` |
-| **Form label** | `text-sm font-medium` | Via `<FormLabel>` |
-| **Form description** | `text-[0.8rem] text-muted-foreground` | Via `<FormDescription>` |
-| **Form error** | `text-[0.8rem] font-medium text-destructive` | Via `<FormMessage>` |
-| **Helper/caption** | `text-xs text-muted-foreground` | Timestamps, metadata |
-| **Stat number** | `text-2xl font-bold` | Dashboard stat cards |
-| **Large stat** | `text-3xl font-bold` | Hero metrics |
-| **Code/ID** | `font-mono text-sm` | Employee IDs, reference numbers, codes |
-| **System label** | `text-xs font-semibold tracking-widest uppercase` | Branding, system labels |
+| Role                 | Classes                                           | Usage                                       |
+| -------------------- | ------------------------------------------------- | ------------------------------------------- |
+| **Page title**       | `text-2xl font-bold tracking-tight`               | Top of every page                           |
+| **Page subtitle**    | `text-muted-foreground` (base size)               | Below page title                            |
+| **Section heading**  | `text-lg font-semibold`                           | Card titles, section headers                |
+| **Card title**       | Via `<CardTitle>` component                       | Auto-styled                                 |
+| **Card description** | Via `<CardDescription>`                           | `text-sm text-muted-foreground`             |
+| **Body text**        | `text-sm`                                         | Default for all content inside cards/tables |
+| **Table header**     | `text-sm font-medium text-muted-foreground`       | Via `<TableHead>`                           |
+| **Table cell**       | `text-sm`                                         | Via `<TableCell>`                           |
+| **Form label**       | `text-sm font-medium`                             | Via `<FormLabel>`                           |
+| **Form description** | `text-[0.8rem] text-muted-foreground`             | Via `<FormDescription>`                     |
+| **Form error**       | `text-[0.8rem] font-medium text-destructive`      | Via `<FormMessage>`                         |
+| **Helper/caption**   | `text-xs text-muted-foreground`                   | Timestamps, metadata                        |
+| **Stat number**      | `text-2xl font-bold`                              | Dashboard stat cards                        |
+| **Large stat**       | `text-3xl font-bold`                              | Hero metrics                                |
+| **Code/ID**          | `font-mono text-sm`                               | Employee IDs, reference numbers, codes      |
+| **System label**     | `text-xs font-semibold tracking-widest uppercase` | Branding, system labels                     |
 
 ### 3.3 Typography Rules
 
@@ -109,33 +109,33 @@ Inline badge gap:       gap-1.5
 
 The base palette is **achromatic** (no hue). All semantic color comes from status classes.
 
-| Variable | Light | Dark | Usage |
-|----------|-------|------|-------|
-| `--background` | White | Near-black | Page background |
-| `--foreground` | Near-black | Near-white | Primary text |
-| `--card` | White | Dark gray | Card surfaces |
-| `--muted` | Light gray | Dark gray | Subtle backgrounds |
-| `--muted-foreground` | Mid gray | Mid gray | Secondary text |
-| `--border` | Light gray | White/10% | All borders |
-| `--primary` | Charcoal | Light gray | Primary buttons, active nav |
-| `--destructive` | Red-orange | Lighter red | Delete actions, errors |
-| `--ring` | Mid gray | Mid gray | Focus rings |
+| Variable             | Light      | Dark        | Usage                       |
+| -------------------- | ---------- | ----------- | --------------------------- |
+| `--background`       | White      | Near-black  | Page background             |
+| `--foreground`       | Near-black | Near-white  | Primary text                |
+| `--card`             | White      | Dark gray   | Card surfaces               |
+| `--muted`            | Light gray | Dark gray   | Subtle backgrounds          |
+| `--muted-foreground` | Mid gray   | Mid gray    | Secondary text              |
+| `--border`           | Light gray | White/10%   | All borders                 |
+| `--primary`          | Charcoal   | Light gray  | Primary buttons, active nav |
+| `--destructive`      | Red-orange | Lighter red | Delete actions, errors      |
+| `--ring`             | Mid gray   | Mid gray    | Focus rings                 |
 
 ### 4.2 Status Colors (The Core of This System)
 
 Status colors are **hardcoded Tailwind classes** (not CSS variables) because they represent domain-specific procurement/workflow states that need to be scannable in dense tables.
 
-| Status Category | Statuses | Background | Text | Border | Dot/Icon |
-|----------------|----------|------------|------|--------|----------|
-| **Success** | `active`, `approved`, `completed`, `delivered`, `success` | `bg-green-100` | `text-green-800` | `border-green-200` | `text-green-600` |
-| **Info/Process** | `trial`, `in_progress`, `for_review`, `forwarded`, `info` | `bg-blue-100` | `text-blue-800` | `border-blue-200` | `text-blue-600` |
-| **Warning/Pending** | `pending`, `draft`, `for_approval`, `noted` | `bg-yellow-100` | `text-yellow-800` | `border-yellow-200` | `text-yellow-600` |
-| **Danger** | `suspended`, `expired`, `rejected`, `cancelled`, `error`, `returned` | `bg-red-100` | `text-red-800` | `border-red-200` | `text-red-600` |
-| **Caution** | `warning`, `maintenance`, `partially_delivered` | `bg-orange-100` | `text-orange-800` | `border-orange-200` | `text-orange-600` |
-| **Critical** | `critical`, `overdue`, `failed` | `bg-red-100` | `text-red-800` | `border-red-200` | `text-red-600` |
-| **Neutral** | `inactive`, `archived`, unknown | `bg-gray-100` | `text-gray-700` | `border-gray-200` | `text-gray-500` |
-| **Violet/Special** | `indicative` (APP type) | `bg-violet-100` | `text-violet-800` | `border-violet-200` | `text-violet-600` |
-| **Emerald/Final** | `final` (APP type) | `bg-emerald-100` | `text-emerald-800` | `border-emerald-200` | `text-emerald-600` |
+| Status Category     | Statuses                                                             | Background       | Text               | Border               | Dot/Icon           |
+| ------------------- | -------------------------------------------------------------------- | ---------------- | ------------------ | -------------------- | ------------------ |
+| **Success**         | `active`, `approved`, `completed`, `delivered`, `success`            | `bg-green-100`   | `text-green-800`   | `border-green-200`   | `text-green-600`   |
+| **Info/Process**    | `trial`, `in_progress`, `for_review`, `forwarded`, `info`            | `bg-blue-100`    | `text-blue-800`    | `border-blue-200`    | `text-blue-600`    |
+| **Warning/Pending** | `pending`, `draft`, `for_approval`, `noted`                          | `bg-yellow-100`  | `text-yellow-800`  | `border-yellow-200`  | `text-yellow-600`  |
+| **Danger**          | `suspended`, `expired`, `rejected`, `cancelled`, `error`, `returned` | `bg-red-100`     | `text-red-800`     | `border-red-200`     | `text-red-600`     |
+| **Caution**         | `warning`, `maintenance`, `partially_delivered`                      | `bg-orange-100`  | `text-orange-800`  | `border-orange-200`  | `text-orange-600`  |
+| **Critical**        | `critical`, `overdue`, `failed`                                      | `bg-red-100`     | `text-red-800`     | `border-red-200`     | `text-red-600`     |
+| **Neutral**         | `inactive`, `archived`, unknown                                      | `bg-gray-100`    | `text-gray-700`    | `border-gray-200`    | `text-gray-500`    |
+| **Violet/Special**  | `indicative` (APP type)                                              | `bg-violet-100`  | `text-violet-800`  | `border-violet-200`  | `text-violet-600`  |
+| **Emerald/Final**   | `final` (APP type)                                                   | `bg-emerald-100` | `text-emerald-800` | `border-emerald-200` | `text-emerald-600` |
 
 ### 4.3 Status Color Usage Rules
 
@@ -181,7 +181,9 @@ For all data listing pages (divisions, users, offices, PPMP items, etc.):
   <div className="flex items-center justify-between">
     <div>
       <h1 className="text-2xl font-bold tracking-tight">Page Title</h1>
-      <p className="text-muted-foreground">Brief description of this section.</p>
+      <p className="text-muted-foreground">
+        Brief description of this section.
+      </p>
     </div>
     <Button asChild>
       <Link href="/path/new">
@@ -223,7 +225,9 @@ For viewing a single record (division, user profile, PPMP, procurement request):
       <p className="text-muted-foreground">{record.subtitle}</p>
     </div>
     <div className="flex gap-2">
-      <Button variant="outline" size="sm">Edit</Button>
+      <Button variant="outline" size="sm">
+        Edit
+      </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm">
@@ -233,7 +237,9 @@ For viewing a single record (division, user profile, PPMP, procurement request):
         <DropdownMenuContent align="end">
           <DropdownMenuItem>Action 1</DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+          <DropdownMenuItem className="text-destructive">
+            Delete
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -374,7 +380,9 @@ For admin and role-based dashboards:
 For procurement and PPMP approval flows:
 
 ```tsx
-{/* Approval Status Header */}
+{
+  /* Approval Status Header */
+}
 <Card>
   <CardHeader>
     <div className="flex items-center justify-between">
@@ -389,22 +397,30 @@ For procurement and PPMP approval flows:
         <div key={step.id} className="flex gap-3">
           {/* Step indicator */}
           <div className="flex flex-col items-center">
-            <div className={cn(
-              "flex h-8 w-8 items-center justify-center rounded-full border-2",
-              step.completed && "border-green-500 bg-green-50 text-green-600",
-              step.current && "border-blue-500 bg-blue-50 text-blue-600",
-              step.pending && "border-gray-300 bg-gray-50 text-gray-400",
-              step.rejected && "border-red-500 bg-red-50 text-red-600",
-            )}>
-              {step.completed ? <Check className="h-4 w-4" /> :
-               step.rejected ? <X className="h-4 w-4" /> :
-               <span className="text-xs font-medium">{i + 1}</span>}
+            <div
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-full border-2",
+                step.completed && "border-green-500 bg-green-50 text-green-600",
+                step.current && "border-blue-500 bg-blue-50 text-blue-600",
+                step.pending && "border-gray-300 bg-gray-50 text-gray-400",
+                step.rejected && "border-red-500 bg-red-50 text-red-600",
+              )}
+            >
+              {step.completed ? (
+                <Check className="h-4 w-4" />
+              ) : step.rejected ? (
+                <X className="h-4 w-4" />
+              ) : (
+                <span className="text-xs font-medium">{i + 1}</span>
+              )}
             </div>
             {i < steps.length - 1 && (
-              <div className={cn(
-                "h-full w-0.5",
-                step.completed ? "bg-green-300" : "bg-gray-200"
-              )} />
+              <div
+                className={cn(
+                  "h-full w-0.5",
+                  step.completed ? "bg-green-300" : "bg-gray-200",
+                )}
+              />
             )}
           </div>
           {/* Step content */}
@@ -423,7 +439,7 @@ For procurement and PPMP approval flows:
       ))}
     </div>
   </CardContent>
-</Card>
+</Card>;
 ```
 
 ### 5.7 Definition List (Key-Value Display)
@@ -441,7 +457,9 @@ For displaying record details inside cards:
   {/* With status badge */}
   <div>
     <dt className="text-sm font-medium text-muted-foreground">Status</dt>
-    <dd><StatusBadge status={record.status} /></dd>
+    <dd>
+      <StatusBadge status={record.status} />
+    </dd>
   </div>
 
   {/* With monospace code */}
@@ -472,33 +490,33 @@ For displaying record details inside cards:
 
 ### 6.1 shadcn/ui Base Components (27)
 
-| Category | Components |
-|----------|-----------|
-| **Input** | Button, Input, InputGroup, Textarea, Select, Checkbox, RadioGroup, Switch, Calendar |
-| **Display** | Badge, Avatar, Skeleton, Separator |
-| **Container** | Card, ScrollArea, Tabs |
-| **Overlay** | Dialog, Sheet, Popover, Tooltip, DropdownMenu, Command |
-| **Form** | Form, Label |
-| **Data** | Table |
-| **Feedback** | Alert, Sonner (toast) |
+| Category      | Components                                                                          |
+| ------------- | ----------------------------------------------------------------------------------- |
+| **Input**     | Button, Input, InputGroup, Textarea, Select, Checkbox, RadioGroup, Switch, Calendar |
+| **Display**   | Badge, Avatar, Skeleton, Separator                                                  |
+| **Container** | Card, ScrollArea, Tabs                                                              |
+| **Overlay**   | Dialog, Sheet, Popover, Tooltip, DropdownMenu, Command                              |
+| **Form**      | Form, Label                                                                         |
+| **Data**      | Table                                                                               |
+| **Feedback**  | Alert, Sonner (toast)                                                               |
 
 ### 6.2 Custom Shared Components
 
-| Component | Path | Purpose |
-|-----------|------|---------|
-| `StatusBadge` | `shared/status-badge.tsx` | Maps status string → colored badge |
-| `DataTable` | `shared/data-table.tsx` | Generic table with search, loading, row click |
-| `FiscalYearSelector` | `shared/fiscal-year-selector.tsx` | Year filter dropdown |
-| `OfficeSelector` | `shared/office-selector.tsx` | Office filter with type grouping |
+| Component            | Path                              | Purpose                                       |
+| -------------------- | --------------------------------- | --------------------------------------------- |
+| `StatusBadge`        | `shared/status-badge.tsx`         | Maps status string → colored badge            |
+| `DataTable`          | `shared/data-table.tsx`           | Generic table with search, loading, row click |
+| `FiscalYearSelector` | `shared/fiscal-year-selector.tsx` | Year filter dropdown                          |
+| `OfficeSelector`     | `shared/office-selector.tsx`      | Office filter with type grouping              |
 
 ### 6.3 Layout Components
 
-| Component | Path | Purpose |
-|-----------|------|---------|
-| `Sidebar` | `layout/sidebar.tsx` | Fixed left nav, active state, icons |
-| `Topbar` | `layout/topbar.tsx` | Top bar with title |
-| `PageHeader` | `layout/page-header.tsx` | Title + description + breadcrumbs + actions |
-| `Breadcrumbs` | `layout/breadcrumbs.tsx` | Breadcrumb navigation |
+| Component     | Path                     | Purpose                                     |
+| ------------- | ------------------------ | ------------------------------------------- |
+| `Sidebar`     | `layout/sidebar.tsx`     | Fixed left nav, active state, icons         |
+| `Topbar`      | `layout/topbar.tsx`      | Top bar with title                          |
+| `PageHeader`  | `layout/page-header.tsx` | Title + description + breadcrumbs + actions |
+| `Breadcrumbs` | `layout/breadcrumbs.tsx` | Breadcrumb navigation                       |
 
 ---
 
@@ -514,56 +532,56 @@ Disabled:       disabled:opacity-50 disabled:cursor-not-allowed
 
 ### 7.2 Hover States
 
-| Element | Hover |
-|---------|-------|
-| Primary button | `hover:bg-primary/80` |
+| Element        | Hover                                          |
+| -------------- | ---------------------------------------------- |
+| Primary button | `hover:bg-primary/80`                          |
 | Outline button | `hover:bg-accent hover:text-accent-foreground` |
-| Ghost button | `hover:bg-accent hover:text-accent-foreground` |
-| Table row | `hover:bg-muted/50` |
-| Clickable card | `transition-colors hover:bg-muted/50` |
-| Sidebar link | `hover:bg-accent hover:text-accent-foreground` |
-| Link text | `hover:underline underline-offset-4` |
+| Ghost button   | `hover:bg-accent hover:text-accent-foreground` |
+| Table row      | `hover:bg-muted/50`                            |
+| Clickable card | `transition-colors hover:bg-muted/50`          |
+| Sidebar link   | `hover:bg-accent hover:text-accent-foreground` |
+| Link text      | `hover:underline underline-offset-4`           |
 
 ### 7.3 Loading States
 
-| Context | Pattern |
-|---------|---------|
-| Table loading | 5 skeleton rows via `<Skeleton className="h-4 w-full" />` |
-| Button loading | `disabled={isSubmitting}` + text change ("Saving...") |
-| Page loading | Skeleton cards matching layout shape |
-| Data fetch | `isLoading` prop on `DataTable` |
+| Context        | Pattern                                                   |
+| -------------- | --------------------------------------------------------- |
+| Table loading  | 5 skeleton rows via `<Skeleton className="h-4 w-full" />` |
+| Button loading | `disabled={isSubmitting}` + text change ("Saving...")     |
+| Page loading   | Skeleton cards matching layout shape                      |
+| Data fetch     | `isLoading` prop on `DataTable`                           |
 
 ### 7.4 Empty States
 
-| Context | Pattern |
-|---------|---------|
-| Empty table | Centered `text-muted-foreground` in full-width cell, `h-24` |
-| Empty detail | Em dash `"—"` for null values |
-| Empty dashboard | Show zero counts in stat cards (never hide cards) |
+| Context         | Pattern                                                     |
+| --------------- | ----------------------------------------------------------- |
+| Empty table     | Centered `text-muted-foreground` in full-width cell, `h-24` |
+| Empty detail    | Em dash `"—"` for null values                               |
+| Empty dashboard | Show zero counts in stat cards (never hide cards)           |
 
 ### 7.5 Toast Notifications
 
 ```tsx
 // Success
-toast.success("Division created", { description: "You can now configure it." })
+toast.success("Division created", { description: "You can now configure it." });
 
 // Error
-toast.error("Failed to save", { description: error.message })
+toast.error("Failed to save", { description: error.message });
 
 // Info (sparingly)
-toast.info("Changes saved")
+toast.info("Changes saved");
 ```
 
 ---
 
 ## 8. Responsive Breakpoints
 
-| Breakpoint | Width | Usage |
-|-----------|-------|-------|
-| Default | 0px+ | Single column, stacked layout |
-| `sm:` | 640px+ | 2-column grids, side-by-side form fields |
-| `md:` | 768px+ | Reserved (not heavily used currently) |
-| `lg:` | 1024px+ | 4-column stat grids, wider table layouts |
+| Breakpoint | Width   | Usage                                    |
+| ---------- | ------- | ---------------------------------------- |
+| Default    | 0px+    | Single column, stacked layout            |
+| `sm:`      | 640px+  | 2-column grids, side-by-side form fields |
+| `md:`      | 768px+  | Reserved (not heavily used currently)    |
+| `lg:`      | 1024px+ | 4-column stat grids, wider table layouts |
 
 ### Common Responsive Patterns
 
@@ -588,29 +606,32 @@ DL fields:      grid-cols-1 sm:grid-cols-2
 
 ## 10. Border Radius Scale
 
-| Token | Computed | Usage |
-|-------|----------|-------|
-| `rounded-sm` | 6px | Small badges, tags |
-| `rounded-md` | 8px | Buttons, inputs |
-| `rounded-lg` | 10px | Cards (base) |
-| `rounded-xl` | 14px | Card component default |
-| `rounded-2xl` | 18px | Large modals |
+| Token         | Computed | Usage                  |
+| ------------- | -------- | ---------------------- |
+| `rounded-sm`  | 6px      | Small badges, tags     |
+| `rounded-md`  | 8px      | Buttons, inputs        |
+| `rounded-lg`  | 10px     | Cards (base)           |
+| `rounded-xl`  | 14px     | Card component default |
+| `rounded-2xl` | 18px     | Large modals           |
 
 ---
 
 ## 11. Naming Conventions
 
 ### File Names
+
 - Components: `kebab-case.tsx` (e.g., `status-badge.tsx`, `data-table.tsx`)
 - Pages: `page.tsx` (Next.js convention)
 - Server actions: `kebab-case.ts` in `lib/actions/`
 
 ### Component Exports
+
 - Named exports only (no default exports)
 - Props interface: `{ComponentName}Props`
 - Column definitions: `Column<T>` generic
 
 ### CSS/Tailwind
+
 - Use `cn()` utility for conditional classes
 - CVA for component variants
 - `data-slot` attributes for component identification
@@ -619,17 +640,17 @@ DL fields:      grid-cols-1 sm:grid-cols-2
 
 ## 12. Quick Reference: "Which Pattern Do I Use?"
 
-| Building... | Use Pattern |
-|-------------|-------------|
-| A page that lists records | **5.2 List Page** |
-| A page showing one record | **5.3 Detail Page** |
-| A create/edit form | **5.4 Form Page** |
-| A role-based landing page | **5.5 Dashboard** |
-| Approval tracking UI | **5.6 Workflow Timeline** |
-| Key-value record fields | **5.7 Definition List** |
-| A status indicator | `<StatusBadge status="..." />` |
-| A data table | `<DataTable columns={...} data={...} />` |
-| A filter toolbar | Flex row with gap-3, selectors as children |
-| Currency display | `formatCurrency()` with `en-PH` locale |
-| Reference/ID display | `font-mono text-sm` |
-| A date | `.toLocaleDateString("en-PH", { dateStyle: "medium" })` |
+| Building...               | Use Pattern                                             |
+| ------------------------- | ------------------------------------------------------- |
+| A page that lists records | **5.2 List Page**                                       |
+| A page showing one record | **5.3 Detail Page**                                     |
+| A create/edit form        | **5.4 Form Page**                                       |
+| A role-based landing page | **5.5 Dashboard**                                       |
+| Approval tracking UI      | **5.6 Workflow Timeline**                               |
+| Key-value record fields   | **5.7 Definition List**                                 |
+| A status indicator        | `<StatusBadge status="..." />`                          |
+| A data table              | `<DataTable columns={...} data={...} />`                |
+| A filter toolbar          | Flex row with gap-3, selectors as children              |
+| Currency display          | `formatCurrency()` with `en-PH` locale                  |
+| Reference/ID display      | `font-mono text-sm`                                     |
+| A date                    | `.toLocaleDateString("en-PH", { dateStyle: "medium" })` |

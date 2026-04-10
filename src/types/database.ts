@@ -678,6 +678,9 @@ export interface AppWithDetails extends App {
 export interface AppItemWithOffice extends AppItem {
   source_office?: Pick<Office, 'id' | 'name' | 'code'> | null
   lot?: Pick<AppLot, 'id' | 'lot_name' | 'lot_number'> | null
+  source_ppmp_lot?: {
+    ppmp_lot_items: Pick<PpmpLotItem, 'id' | 'item_number' | 'description' | 'quantity' | 'unit' | 'estimated_unit_cost' | 'estimated_total_cost' | 'specification'>[]
+  } | null
 }
 
 export interface AppLotWithItems extends AppLot {
