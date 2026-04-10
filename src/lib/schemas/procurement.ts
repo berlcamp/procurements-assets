@@ -173,7 +173,7 @@ export const BUSINESS_TYPE_OPTIONS = [
 
 export const createProcurementSchema = z.object({
   purchase_request_id: z.string().uuid("Purchase Request is required"),
-  procurement_method: z.enum(["svp", "shopping"], {
+  procurement_method: z.enum(["svp", "shopping", "competitive_bidding"], {
     message: "Procurement method is required",
   }),
 })
@@ -199,10 +199,31 @@ export const bidItemSchema = z.object({
 
 export type BidItemInput = z.infer<typeof bidItemSchema>
 
+export const BID_SECURITY_FORMS = [
+  "cash",
+  "bank_draft",
+  "managers_check",
+  "irrevocable_loc",
+  "surety_bond",
+  "bank_guarantee",
+] as const
+
+export const BID_SECURITY_FORM_LABELS: Record<string, string> = {
+  cash: "Cash",
+  bank_draft: "Bank Draft",
+  managers_check: "Manager's Check",
+  irrevocable_loc: "Irrevocable Letter of Credit",
+  surety_bond: "Surety Bond",
+  bank_guarantee: "Bank Guarantee",
+}
+
 export const recordBidSchema = z.object({
   procurement_id: z.string().uuid(),
   supplier_id: z.string().uuid("Supplier is required"),
   items: z.array(bidItemSchema).min(1, "At least one bid item is required"),
+  bid_security_amount: z.string().nullable().optional(),
+  bid_security_form: z.enum(BID_SECURITY_FORMS).nullable().optional(),
+  bid_security_reference: z.string().nullable().optional(),
 })
 
 export type RecordBidInput = z.infer<typeof recordBidSchema>
@@ -307,4 +328,25 @@ export const SHOPPING_STAGE_LABELS: Record<string, string> = {
   award_recommended:    "Award Recommended",
   award_approved:       "Award Approved",
   completed:            "Completed",
+}
+
+export const COMPETITIVE_BIDDING_STAGE_LABELS: Record<string, string> = {
+  created:                    "Created",
+  bid_document_preparation:   "Bidding Documents Preparation",
+  pre_procurement_conference: "Pre-Procurement Conference",
+  itb_published:              "ITB Published",
+  pre_bid_conference:         "Pre-Bid Conference",
+  bid_submission:             "Bid Submission",
+  bid_opening:                "Bid Opening",
+  preliminary_examination:    "Preliminary Examination",
+  technical_evaluation:       "Technical Evaluation",
+  financial_evaluation:       "Financial Evaluation",
+  post_qualification:         "Post-Qualification",
+  bac_resolution:             "BAC Resolution",
+  award_recommended:          "Award Recommended",
+  award_approved:             "Award Approved",
+  noa_issued:                 "Notice of Award Issued",
+  contract_signing:           "Contract Signing",
+  ntp_issued:                 "Notice to Proceed",
+  completed:                  "Completed",
 }

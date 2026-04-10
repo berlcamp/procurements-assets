@@ -1,0 +1,44 @@
+{
+  "skill_name": "code-audit",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Audit the RLS policies in supabase/migrations/20240315_rls_policies.sql — check if division isolation is airtight and flag any tables that might be missing policies",
+      "expected_output": "Structured audit report covering each table's RLS status, identifying any gaps in division_id filtering, checking for proper use of get_user_division_id(), and flagging any missing policies on junction tables",
+      "files": [],
+      "assertions": [
+        {"id": "uses-structured-report", "description": "Output follows severity-classified report format (Critical/High/Medium/Low findings)"},
+        {"id": "identifies-all-tables", "description": "Lists all tables that have or should have RLS policies"},
+        {"id": "checks-division-isolation", "description": "Specifically examines division_id filtering in RLS policies"},
+        {"id": "flags-missing-policies", "description": "Identifies any tables without RLS that should have it"},
+        {"id": "references-helper-functions", "description": "Mentions get_user_division_id(), has_permission(), or is_super_admin()"}
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Review src/lib/actions/divisions.ts and src/lib/actions/users.ts for permission enforcement — are there any server actions that skip authorization checks?",
+      "expected_output": "Detailed findings on each server action function, whether it validates permissions server-side before executing, identifies any actions that rely solely on UI hiding, checks for privilege escalation paths",
+      "files": [],
+      "assertions": [
+        {"id": "uses-structured-report", "description": "Output follows severity-classified report format (Critical/High/Medium/Low findings)"},
+        {"id": "reviews-each-action", "description": "Analyzes each exported server action function individually"},
+        {"id": "checks-server-side-auth", "description": "Distinguishes between UI-only checks vs server-side enforcement"},
+        {"id": "identifies-escalation-risk", "description": "Flags any privilege escalation paths in role/permission management"},
+        {"id": "checks-role-scope", "description": "Validates that role scope boundaries are respected"}
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Audit the sequence counter and approval workflow code for race conditions — check supabase/migrations/20240309_sequence_counters.sql, 20240311_approval_logs.sql, and 20240314_triggers.sql",
+      "expected_output": "Analysis of atomicity in sequence generation, idempotency of approval operations, proper locking mechanisms, and whether concurrent operations could corrupt state",
+      "files": [],
+      "assertions": [
+        {"id": "uses-structured-report", "description": "Output follows severity-classified report format (Critical/High/Medium/Low findings)"},
+        {"id": "checks-atomicity", "description": "Analyzes whether sequence generation uses proper locking (SELECT FOR UPDATE or equivalent)"},
+        {"id": "checks-idempotency", "description": "Evaluates if approval operations handle double-submission safely"},
+        {"id": "identifies-concurrency-gaps", "description": "Flags specific concurrent scenarios that could corrupt state"},
+        {"id": "recommends-locking", "description": "Suggests SELECT FOR UPDATE, transactions, or equivalent mechanisms"}
+      ]
+    }
+  ]
+}

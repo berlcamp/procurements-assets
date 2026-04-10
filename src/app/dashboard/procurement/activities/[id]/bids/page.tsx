@@ -56,12 +56,16 @@ export default async function BidsPage({
 
   const canRecord = permissions.canRecordBid && activity.status === "active"
   const canEvaluate = permissions.canEvaluate && activity.status === "active" &&
-    ["quotations_received", "canvass_received", "evaluation", "comparison", "abstract_prepared"].includes(activity.current_stage)
+    ["quotations_received", "canvass_received", "evaluation", "comparison", "abstract_prepared",
+     "preliminary_examination", "technical_evaluation", "financial_evaluation"].includes(activity.current_stage)
   const hasEvaluatedBids = bids.some(b => b.status === "evaluated" || b.status === "awarded")
   // Recommend Award available from evaluation through award_recommended (so users can recover
   // from manual stage advances that bypassed the actual award action).
   const canRecommend = permissions.canRecommendAward && activity.status === "active" &&
-    ["evaluation", "abstract_prepared", "comparison", "post_qualification", "award_recommended"].includes(activity.current_stage)
+    ["evaluation", "abstract_prepared", "comparison", "post_qualification", "award_recommended",
+     "bac_resolution"].includes(activity.current_stage)
+  const isCompetitiveBidding = activity.procurement_method === "competitive_bidding"
+  const minBidsRequired = isCompetitiveBidding ? 2 : 3
 
   return (
     <div className="space-y-6">
@@ -82,6 +86,8 @@ export default async function BidsPage({
               procurementId={id}
               prItems={prItems}
               abcAmount={activity.abc_amount}
+              requiresBidSecurity={isCompetitiveBidding}
+              bidSecurityMinAmount={isCompetitiveBidding ? parseFloat(activity.abc_amount) * 0.02 : undefined}
             />
           )}
           <Button variant="ghost" size="sm" nativeButton={false} render={<Link href={`/dashboard/procurement/activities/${id}`} />}>
@@ -96,9 +102,9 @@ export default async function BidsPage({
         <CardHeader>
           <CardTitle className="text-base">
             Submitted Bids ({bids.length})
-            {bids.length < 3 && activity.status === "active" && (
+            {bids.length < minBidsRequired && activity.status === "active" && (
               <span className="text-xs text-amber-600 font-normal ml-2">
-                {3 - bids.length} more needed for minimum requirement
+                {minBidsRequired - bids.length} more needed for minimum requirement
               </span>
             )}
           </CardTitle>

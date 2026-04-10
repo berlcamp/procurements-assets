@@ -26,12 +26,15 @@ import {
 import { AmountDisplay, formatPeso } from "@/components/shared/amount-display"
 import { toast } from "sonner"
 import { getActiveSuppliersForBid, recordBid } from "@/lib/actions/procurement-activities"
+import { BID_SECURITY_FORMS, BID_SECURITY_FORM_LABELS } from "@/lib/schemas/procurement"
 import type { PrItem, Supplier } from "@/types/database"
 
 interface RecordBidDialogProps {
   procurementId: string
   prItems: PrItem[]
   abcAmount: string
+  requiresBidSecurity?: boolean
+  bidSecurityMinAmount?: number
 }
 
 interface BidItemRow {
@@ -45,12 +48,15 @@ interface BidItemRow {
   specifications: string
 }
 
-export function RecordBidDialog({ procurementId, prItems, abcAmount }: RecordBidDialogProps) {
+export function RecordBidDialog({ procurementId, prItems, abcAmount, requiresBidSecurity, bidSecurityMinAmount }: RecordBidDialogProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [suppliers, setSuppliers] = useState<Pick<Supplier, "id" | "name" | "trade_name" | "tin">[]>([])
   const [selectedSupplierId, setSelectedSupplierId] = useState("")
   const [items, setItems] = useState<BidItemRow[]>([])
+  const [bidSecurityAmount, setBidSecurityAmount] = useState("")
+  const [bidSecurityForm, setBidSecurityForm] = useState("")
+  const [bidSecurityReference, setBidSecurityReference] = useState("")
   const router = useRouter()
 
   useEffect(() => {
@@ -70,6 +76,9 @@ export function RecordBidDialog({ procurementId, prItems, abcAmount }: RecordBid
         }))
       )
       setSelectedSupplierId("")
+      setBidSecurityAmount("")
+      setBidSecurityForm("")
+      setBidSecurityReference("")
     }
   }, [open, prItems])
 
@@ -101,6 +110,16 @@ export function RecordBidDialog({ procurementId, prItems, abcAmount }: RecordBid
       toast.error("Enter at least one item price")
       return
     }
+    if (requiresBidSecurity) {
+      if (!bidSecurityAmount || parseFloat(bidSecurityAmount) <= 0) {
+        toast.error("Bid security amount is required")
+        return
+      }
+      if (!bidSecurityForm) {
+        toast.error("Bid security form is required")
+        return
+      }
+    }
 
     setLoading(true)
     const result = await recordBid({
@@ -114,6 +133,11 @@ export function RecordBidDialog({ procurementId, prItems, abcAmount }: RecordBid
         specifications: i.specifications || null,
         remarks: null,
       })),
+      ...(requiresBidSecurity ? {
+        bid_security_amount: bidSecurityAmount || null,
+        bid_security_form: bidSecurityForm as typeof BID_SECURITY_FORMS[number] || null,
+        bid_security_reference: bidSecurityReference || null,
+      } : {}),
     })
     setLoading(false)
 
@@ -159,6 +183,52 @@ export function RecordBidDialog({ procurementId, prItems, abcAmount }: RecordBid
               ))}
             </select>
           </div>
+
+          {/* Bid Security (Competitive Bidding) */}
+          {requiresBidSecurity && (
+            <div className="space-y-3 rounded-md border border-amber-200 bg-amber-50/50 p-3">
+              <Label className="text-sm font-medium">Bid Security (Required)</Label>
+              {bidSecurityMinAmount != null && (
+                <p className="text-xs text-muted-foreground">
+                  Minimum: {formatPeso(bidSecurityMinAmount)} (2% of ABC)
+                </p>
+              )}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Amount</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={bidSecurityAmount}
+                    onChange={e => setBidSecurityAmount(e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Form</Label>
+                  <select
+                    value={bidSecurityForm}
+                    onChange={e => setBidSecurityForm(e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">Select form...</option>
+                    {BID_SECURITY_FORMS.map(f => (
+                      <option key={f} value={f}>{BID_SECURITY_FORM_LABELS[f]}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Reference No.</Label>
+                  <Input
+                    value={bidSecurityReference}
+                    onChange={e => setBidSecurityReference(e.target.value)}
+                    placeholder="Optional"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Bid Items Table */}
           <div className="space-y-2">

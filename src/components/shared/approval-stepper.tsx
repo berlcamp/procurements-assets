@@ -81,6 +81,27 @@ export const SHOPPING_STEPS: Omit<WorkflowStep, "status">[] = [
   { id: "completed",          label: "Completed",            description: "Ready for Purchase Order" },
 ]
 
+export const COMPETITIVE_BIDDING_STEPS: Omit<WorkflowStep, "status">[] = [
+  { id: "created",                    label: "Created",                    description: "Procurement activity initiated" },
+  { id: "bid_document_preparation",   label: "Bidding Documents",          description: "BAC Secretariat prepares bidding documents" },
+  { id: "pre_procurement_conference", label: "Pre-Procurement Conference", description: "BAC reviews procurement plan" },
+  { id: "itb_published",              label: "ITB Published",              description: "Invitation to Bid posted on PhilGEPS" },
+  { id: "pre_bid_conference",         label: "Pre-Bid Conference",         description: "Mandatory if ABC > ₱1M for goods" },
+  { id: "bid_submission",             label: "Bid Submission",             description: "Deadline for bid submission" },
+  { id: "bid_opening",                label: "Bid Opening",               description: "Public opening of submitted bids" },
+  { id: "preliminary_examination",    label: "Preliminary Exam",           description: "Check completeness and eligibility" },
+  { id: "technical_evaluation",       label: "Technical Evaluation",       description: "BAC evaluates technical requirements" },
+  { id: "financial_evaluation",       label: "Financial Evaluation",       description: "BAC evaluates financial proposals" },
+  { id: "post_qualification",         label: "Post-Qualification",         description: "Verify LCB docs, specs, NFCC" },
+  { id: "bac_resolution",             label: "BAC Resolution",             description: "BAC resolves to recommend award" },
+  { id: "award_recommended",          label: "Award Recommended",          description: "BAC recommends LCRB for award" },
+  { id: "award_approved",             label: "Award Approved",             description: "HOPE approves the award" },
+  { id: "noa_issued",                 label: "NOA Issued",                 description: "Notice of Award sent to winner" },
+  { id: "contract_signing",           label: "Contract Signing",           description: "Contract preparation and signing" },
+  { id: "ntp_issued",                 label: "NTP Issued",                 description: "Notice to Proceed issued" },
+  { id: "completed",                  label: "Completed",                  description: "Procurement completed" },
+]
+
 /**
  * Build step statuses for a procurement activity based on its method and current stage.
  */
@@ -89,7 +110,9 @@ export function buildProcurementSteps(
   currentStage: string,
   stageHistory: { stage: string; status: string; completed_at: string | null; completed_by: string | null; notes: string | null }[] = []
 ): WorkflowStep[] {
-  const template = method === "svp" ? SVP_STEPS : SHOPPING_STEPS
+  const template = method === "svp" ? SVP_STEPS
+    : method === "competitive_bidding" ? COMPETITIVE_BIDDING_STEPS
+    : SHOPPING_STEPS
   const historyMap = new Map(stageHistory.map(s => [s.stage, s]))
 
   let foundCurrent = false

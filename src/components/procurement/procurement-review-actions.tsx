@@ -49,9 +49,19 @@ const SHOPPING_STAGE_ORDER = [
   "comparison", "post_qualification",
   "award_recommended", "award_approved", "completed",
 ]
+const COMPETITIVE_BIDDING_STAGE_ORDER = [
+  "created", "bid_document_preparation", "pre_procurement_conference",
+  "itb_published", "pre_bid_conference", "bid_submission", "bid_opening",
+  "preliminary_examination", "technical_evaluation", "financial_evaluation",
+  "post_qualification", "bac_resolution",
+  "award_recommended", "award_approved",
+  "noa_issued", "contract_signing", "ntp_issued", "completed",
+]
 
 function getNextStage(method: string, current: string): string | null {
-  const stages = method === "svp" ? SVP_STAGE_ORDER : SHOPPING_STAGE_ORDER
+  const stages = method === "svp" ? SVP_STAGE_ORDER
+    : method === "competitive_bidding" ? COMPETITIVE_BIDDING_STAGE_ORDER
+    : SHOPPING_STAGE_ORDER
   const idx = stages.indexOf(current)
   if (idx === -1 || idx >= stages.length - 1) return null
   return stages[idx + 1]
@@ -87,8 +97,9 @@ export function ProcurementReviewActions({
   if (status !== "active") return null
 
   const nextStage = getNextStage(procurementMethod, currentStage)
-  // Don't show advance for award_recommended (that's handled by approve_award)
-  const showAdvance = canAdvance && nextStage && currentStage !== "award_recommended"
+  // Don't show advance for award_recommended (handled by approve_award)
+  // or bac_resolution (award must be selected via Recommend Award first)
+  const showAdvance = canAdvance && nextStage && currentStage !== "award_recommended" && currentStage !== "bac_resolution"
   const showApproveAward = canApproveAward && currentStage === "award_recommended"
   const showFail = canFail
 

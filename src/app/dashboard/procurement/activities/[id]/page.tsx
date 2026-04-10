@@ -49,11 +49,15 @@ export default async function ProcurementActivityDetailPage({
     }))
   )
 
+  const isCompetitiveBidding = activity.procurement_method === "competitive_bidding"
+  const minBidsRequired = isCompetitiveBidding ? 2 : 3
+
   const hasAction =
     (permissions.canAdvance && activity.status === "active") ||
     (permissions.canRecordBid && activity.status === "active") ||
-    (permissions.canEvaluate && ["quotations_received", "canvass_received", "evaluation", "comparison", "post_qualification"].includes(activity.current_stage)) ||
-    (permissions.canRecommendAward && ["evaluation", "abstract_prepared", "comparison", "post_qualification"].includes(activity.current_stage)) ||
+    (permissions.canEvaluate && ["quotations_received", "canvass_received", "evaluation", "comparison", "post_qualification",
+      "preliminary_examination", "technical_evaluation", "financial_evaluation"].includes(activity.current_stage)) ||
+    (permissions.canRecommendAward && ["evaluation", "abstract_prepared", "comparison", "post_qualification", "bac_resolution"].includes(activity.current_stage)) ||
     (permissions.canApproveAward && activity.current_stage === "award_recommended") ||
     (permissions.canFail && activity.status === "active")
 
@@ -78,6 +82,45 @@ export default async function ProcurementActivityDetailPage({
         </Button>
       </div>
 
+      {/* BAC resolution banner — award must be selected via Bids page */}
+      {activity.status === "active" &&
+        activity.current_stage === "bac_resolution" &&
+        !activity.awarded_supplier_id && (
+          <Card className="border-blue-300 bg-blue-50">
+            <CardContent className="flex items-start justify-between gap-3 py-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-blue-900">BAC Resolution — Select Winning Bid</p>
+                <p className="text-xs text-blue-800">
+                  The BAC must select the Lowest Calculated Responsive Bid (LCRB) on the Bids page before the resolution can advance to Award Recommended.
+                </p>
+              </div>
+              <Button size="sm" nativeButton={false} render={<Link href={`/dashboard/procurement/activities/${id}/bids`} />}>
+                Go to Bids
+              </Button>
+            </CardContent>
+          </Card>
+      )}
+
+      {/* Evaluation page link for competitive bidding */}
+      {isCompetitiveBidding &&
+        activity.status === "active" &&
+        ["preliminary_examination", "technical_evaluation", "financial_evaluation"].includes(activity.current_stage) &&
+        permissions.canEvaluate && (
+          <Card className="border-blue-300 bg-blue-50">
+            <CardContent className="flex items-start justify-between gap-3 py-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-blue-900">Bid Evaluation Required</p>
+                <p className="text-xs text-blue-800">
+                  BAC members must complete technical and financial evaluation of submitted bids.
+                </p>
+              </div>
+              <Button size="sm" nativeButton={false} render={<Link href={`/dashboard/procurement/activities/${id}/evaluation`} />}>
+                Evaluate Bids
+              </Button>
+            </CardContent>
+          </Card>
+      )}
+
       {/* No-bid-selected at award_recommended banner */}
       {activity.status === "active" &&
         activity.current_stage === "award_recommended" &&
@@ -101,7 +144,7 @@ export default async function ProcurementActivityDetailPage({
       {/* PhilGEPS reference required banner */}
       {!activity.philgeps_reference &&
         activity.status === "active" &&
-        ["created", "rfq_preparation", "canvass_preparation"].includes(activity.current_stage) &&
+        ["created", "rfq_preparation", "canvass_preparation", "bid_document_preparation", "pre_procurement_conference"].includes(activity.current_stage) &&
         permissions.canManage && (
           <Card className="border-amber-300 bg-amber-50">
             <CardContent className="flex items-start justify-between gap-3 py-4">
@@ -185,9 +228,9 @@ export default async function ProcurementActivityDetailPage({
                 <span className="text-muted-foreground">Evaluated</span>
                 <span className="font-medium">{bids.filter(b => b.status === "evaluated" || b.status === "awarded").length}</span>
               </div>
-              {bids.length < 3 && activity.status === "active" && (
+              {bids.length < minBidsRequired && activity.status === "active" && (
                 <p className="text-xs text-amber-600 pt-1">
-                  Minimum 3 bids required before award. {3 - bids.length} more needed.
+                  Minimum {minBidsRequired} bids required before award. {minBidsRequired - bids.length} more needed.
                 </p>
               )}
             </CardContent>

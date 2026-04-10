@@ -131,11 +131,17 @@ export async function getProcurementsRequiringMyAction(): Promise<ProcurementAct
   if (!isManager && !isEvaluator && !isApprover) return []
 
   const stages: string[] = []
-  if (isManager) stages.push("rfq_preparation", "rfq_sent", "canvass_preparation", "canvass_sent")
+  if (isManager) stages.push(
+    "rfq_preparation", "rfq_sent", "canvass_preparation", "canvass_sent",
+    "bid_document_preparation", "pre_procurement_conference", "itb_published",
+    "bid_submission", "noa_issued", "contract_signing", "ntp_issued"
+  )
   if (isEvaluator) stages.push(
     "quotations_received", "canvass_received",
     "evaluation", "comparison", "abstract_prepared",
-    "post_qualification"
+    "post_qualification",
+    "pre_bid_conference", "bid_opening", "preliminary_examination",
+    "technical_evaluation", "financial_evaluation", "bac_resolution"
   )
   if (isApprover) stages.push("award_recommended")
 
@@ -386,6 +392,9 @@ export async function recordBid(
       p_supplier_id: input.supplier_id,
       p_items: rpcItems,
       p_lot_id: (input as { lot_id?: string }).lot_id ?? null,
+      p_bid_security_amount: input.bid_security_amount ? parseFloat(input.bid_security_amount) : null,
+      p_bid_security_form: input.bid_security_form || null,
+      p_bid_security_reference: input.bid_security_reference || null,
     }
   )
 
@@ -471,6 +480,60 @@ export async function advanceProcurementStage(
   )
 
   if (error) return { error: error.message }
+
+  // Stage-specific notifications for competitive bidding
+  const meta = await getProcMeta(procurementId)
+  if (meta) {
+    if (input.next_stage === "itb_published") {
+      await notifyRoleInDivision(
+        ["bac_chair", "bac_member", "bac_secretariat"],
+        meta.division_id,
+        {
+          title: "ITB Published",
+          message: `Invitation to Bid for ${meta.procurement_number} has been published on PhilGEPS.`,
+          type: "info",
+          reference_type: "procurement",
+          reference_id: procurementId,
+        }
+      )
+    } else if (input.next_stage === "bac_resolution") {
+      await notifyRoleInDivision(
+        ["hope", "division_chief"],
+        meta.division_id,
+        {
+          title: "BAC Resolution Pending",
+          message: `BAC resolution for ${meta.procurement_number} is being prepared. Award recommendation will follow.`,
+          type: "info",
+          reference_type: "procurement",
+          reference_id: procurementId,
+        }
+      )
+    } else if (input.next_stage === "noa_issued") {
+      await notifyRoleInDivision(
+        ["supply_officer", "bac_secretariat"],
+        meta.division_id,
+        {
+          title: "Notice of Award Issued",
+          message: `NOA for ${meta.procurement_number} has been issued to the winning bidder.`,
+          type: "success",
+          reference_type: "procurement",
+          reference_id: procurementId,
+        }
+      )
+    } else if (input.next_stage === "ntp_issued") {
+      await notifyRoleInDivision(
+        ["supply_officer"],
+        meta.division_id,
+        {
+          title: "Notice to Proceed Issued",
+          message: `NTP for ${meta.procurement_number} has been issued. Delivery/fulfillment may begin.`,
+          type: "success",
+          reference_type: "procurement",
+          reference_id: procurementId,
+        }
+      )
+    }
+  }
 
   revalidatePath("/dashboard/procurement")
   return { error: null }

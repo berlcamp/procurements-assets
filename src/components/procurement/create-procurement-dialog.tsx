@@ -28,7 +28,7 @@ export function CreateProcurementDialog() {
   const [loading, setLoading] = useState(false)
   const [prs, setPrs] = useState<PurchaseRequestWithDetails[]>([])
   const [selectedPrId, setSelectedPrId] = useState("")
-  const [method, setMethod] = useState<"svp" | "shopping">("svp")
+  const [method, setMethod] = useState<"svp" | "shopping" | "competitive_bidding">("svp")
   const [splitWarning, setSplitWarning] = useState<SplitContractWarning | null>(null)
   const router = useRouter()
 
@@ -51,6 +51,7 @@ export function CreateProcurementDialog() {
     const planned = selectedPr.procurement_mode?.toLowerCase().trim()
     if (planned === "svp") setMethod("svp")
     else if (planned === "shopping") setMethod("shopping")
+    else if (planned === "competitive_bidding" || planned === "competitive bidding" || planned === "bidding") setMethod("competitive_bidding")
   }, [selectedPr])
 
   useEffect(() => {
@@ -167,7 +168,8 @@ export function CreateProcurementDialog() {
           {selectedPr?.procurement_mode &&
             (() => {
               const planned = selectedPr.procurement_mode.toLowerCase().trim()
-              if (planned !== method && (planned === "svp" || planned === "shopping")) {
+              const normalizedPlanned = planned === "competitive bidding" || planned === "bidding" ? "competitive_bidding" : planned
+              if (normalizedPlanned !== method && ["svp", "shopping", "competitive_bidding"].includes(normalizedPlanned)) {
                 return (
                   <div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
                     <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
@@ -227,7 +229,23 @@ export function CreateProcurementDialog() {
                 />
                 <span className="text-sm">Shopping</span>
               </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="method"
+                  value="competitive_bidding"
+                  checked={method === "competitive_bidding"}
+                  onChange={() => setMethod("competitive_bidding")}
+                  className="accent-primary"
+                />
+                <span className="text-sm">Competitive Bidding</span>
+              </label>
             </div>
+            {method === "competitive_bidding" && (
+              <p className="text-xs text-muted-foreground">
+                For procurements above SVP/Shopping thresholds. Requires BAC evaluation, PhilGEPS publication, and full 17-step workflow.
+              </p>
+            )}
           </div>
         </div>
 
