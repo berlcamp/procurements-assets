@@ -246,6 +246,53 @@ export async function getPpmpUserPermissions(): Promise<{
 }
 
 /**
+ * Returns all PPMPs in the current user's division.
+ * Only accessible to roles with the `ppmp.view_all` permission.
+ * Returns null when the user lacks the permission (caller should hide the section).
+ * Auditors see every status; other roles see only non-draft PPMPs.
+ */
+export async function getAllDivisionPpmps(
+  fiscalYearId?: string,
+): Promise<PpmpWithDetails[] | null> {
+  const supabase = await createClient();
+
+  // Check permission via RPC (runs as the authenticated user, respects RLS)
+  const { data: hasPermission, error: permError } = await supabase
+    .schema("procurements")
+    .rpc("has_permission", { p_permission_code: "ppmp.view_all" });
+
+  if (permError) {
+    console.error("getAllDivisionPpmps permission check error:", permError);
+    return null;
+  }
+  if (!hasPermission) return null;
+
+  // Determine if the user is an auditor (auditors see all statuses including draft)
+  const ctx = await getUserRoleContext(supabase);
+  const isAuditor = ctx?.roleNames.includes("auditor") ?? false;
+
+  let query = supabase
+    .schema("procurements")
+    .from("ppmps")
+    .select(PPMP_SELECT)
+    .neq("status", "cancelled")
+    .order("created_at", { ascending: false });
+
+  if (!isAuditor) {
+    query = query.neq("status", "draft");
+  }
+  if (fiscalYearId) query = query.eq("fiscal_year_id", fiscalYearId);
+
+  const { data, error } = await query;
+  if (error) {
+    console.error("getAllDivisionPpmps error:", error);
+    return [];
+  }
+  const rows = (data ?? []) as PpmpWithDetails[];
+  return enrichPpmpsWithCreators(supabase, rows);
+}
+
+/**
  * Returns PPMPs created by the current user ("My PPMP" list only).
  * Division- or office-wide PPMP views belong on a different screen or use {@link getPpmps}.
  */

@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { getMyPpmps, getPpmpsRequiringMyAction } from "@/lib/actions/ppmp"
+import { getMyPpmps, getPpmpsRequiringMyAction, getAllDivisionPpmps } from "@/lib/actions/ppmp"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { Badge } from "@/components/ui/badge"
@@ -82,9 +82,10 @@ function PpmpTable({
   )
 }
 export default async function PpmpListPage() {
-  const [myPpmps, actionPpmps] = await Promise.all([
+  const [myPpmps, actionPpmps, allDivisionPpmps] = await Promise.all([
     getMyPpmps(),
     getPpmpsRequiringMyAction(),
+    getAllDivisionPpmps(),
   ])
 
   return (
@@ -136,6 +137,21 @@ export default async function PpmpListPage() {
           )}
         </div>
       </section>
+
+      {/* All Division PPMPs — only rendered for roles with ppmp.view_all */}
+      {allDivisionPpmps !== null && (
+        <section className="rounded-lg border bg-card overflow-hidden">
+          <div className="px-5 py-4 border-b">
+            <h2 className="text-lg font-semibold">All Division PPMPs</h2>
+            <p className="text-sm text-muted-foreground">
+              All PPMPs submitted across every office in this division
+            </p>
+          </div>
+          <div className="p-0">
+            <PpmpTable ppmps={allDivisionPpmps} showCreator />
+          </div>
+        </section>
+      )}
     </div>
   )
 }
