@@ -185,19 +185,32 @@ export function CreateProcurementDialog() {
               return null
             })()}
 
-          {/* Split-contract advisory */}
-          {splitWarning?.warning && (
+          {/* Split-contract advisory — only relevant for SVP/Shopping */}
+          {splitWarning?.warning && method !== "competitive_bidding" && (
             <div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
               <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
               <div className="space-y-1">
                 <p className="font-medium">Possible contract splitting</p>
                 <p className="text-xs">
-                  This office has{" "}
-                  <span className="font-semibold">{splitWarning.pr_count}</span> recent PR(s) in this category
-                  totaling <AmountDisplay amount={splitWarning.cumulative_amount} className="font-semibold" />,
-                  exceeding the threshold of{" "}
-                  <AmountDisplay amount={splitWarning.threshold} className="font-semibold" />. Review whether
-                  these should be consolidated under a single competitive method.
+                  {splitWarning.pr_count > 0 ? (
+                    <>
+                      This office has{" "}
+                      <span className="font-semibold">{splitWarning.pr_count}</span> existing PR(s) in this
+                      category. Including this request, the cumulative total is{" "}
+                      <AmountDisplay amount={splitWarning.cumulative_amount} className="font-semibold" />,
+                      exceeding the threshold of{" "}
+                      <AmountDisplay amount={splitWarning.threshold} className="font-semibold" />.
+                    </>
+                  ) : (
+                    <>
+                      This request of{" "}
+                      <AmountDisplay amount={splitWarning.cumulative_amount} className="font-semibold" />{" "}
+                      already exceeds the{" "}
+                      <AmountDisplay amount={splitWarning.threshold} className="font-semibold" />{" "}
+                      threshold for this category.
+                    </>
+                  )}{" "}
+                  Review whether this should use Competitive Bidding instead.
                 </p>
               </div>
             </div>

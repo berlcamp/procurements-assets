@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
@@ -33,6 +34,7 @@ interface ProcurementReviewActionsProps {
   canAdvance: boolean
   canRecordBid: boolean
   canEvaluate: boolean
+  canConfirm: boolean
   canRecommendAward: boolean
   canApproveAward: boolean
   canFail: boolean
@@ -85,6 +87,7 @@ export function ProcurementReviewActions({
   canAdvance,
   canRecordBid,
   canEvaluate,
+  canConfirm,
   canRecommendAward,
   canApproveAward,
   canFail,
@@ -102,6 +105,17 @@ export function ProcurementReviewActions({
   const showAdvance = canAdvance && nextStage && currentStage !== "award_recommended" && currentStage !== "bac_resolution"
   const showApproveAward = canApproveAward && currentStage === "award_recommended"
   const showFail = canFail
+  // Secretariat sees a "Draft Evaluation" button at evaluation-capable stages.
+  // BAC voting members see a "Confirm Evaluation" button at the same stages.
+  const EVAL_STAGES = [
+    "quotations_received", "canvass_received",
+    "evaluation", "comparison", "abstract_prepared",
+    "preliminary_examination", "technical_evaluation", "financial_evaluation",
+    "post_qualification", "bac_resolution",
+  ]
+  const showEvaluate = canEvaluate && EVAL_STAGES.includes(currentStage)
+  // Only show Confirm to users who cannot draft — Secretariat already has Draft
+  const showConfirm  = !canEvaluate && canConfirm && EVAL_STAGES.includes(currentStage)
 
   async function handleConfirm() {
     setLoading(true)
@@ -147,6 +161,28 @@ export function ProcurementReviewActions({
   return (
     <>
       <div className="flex flex-wrap gap-2">
+        {showEvaluate && (
+          <Button
+            size="sm"
+            variant="outline"
+            nativeButton={false}
+            render={<Link href={`/dashboard/procurement/activities/${procurementId}/evaluation`} />}
+          >
+            Draft Evaluation
+          </Button>
+        )}
+
+        {showConfirm && (
+          <Button
+            size="sm"
+            variant="default"
+            nativeButton={false}
+            render={<Link href={`/dashboard/procurement/activities/${procurementId}/evaluation`} />}
+          >
+            Confirm Evaluation
+          </Button>
+        )}
+
         {showAdvance && (
           <Button
             size="sm"

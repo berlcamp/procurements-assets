@@ -9,13 +9,17 @@ import {
   getProcurementDashboardStats,
   getPrsRequiringMyAction,
 } from "@/lib/actions/procurement"
+import { getUserPermissions } from "@/lib/actions/roles"
 
 export default async function ProcurementDashboardPage() {
   const fiscalYear = await getActiveFiscalYear()
-  const [stats, actionPrs] = await Promise.all([
+  const [stats, actionPrs, permissions] = await Promise.all([
     fiscalYear ? getProcurementDashboardStats(fiscalYear.id) : null,
     getPrsRequiringMyAction(),
+    getUserPermissions(),
   ])
+
+  const canCreatePr = permissions.includes("pr.create")
 
   return (
     <div className="space-y-6">
@@ -113,9 +117,11 @@ export default async function ProcurementDashboardPage() {
               <Button variant="outline" className="w-full justify-start" nativeButton={false} render={<Link href="/dashboard/procurement/suppliers" />}>
                 <Building className="mr-2 h-4 w-4" /> Supplier Registry
               </Button>
-              <Button className="w-full justify-start" nativeButton={false} render={<Link href="/dashboard/procurement/purchase-requests/new" />}>
-                <ShoppingCart className="mr-2 h-4 w-4" /> New Purchase Request
-              </Button>
+              {canCreatePr && (
+                <Button className="w-full justify-start" nativeButton={false} render={<Link href="/dashboard/procurement/purchase-requests/new" />}>
+                  <ShoppingCart className="mr-2 h-4 w-4" /> New Purchase Request
+                </Button>
+              )}
             </CardContent>
           </Card>
 

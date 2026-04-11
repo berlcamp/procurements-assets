@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { getActiveFiscalYear, getBudgetAllocations, getFiscalYears } from "@/lib/actions/budget"
+import { getUserPermissions } from "@/lib/actions/roles"
 import { Button } from "@/components/ui/button"
 import { AmountDisplay } from "@/components/shared/amount-display"
 import { StatusBadge } from "@/components/shared/status-badge"
@@ -16,10 +17,13 @@ import { PlusIcon } from "lucide-react"
 import type { BudgetAllocationWithDetails } from "@/types/database"
 
 export default async function AllocationsPage() {
-  const [fiscalYear, allocations] = await Promise.all([
+  const [fiscalYear, allocations, permissions] = await Promise.all([
     getActiveFiscalYear(),
     getBudgetAllocations(),
+    getUserPermissions(),
   ])
+
+  const canCreate = permissions.includes("budget.create")
 
   const activeAllocations = fiscalYear
     ? allocations.filter((a) => {
@@ -39,22 +43,26 @@ export default async function AllocationsPage() {
               : "Showing all allocations"}
           </p>
         </div>
-        <Link href="/dashboard/budget/allocations/new">
-          <Button>
-            <PlusIcon className="mr-1.5 h-4 w-4" />
-            New Allocation
-          </Button>
-        </Link>
+        {canCreate && (
+          <Link href="/dashboard/budget/allocations/new">
+            <Button>
+              <PlusIcon className="mr-1.5 h-4 w-4" />
+              New Allocation
+            </Button>
+          </Link>
+        )}
       </div>
 
       {activeAllocations.length === 0 ? (
         <div className="rounded-lg border border-dashed p-12 text-center">
           <p className="text-muted-foreground text-sm">No allocations yet.</p>
-          <Link href="/dashboard/budget/allocations/new" className="mt-3 block">
-            <Button variant="outline" size="sm">
-              Create your first allocation
-            </Button>
-          </Link>
+          {canCreate && (
+            <Link href="/dashboard/budget/allocations/new" className="mt-3 block">
+              <Button variant="outline" size="sm">
+                Create your first allocation
+              </Button>
+            </Link>
+          )}
         </div>
       ) : (
         <div className="rounded-md border">

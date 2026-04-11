@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { getUsers } from "@/lib/actions/users"
 import { getOffices } from "@/lib/actions/offices"
+import { getUserPermissions } from "@/lib/actions/roles"
 import {
   Card,
   CardContent,
@@ -9,9 +10,27 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Forbidden } from "@/components/shared/forbidden"
 import { Users, Building2, ShieldCheck, Settings } from "lucide-react"
 
+const ADMIN_PERMS = [
+  "users.manage",
+  "roles.assign",
+  "offices.manage",
+  "division.settings",
+  "division.audit_logs",
+]
+
 export default async function AdminDashboardPage() {
+  const permissions = await getUserPermissions()
+  if (!ADMIN_PERMS.some((p) => permissions.includes(p))) {
+    return (
+      <Forbidden
+        message="You don't have permission to access division administration. Contact your Division Admin if you need access."
+      />
+    )
+  }
+
   const [users, offices] = await Promise.all([getUsers(), getOffices()])
 
   const stats = [

@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { Check, X, ShieldCheck, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -15,12 +16,29 @@ import {
 } from "@/components/ui/table"
 import { AmountDisplay } from "@/components/shared/amount-display"
 import { toast } from "sonner"
-import { evaluateBids } from "@/lib/actions/procurement-activities"
+import {
+  evaluateBids,
+  confirmBidEvaluations,
+} from "@/lib/actions/procurement-activities"
 import type { BidWithDetails } from "@/types/database"
+
+export type EvaluationMode = "draft" | "confirm"
 
 interface BidEvaluationFormProps {
   procurementId: string
   bids: BidWithDetails[]
+  /**
+   * "draft"   — BAC Secretariat editing the evaluation draft
+   * "confirm" — BAC voting member viewing the Secretariat's draft to confirm
+   */
+  mode: EvaluationMode
+  /** Whether the current user has already confirmed this procurement's evaluation (confirm mode only). */
+  hasConfirmed?: boolean
+  /** Whether the user had a prior confirmation that was invalidated by a Secretariat edit. */
+  hasStaleConfirmation?: boolean
+  /** Quorum progress badge. */
+  confirmedMembers?: number
+  requiredMembers?: number
 }
 
 interface EvalRow {
@@ -32,7 +50,21 @@ interface EvalRow {
   remarks: string
 }
 
-export function BidEvaluationForm({ procurementId, bids }: BidEvaluationFormProps) {
+function BoolCell({ value }: { value: boolean }) {
+  return value
+    ? <Check className="h-4 w-4 text-green-600 mx-auto" />
+    : <X className="h-4 w-4 text-red-500 mx-auto" />
+}
+
+export function BidEvaluationForm({
+  procurementId,
+  bids,
+  mode,
+  hasConfirmed = false,
+  hasStaleConfirmation = false,
+  confirmedMembers = 0,
+  requiredMembers = 3,
+}: BidEvaluationFormProps) {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
@@ -55,7 +87,7 @@ export function BidEvaluationForm({ procurementId, bids }: BidEvaluationFormProp
     })
   }
 
-  async function handleSubmit() {
+  async function handleDraftSubmit() {
     setLoading(true)
     const result = await evaluateBids({
       procurement_id: procurementId,
@@ -75,12 +107,74 @@ export function BidEvaluationForm({ procurementId, bids }: BidEvaluationFormProp
       return
     }
 
-    toast.success("Bids evaluated and ranked successfully")
+    toast.success(
+      confirmedMembers > 0
+        ? "Draft saved. Existing BAC confirmations were invalidated — members have been asked to re-confirm."
+        : "Evaluation draft saved successfully"
+    )
     router.refresh()
   }
 
+  async function handleConfirm() {
+    setLoading(true)
+    const result = await confirmBidEvaluations(procurementId)
+    setLoading(false)
+
+    if (result.error) {
+      toast.error(result.error)
+      return
+    }
+
+    toast.success("You confirmed the BAC Secretariat's evaluation draft")
+    router.refresh()
+  }
+
+  const isDraftMode = mode === "draft"
+  const locked = !isDraftMode
+  const quorumMet = confirmedMembers >= requiredMembers
+
   return (
     <div className="space-y-4">
+      {/* Mode banner */}
+      {isDraftMode ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <strong>BAC Secretariat draft.</strong> You are the only role that can edit
+          these fields. When you save, any existing BAC member confirmations will be
+          invalidated and members will be asked to re-confirm.
+        </div>
+      ) : (
+        <div className="rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-xs text-blue-900 flex items-start gap-2">
+          <ShieldCheck className="h-4 w-4 mt-0.5 flex-shrink-0" />
+          <div>
+            <strong>BAC confirmation.</strong> Review the draft prepared by the BAC
+            Secretariat and click <strong>Confirm</strong> to record your agreement.
+            You cannot edit the fields — raise any disagreement at the BAC meeting and
+            the Secretariat will revise the draft for re-confirmation.
+          </div>
+        </div>
+      )}
+
+      {/* Stale confirmation banner */}
+      {!isDraftMode && hasStaleConfirmation && !hasConfirmed && (
+        <div className="rounded-md border border-orange-300 bg-orange-50 px-3 py-2 text-xs text-orange-900 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+          <div>
+            <strong>Evaluation was revised.</strong> The BAC Secretariat updated the
+            draft after your previous confirmation. Please review the current values and
+            confirm again.
+          </div>
+        </div>
+      )}
+
+      {/* Quorum progress */}
+      <div className="text-xs text-muted-foreground">
+        BAC confirmations:{" "}
+        <span className={quorumMet ? "text-green-700 font-medium" : "font-medium"}>
+          {confirmedMembers} of {requiredMembers}
+        </span>
+        {quorumMet && " — quorum met"}
+      </div>
+
       <Table>
         <TableHeader>
           <TableRow>
@@ -105,41 +199,61 @@ export function BidEvaluationForm({ procurementId, bids }: BidEvaluationFormProp
                   <AmountDisplay amount={bid.bid_amount} />
                 </TableCell>
                 <TableCell className="text-center">
-                  <Checkbox
-                    checked={eval_.is_responsive}
-                    onCheckedChange={(v) => updateEval(idx, "is_responsive", !!v)}
-                  />
+                  {locked ? (
+                    <BoolCell value={eval_.is_responsive} />
+                  ) : (
+                    <Checkbox
+                      checked={eval_.is_responsive}
+                      onCheckedChange={(v) => updateEval(idx, "is_responsive", !!v)}
+                    />
+                  )}
                 </TableCell>
                 <TableCell className="text-center">
-                  <Checkbox
-                    checked={eval_.is_eligible}
-                    onCheckedChange={(v) => updateEval(idx, "is_eligible", !!v)}
-                  />
+                  {locked ? (
+                    <BoolCell value={eval_.is_eligible} />
+                  ) : (
+                    <Checkbox
+                      checked={eval_.is_eligible}
+                      onCheckedChange={(v) => updateEval(idx, "is_eligible", !!v)}
+                    />
+                  )}
                 </TableCell>
                 <TableCell className="text-center">
-                  <Checkbox
-                    checked={eval_.is_compliant}
-                    onCheckedChange={(v) => updateEval(idx, "is_compliant", !!v)}
-                  />
+                  {locked ? (
+                    <BoolCell value={eval_.is_compliant} />
+                  ) : (
+                    <Checkbox
+                      checked={eval_.is_compliant}
+                      onCheckedChange={(v) => updateEval(idx, "is_compliant", !!v)}
+                    />
+                  )}
                 </TableCell>
                 <TableCell>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={eval_.evaluation_score}
-                    onChange={e => updateEval(idx, "evaluation_score", e.target.value)}
-                    className="w-20"
-                    placeholder="—"
-                  />
+                  {locked ? (
+                    <span className="font-mono text-sm">{eval_.evaluation_score || "—"}</span>
+                  ) : (
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={eval_.evaluation_score}
+                      onChange={e => updateEval(idx, "evaluation_score", e.target.value)}
+                      className="w-20"
+                      placeholder="—"
+                    />
+                  )}
                 </TableCell>
                 <TableCell>
-                  <Input
-                    value={eval_.remarks}
-                    onChange={e => updateEval(idx, "remarks", e.target.value)}
-                    className="w-36"
-                    placeholder="Optional"
-                  />
+                  {locked ? (
+                    <span className="text-xs text-muted-foreground">{eval_.remarks || "—"}</span>
+                  ) : (
+                    <Input
+                      value={eval_.remarks}
+                      onChange={e => updateEval(idx, "remarks", e.target.value)}
+                      className="w-36"
+                      placeholder="Optional"
+                    />
+                  )}
                 </TableCell>
               </TableRow>
             )
@@ -147,10 +261,29 @@ export function BidEvaluationForm({ procurementId, bids }: BidEvaluationFormProp
         </TableBody>
       </Table>
 
-      <div className="flex justify-end">
-        <Button onClick={handleSubmit} disabled={loading}>
-          {loading ? "Evaluating..." : "Submit Evaluation"}
-        </Button>
+      <div className="flex justify-end gap-2">
+        {isDraftMode && (
+          <Button onClick={handleDraftSubmit} disabled={loading}>
+            {loading ? "Saving..." : "Save Evaluation Draft"}
+          </Button>
+        )}
+
+        {!isDraftMode && hasConfirmed && !hasStaleConfirmation && (
+          <div className="flex items-center gap-2 text-sm text-green-700">
+            <ShieldCheck className="h-4 w-4" />
+            You have confirmed this evaluation.
+          </div>
+        )}
+
+        {!isDraftMode && (!hasConfirmed || hasStaleConfirmation) && (
+          <Button onClick={handleConfirm} disabled={loading || bids.length === 0}>
+            {loading
+              ? "Confirming..."
+              : hasStaleConfirmation
+                ? "Re-confirm Evaluation"
+                : "Confirm Evaluation"}
+          </Button>
+        )}
       </div>
     </div>
   )

@@ -17,11 +17,15 @@ import { AmountDisplay, formatPeso } from "@/components/shared/amount-display"
 import { PrItemsEdit } from "@/components/procurement/pr-items-table"
 import { createPrSchema, type CreatePrInput } from "@/lib/schemas/procurement"
 import { createPurchaseRequest, getApprovedAppItemsForOffice, checkSplitContract } from "@/lib/actions/procurement"
-import type { FiscalYear, Office, AppItem, AppLot } from "@/types/database"
+import type { FiscalYear, Office, AppItem, AppLot, PpmpLotItem } from "@/types/database"
 import { cn } from "@/lib/utils"
+
+type PpmpLotItemPick = Pick<PpmpLotItem, 'id' | 'item_number' | 'description' | 'quantity' | 'unit' | 'estimated_unit_cost' | 'estimated_total_cost' | 'specification'>
 
 type AppItemWithLot = AppItem & {
   lot?: Pick<AppLot, "id" | "lot_name" | "lot_number"> | null
+  source_ppmp_lot?: { ppmp_lot_items: PpmpLotItemPick[] } | null
+  ppmp_creator_name?: string | null
   has_active_pr?: boolean
 }
 
@@ -112,29 +116,68 @@ export function PrCreateForm({ fiscalYear, offices }: PrCreateFormProps) {
 
   const ceiling = unifiedMode ? MODE_CEILINGS[unifiedMode] ?? null : null
 
-  // Sync selected items into the form's items array as draft line rows
+  // Sync selected items into the form's items array as draft line rows.
+  // Each selected APP item expands into its PPMP lot items (one PR line per lot item).
+  // Falls back to a single line from general_description when no lot items exist.
   useEffect(() => {
     if (selectedItems.length === 0) {
       if (watchItems.length > 0) form.setValue("items", [])
       return
     }
-    // Preserve existing edits when an item stays selected; reset when first added
-    const existingByAppItemId = new Map(
-      watchItems.filter(it => it.app_item_id).map(it => [it.app_item_id, it])
+    // Build a lookup of existing edits keyed by "appItemId::description" to preserve user edits
+    const existingKey = (row: { app_item_id: string; description: string }) =>
+      `${row.app_item_id}::${row.description}`
+    const existingMap = new Map(
+      watchItems.filter(it => it.app_item_id).map(it => [existingKey(it), it])
     )
-    const next = selectedItems.map((item, idx) => {
-      const existing = existingByAppItemId.get(item.id)
-      if (existing) return { ...existing, item_number: idx + 1 }
-      return {
-        item_number: idx + 1,
-        app_item_id: item.id,
-        description: item.general_description,
-        unit: "",
-        quantity: "1",
-        estimated_unit_cost: String(item.estimated_budget ?? "0"),
-        remarks: null,
+
+    let lineNumber = 0
+    const next: CreatePrInput["items"] = []
+
+    for (const item of selectedItems) {
+      const lotItems = item.source_ppmp_lot?.ppmp_lot_items ?? []
+
+      if (lotItems.length > 0) {
+        // Expand each PPMP lot item into its own PR line item
+        for (const li of lotItems) {
+          lineNumber++
+          const key = `${item.id}::${li.description}`
+          const existing = existingMap.get(key)
+          if (existing) {
+            next.push({ ...existing, item_number: lineNumber })
+          } else {
+            next.push({
+              item_number: lineNumber,
+              app_item_id: item.id,
+              description: li.description,
+              unit: li.unit,
+              quantity: String(li.quantity ?? "1"),
+              estimated_unit_cost: String(li.estimated_unit_cost ?? "0"),
+              remarks: null,
+            })
+          }
+        }
+      } else {
+        // Fallback: no lot items — create one line from the APP item itself
+        lineNumber++
+        const key = `${item.id}::${item.general_description}`
+        const existing = existingMap.get(key)
+        if (existing) {
+          next.push({ ...existing, item_number: lineNumber })
+        } else {
+          next.push({
+            item_number: lineNumber,
+            app_item_id: item.id,
+            description: item.general_description,
+            unit: "",
+            quantity: "1",
+            estimated_unit_cost: String(item.estimated_budget ?? "0"),
+            remarks: null,
+          })
+        }
       }
-    })
+    }
+
     form.setValue("items", next, { shouldValidate: false, shouldDirty: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedItems])
@@ -304,6 +347,8 @@ export function PrCreateForm({ fiscalYear, offices }: PrCreateFormProps) {
                         ? `Different mode (${MODE_LABELS[itemMode] ?? itemMode}) — start a separate PR`
                         : undefined
 
+                    const lotItems = item.source_ppmp_lot?.ppmp_lot_items ?? []
+
                     return (
                       <button
                         type="button"
@@ -333,6 +378,9 @@ export function PrCreateForm({ fiscalYear, offices }: PrCreateFormProps) {
                             <div className="min-w-0">
                               <p className="font-medium truncate">{item.general_description}</p>
                               <p className="text-xs text-muted-foreground">{item.procurement_mode}</p>
+                              {item.ppmp_creator_name && (
+                                <p className="text-xs text-muted-foreground/70">PPMP by {item.ppmp_creator_name}</p>
+                              )}
                             </div>
                           </div>
                           <div className="shrink-0 text-right space-y-1">
@@ -355,6 +403,21 @@ export function PrCreateForm({ fiscalYear, offices }: PrCreateFormProps) {
                             </div>
                           </div>
                         </div>
+                        {/* PPMP lot items */}
+                        {lotItems.length > 0 && (
+                          <ul className="mt-2 ml-6 space-y-0.5 border-t pt-2">
+                            {lotItems.map((li) => (
+                              <li key={li.id} className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
+                                <span className="truncate">
+                                  {li.description}
+                                </span>
+                                <span className="shrink-0 tabular-nums">
+                                  {Number(li.quantity).toLocaleString()} {li.unit} &times; {formatPeso(Number(li.estimated_unit_cost))}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </button>
                     )
                   })}

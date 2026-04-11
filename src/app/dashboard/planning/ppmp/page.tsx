@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { getMyPpmps, getPpmpsRequiringMyAction, getAllDivisionPpmps } from "@/lib/actions/ppmp"
+import { getUserPermissions } from "@/lib/actions/roles"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { Badge } from "@/components/ui/badge"
@@ -82,11 +83,14 @@ function PpmpTable({
   )
 }
 export default async function PpmpListPage() {
-  const [myPpmps, actionPpmps, allDivisionPpmps] = await Promise.all([
+  const [myPpmps, actionPpmps, allDivisionPpmps, permissions] = await Promise.all([
     getMyPpmps(),
     getPpmpsRequiringMyAction(),
     getAllDivisionPpmps(),
+    getUserPermissions(),
   ])
+
+  const canCreate = permissions.includes("ppmp.create")
 
   return (
     <div className="space-y-8">
@@ -97,10 +101,12 @@ export default async function PpmpListPage() {
             Project Procurement Management Plans
           </p>
         </div>
-        <Button nativeButton={false} render={<Link href="/dashboard/planning/ppmp/new" />}>
-          <PlusIcon className="mr-1.5 h-4 w-4" />
-          New PPMP
-        </Button>
+        {canCreate && (
+          <Button nativeButton={false} render={<Link href="/dashboard/planning/ppmp/new" />}>
+            <PlusIcon className="mr-1.5 h-4 w-4" />
+            New PPMP
+          </Button>
+        )}
       </div>
 
       {/* PPMP That Requires My Action */}
@@ -128,9 +134,11 @@ export default async function PpmpListPage() {
           {myPpmps.length === 0 ? (
             <div className="p-8 text-center">
               <p className="text-sm text-muted-foreground">No PPMPs yet.</p>
-              <Button variant="outline" size="sm" className="mt-3" nativeButton={false} render={<Link href="/dashboard/planning/ppmp/new" />}>
-                Create your first PPMP
-              </Button>
+              {canCreate && (
+                <Button variant="outline" size="sm" className="mt-3" nativeButton={false} render={<Link href="/dashboard/planning/ppmp/new" />}>
+                  Create your first PPMP
+                </Button>
+              )}
             </div>
           ) : (
             <PpmpTable ppmps={myPpmps} showCreator />

@@ -13,6 +13,7 @@ import {
 import { StatusBadge } from "@/components/shared/status-badge"
 import { AmountDisplay } from "@/components/shared/amount-display"
 import { getMyPrs, getPrsRequiringMyAction } from "@/lib/actions/procurement"
+import { getUserPermissions } from "@/lib/actions/roles"
 import { format } from "date-fns"
 import type { PurchaseRequestWithDetails } from "@/types/database"
 
@@ -68,10 +69,13 @@ function PrTable({ prs }: { prs: PurchaseRequestWithDetails[] }) {
 }
 
 export default async function PurchaseRequestsPage() {
-  const [myPrs, actionPrs] = await Promise.all([
+  const [myPrs, actionPrs, permissions] = await Promise.all([
     getMyPrs(),
     getPrsRequiringMyAction(),
+    getUserPermissions(),
   ])
+
+  const canCreate = permissions.includes("pr.create")
 
   return (
     <div className="space-y-6">
@@ -80,10 +84,12 @@ export default async function PurchaseRequestsPage() {
           <h1 className="text-2xl font-bold">Purchase Requests</h1>
           <p className="text-sm text-muted-foreground">Manage and track your Purchase Requests</p>
         </div>
-        <Button nativeButton={false} render={<Link href="/dashboard/procurement/purchase-requests/new" />}>
-          <Plus className="mr-1.5 h-4 w-4" />
-          New PR
-        </Button>
+        {canCreate && (
+          <Button nativeButton={false} render={<Link href="/dashboard/procurement/purchase-requests/new" />}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            New PR
+          </Button>
+        )}
       </div>
 
       {actionPrs.length > 0 && (
@@ -109,9 +115,11 @@ export default async function PurchaseRequestsPage() {
           {myPrs.length === 0 ? (
             <div className="text-center py-8 space-y-3">
               <p className="text-sm text-muted-foreground">You haven&apos;t created any Purchase Requests yet.</p>
-              <Button nativeButton={false} render={<Link href="/dashboard/procurement/purchase-requests/new" />}>
-                Create your first PR
-              </Button>
+              {canCreate && (
+                <Button nativeButton={false} render={<Link href="/dashboard/procurement/purchase-requests/new" />}>
+                  Create your first PR
+                </Button>
+              )}
             </div>
           ) : (
             <PrTable prs={myPrs} />

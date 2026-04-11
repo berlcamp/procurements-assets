@@ -4,13 +4,26 @@ import { ChevronLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { getActiveFiscalYear } from "@/lib/actions/budget"
 import { getOfficesForUser } from "@/lib/actions/procurement"
+import { getUserPermissions } from "@/lib/actions/roles"
 import { PrCreateForm } from "@/components/procurement/pr-create-form"
+import { Forbidden } from "@/components/shared/forbidden"
 
 export default async function NewPurchaseRequestPage() {
-  const [fiscalYear, offices] = await Promise.all([
+  const [fiscalYear, offices, permissions] = await Promise.all([
     getActiveFiscalYear(),
     getOfficesForUser(),
+    getUserPermissions(),
   ])
+
+  if (!permissions.includes("pr.create")) {
+    return (
+      <Forbidden
+        message="You don't have permission to create Purchase Requests. Only roles with pr.create (e.g., End User, School Head, Supply Officer) can access this page."
+        backHref="/dashboard/procurement/purchase-requests"
+        backLabel="Back to Purchase Requests"
+      />
+    )
+  }
 
   if (!fiscalYear) {
     redirect("/dashboard/procurement")

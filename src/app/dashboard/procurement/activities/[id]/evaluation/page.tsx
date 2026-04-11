@@ -10,6 +10,8 @@ import {
   getProcurementActivityById,
   getBidsForProcurement,
   getProcurementUserPermissions,
+  getMyBidConfirmationStatus,
+  getProcurementConfirmationProgress,
 } from "@/lib/actions/procurement-activities"
 import { PROCUREMENT_METHOD_LABELS } from "@/lib/schemas/procurement"
 import { BidEvaluationForm } from "@/components/procurement/bid-evaluation-form"
@@ -22,17 +24,25 @@ export default async function EvaluationPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const [activity, bids, permissions] = await Promise.all([
+  const [activity, bids, permissions, myConfirmation, quorum] = await Promise.all([
     getProcurementActivityById(id),
     getBidsForProcurement(id),
     getProcurementUserPermissions(id),
+    getMyBidConfirmationStatus(id),
+    getProcurementConfirmationProgress(id),
   ])
 
   if (!activity) notFound()
 
-  const canEvaluate = permissions.canEvaluate && activity.status === "active" &&
-    ["preliminary_examination", "technical_evaluation", "financial_evaluation",
-     "post_qualification", "bac_resolution"].includes(activity.current_stage)
+  const EVAL_STAGES = [
+    "quotations_received", "canvass_received",
+    "evaluation", "comparison", "abstract_prepared",
+    "preliminary_examination", "technical_evaluation", "financial_evaluation",
+    "post_qualification", "bac_resolution",
+  ]
+  const isEvalStage = EVAL_STAGES.includes(activity.current_stage)
+  const canDraft   = permissions.canEvaluate && activity.status === "active" && isEvalStage
+  const canConfirm = permissions.canConfirm  && activity.status === "active" && isEvalStage
 
   const evaluatedBids = bids.filter(b => b.status === "evaluated" || b.status === "awarded")
   const responsiveBids = bids.filter(b => b.is_responsive && b.is_eligible && b.is_compliant)
@@ -102,10 +112,23 @@ export default async function EvaluationPage({
                 <p className="text-sm text-muted-foreground py-6 text-center">
                   No bids recorded yet.
                 </p>
-              ) : canEvaluate ? (
+              ) : canDraft ? (
                 <BidEvaluationForm
                   procurementId={id}
                   bids={bids}
+                  mode="draft"
+                  confirmedMembers={quorum.confirmedMembers}
+                  requiredMembers={quorum.required}
+                />
+              ) : canConfirm ? (
+                <BidEvaluationForm
+                  procurementId={id}
+                  bids={bids}
+                  mode="confirm"
+                  hasConfirmed={myConfirmation.hasConfirmed}
+                  hasStaleConfirmation={myConfirmation.hasStaleConfirmation}
+                  confirmedMembers={quorum.confirmedMembers}
+                  requiredMembers={quorum.required}
                 />
               ) : (
                 <TechnicalSummaryTable bids={bids} />

@@ -12,6 +12,7 @@ import type {
   SplitContractWarning,
   AppItem,
   AppLot,
+  PpmpLotItem,
   Office,
 } from "@/types/database"
 import type {
@@ -410,7 +411,11 @@ export async function getPrUserPermissions(prId: string): Promise<{
 export async function getApprovedAppItemsForOffice(
   officeId: string,
   fiscalYearId: string
-): Promise<(AppItem & { lot?: Pick<AppLot, 'id' | 'lot_name' | 'lot_number'> | null })[]> {
+): Promise<(AppItem & {
+  lot?: Pick<AppLot, 'id' | 'lot_name' | 'lot_number'> | null
+  source_ppmp_lot?: { ppmp_lot_items: Pick<PpmpLotItem, 'id' | 'item_number' | 'description' | 'quantity' | 'unit' | 'estimated_unit_cost' | 'estimated_total_cost' | 'specification'>[] } | null
+  ppmp_creator_name?: string | null
+})[]> {
   const supabase = await createClient()
   const ctx = await getUserRoleContext(supabase)
   if (!ctx) return []
@@ -435,7 +440,13 @@ export async function getApprovedAppItemsForOffice(
   let query = supabase
     .schema("procurements")
     .from("app_items")
-    .select("*, lot:app_lots(id, lot_name, lot_number)")
+    .select(`
+      *,
+      lot:app_lots(id, lot_name, lot_number),
+      source_ppmp_lot:ppmp_lots!app_items_source_ppmp_lot_id_fkey(
+        ppmp_lot_items(id, item_number, description, quantity, unit, estimated_unit_cost, estimated_total_cost, specification)
+      )
+    `)
     .in("app_id", appIds)
     .eq("hope_review_status", "approved")
     .is("deleted_at", null)
@@ -448,7 +459,7 @@ export async function getApprovedAppItemsForOffice(
   const { data, error } = await query
   if (error) return []
 
-  const items = (data ?? []) as Array<Record<string, unknown> & { id: string }>
+  const items = (data ?? []) as Array<Record<string, unknown> & { id: string; source_ppmp_id: string | null }>
   if (items.length === 0) return []
 
   // Find which items already have an active PR (not cancelled, not soft-deleted)
@@ -463,8 +474,47 @@ export async function getApprovedAppItemsForOffice(
 
   const takenSet = new Set((takenRows ?? []).map(r => r.app_item_id as string))
 
+  // Enrich with PPMP creator name
+  const ppmpIds = [...new Set(items.map(i => i.source_ppmp_id).filter((id): id is string => !!id))]
+  const creatorByPpmpId = new Map<string, string>()
+
+  if (ppmpIds.length > 0) {
+    const { data: ppmps } = await supabase
+      .schema("procurements")
+      .from("ppmps")
+      .select("id, created_by")
+      .in("id", ppmpIds)
+
+    if (ppmps?.length) {
+      const creatorIds = [...new Set(ppmps.map(p => p.created_by).filter((id): id is string => !!id))]
+      if (creatorIds.length > 0) {
+        const { data: profiles } = await supabase
+          .schema("procurements")
+          .from("user_profiles")
+          .select("id, first_name, last_name")
+          .in("id", creatorIds)
+
+        const profileById = new Map(
+          (profiles ?? []).map((p: { id: string; first_name: string; last_name: string }) => [
+            p.id,
+            [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || "—",
+          ])
+        )
+        for (const ppmp of ppmps) {
+          if (ppmp.created_by) {
+            creatorByPpmpId.set(ppmp.id as string, profileById.get(ppmp.created_by as string) ?? "")
+          }
+        }
+      }
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return items.map(i => ({ ...i, has_active_pr: takenSet.has(i.id) })) as any[]
+  return items.map(i => ({
+    ...i,
+    has_active_pr: takenSet.has(i.id),
+    ppmp_creator_name: (i.source_ppmp_id && creatorByPpmpId.get(i.source_ppmp_id)) || null,
+  })) as any[]
 }
 
 export async function getProcurementDashboardStats(

@@ -1,4 +1,4 @@
-import { getRoles, getRolePermissions } from "@/lib/actions/roles"
+import { getRoles, getRolePermissions, getUserPermissions } from "@/lib/actions/roles"
 import {
   Card,
   CardContent,
@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Forbidden } from "@/components/shared/forbidden"
 import type { Role, Permission } from "@/types/database"
 
 async function RoleCard({ role }: { role: Role }) {
@@ -63,6 +64,15 @@ async function RoleCard({ role }: { role: Role }) {
 }
 
 export default async function RolesPage() {
+  const permissions = await getUserPermissions()
+  if (!permissions.includes("roles.assign") && !permissions.includes("users.manage")) {
+    return (
+      <Forbidden
+        message="You don't have permission to view roles. Only roles with roles.assign or users.manage (e.g., Division Admin) can access this page."
+      />
+    )
+  }
+
   const roles = await getRoles()
   const divisionRoles = roles.filter((r) => r.scope !== "platform")
 

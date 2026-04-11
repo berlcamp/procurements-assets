@@ -15,6 +15,7 @@ import {
   getProcurementActivities,
   getProcurementsRequiringMyAction,
 } from "@/lib/actions/procurement-activities"
+import { getUserPermissions } from "@/lib/actions/roles"
 import { PROCUREMENT_METHOD_LABELS } from "@/lib/schemas/procurement"
 import { format } from "date-fns"
 import type { ProcurementActivityWithDetails } from "@/types/database"
@@ -86,10 +87,13 @@ function ActivityTable({ activities }: { activities: ProcurementActivityWithDeta
 }
 
 export default async function ProcurementActivitiesPage() {
-  const [activities, actionActivities] = await Promise.all([
+  const [activities, actionActivities, permissions] = await Promise.all([
     getProcurementActivities(),
     getProcurementsRequiringMyAction(),
+    getUserPermissions(),
   ])
+
+  const canCreate = permissions.includes("proc.create") || permissions.includes("proc.manage")
 
   return (
     <div className="space-y-6">
@@ -100,7 +104,7 @@ export default async function ProcurementActivitiesPage() {
             SVP and Shopping procurement workflows
           </p>
         </div>
-        <CreateProcurementDialog />
+        {canCreate && <CreateProcurementDialog />}
       </div>
 
       {actionActivities.length > 0 && (

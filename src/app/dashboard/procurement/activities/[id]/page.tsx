@@ -9,11 +9,16 @@ import { AmountDisplay } from "@/components/shared/amount-display"
 import { ApprovalStepper, buildProcurementSteps } from "@/components/shared/approval-stepper"
 import { ProcurementReviewActions } from "@/components/procurement/procurement-review-actions"
 import { PhilgepsReferenceDialog } from "@/components/procurement/philgeps-reference-dialog"
+import { BacResolutionDialog } from "@/components/procurement/bac-resolution-dialog"
+import { ProcurementDocumentUpload } from "@/components/procurement/procurement-document-upload"
 import {
   getProcurementActivityById,
   getProcurementStages,
   getProcurementUserPermissions,
   getBidsForProcurement,
+  getMyBidConfirmationStatus,
+  getProcurementConfirmationProgress,
+  getMyDivisionId,
 } from "@/lib/actions/procurement-activities"
 import { PROCUREMENT_METHOD_LABELS } from "@/lib/schemas/procurement"
 import { format } from "date-fns"
@@ -24,11 +29,14 @@ export default async function ProcurementActivityDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const [activity, stages, permissions, bids] = await Promise.all([
+  const [activity, stages, permissions, bids, myConfirmation, quorum, divisionId] = await Promise.all([
     getProcurementActivityById(id),
     getProcurementStages(id),
     getProcurementUserPermissions(id),
     getBidsForProcurement(id),
+    getMyBidConfirmationStatus(id),
+    getProcurementConfirmationProgress(id),
+    getMyDivisionId(),
   ])
 
   if (!activity) notFound()
@@ -52,11 +60,17 @@ export default async function ProcurementActivityDetailPage({
   const isCompetitiveBidding = activity.procurement_method === "competitive_bidding"
   const minBidsRequired = isCompetitiveBidding ? 2 : 3
 
+  const EVAL_STAGES = [
+    "quotations_received", "canvass_received",
+    "evaluation", "comparison", "abstract_prepared",
+    "preliminary_examination", "technical_evaluation", "financial_evaluation",
+    "post_qualification", "bac_resolution",
+  ]
   const hasAction =
     (permissions.canAdvance && activity.status === "active") ||
     (permissions.canRecordBid && activity.status === "active") ||
-    (permissions.canEvaluate && ["quotations_received", "canvass_received", "evaluation", "comparison", "post_qualification",
-      "preliminary_examination", "technical_evaluation", "financial_evaluation"].includes(activity.current_stage)) ||
+    (permissions.canEvaluate && EVAL_STAGES.includes(activity.current_stage)) ||
+    (permissions.canConfirm  && EVAL_STAGES.includes(activity.current_stage)) ||
     (permissions.canRecommendAward && ["evaluation", "abstract_prepared", "comparison", "post_qualification", "bac_resolution"].includes(activity.current_stage)) ||
     (permissions.canApproveAward && activity.current_stage === "award_recommended") ||
     (permissions.canFail && activity.status === "active")
@@ -101,22 +115,165 @@ export default async function ProcurementActivityDetailPage({
           </Card>
       )}
 
-      {/* Evaluation page link for competitive bidding */}
-      {isCompetitiveBidding &&
-        activity.status === "active" &&
-        ["preliminary_examination", "technical_evaluation", "financial_evaluation"].includes(activity.current_stage) &&
-        permissions.canEvaluate && (
-          <Card className="border-blue-300 bg-blue-50">
+      {/* Secretariat: draft evaluation */}
+      {activity.status === "active" &&
+        permissions.canEvaluate &&
+        EVAL_STAGES.includes(activity.current_stage) && (
+          <Card className="border-amber-300 bg-amber-50">
             <CardContent className="flex items-start justify-between gap-3 py-4">
               <div className="space-y-1">
-                <p className="text-sm font-medium text-blue-900">Bid Evaluation Required</p>
-                <p className="text-xs text-blue-800">
-                  BAC members must complete technical and financial evaluation of submitted bids.
+                <p className="text-sm font-medium text-amber-900">
+                  BAC Secretariat — Draft the Evaluation
+                </p>
+                <p className="text-xs text-amber-800">
+                  Enter responsiveness, eligibility, compliance, and any score/remarks
+                  for each bid. BAC members ({quorum.confirmedMembers}/{quorum.required} confirmed)
+                  will then confirm your draft. Editing after confirmations invalidates them.
                 </p>
               </div>
               <Button size="sm" nativeButton={false} render={<Link href={`/dashboard/procurement/activities/${id}/evaluation`} />}>
-                Evaluate Bids
+                Open Draft
               </Button>
+            </CardContent>
+          </Card>
+      )}
+
+      {/* BAC voting member: confirm evaluation */}
+      {activity.status === "active" &&
+        permissions.canConfirm &&
+        !permissions.canEvaluate &&
+        EVAL_STAGES.includes(activity.current_stage) && (
+          <Card className="border-blue-300 bg-blue-50">
+            <CardContent className="flex items-start justify-between gap-3 py-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-blue-900">
+                  {myConfirmation.hasConfirmed && !myConfirmation.hasStaleConfirmation
+                    ? "Evaluation Confirmed"
+                    : myConfirmation.hasStaleConfirmation
+                      ? "Evaluation Revised — Please Re-confirm"
+                      : "Confirm BAC Evaluation"}
+                </p>
+                <p className="text-xs text-blue-800">
+                  {myConfirmation.hasConfirmed && !myConfirmation.hasStaleConfirmation
+                    ? `You have confirmed the Secretariat's draft. ${quorum.confirmedMembers} of ${quorum.required} BAC members confirmed.`
+                    : myConfirmation.hasStaleConfirmation
+                      ? "The BAC Secretariat updated the evaluation after your previous confirmation. Please re-confirm."
+                      : `Review the Secretariat's evaluation draft and click Confirm. ${quorum.confirmedMembers} of ${quorum.required} BAC members have confirmed.`}
+                </p>
+              </div>
+              <Button size="sm" nativeButton={false} render={<Link href={`/dashboard/procurement/activities/${id}/evaluation`} />}>
+                {myConfirmation.hasConfirmed && !myConfirmation.hasStaleConfirmation
+                  ? "View Evaluation"
+                  : "Open to Confirm"}
+              </Button>
+            </CardContent>
+          </Card>
+      )}
+
+      {/* BAC Resolution upload — shown while at bac_resolution stage for the Secretariat */}
+      {activity.status === "active" &&
+        activity.current_stage === "bac_resolution" &&
+        permissions.canUploadResolution &&
+        divisionId && (
+          <Card className={activity.bac_resolution_file_url ? "border-green-300 bg-green-50" : "border-amber-300 bg-amber-50"}>
+            <CardContent className="flex items-start justify-between gap-3 py-4">
+              <div className="space-y-1">
+                <p className={activity.bac_resolution_file_url ? "text-sm font-medium text-green-900" : "text-sm font-medium text-amber-900"}>
+                  {activity.bac_resolution_file_url
+                    ? `BAC Resolution on file${activity.bac_resolution_number ? ": " + activity.bac_resolution_number : ""}`
+                    : "BAC Resolution required"}
+                </p>
+                <p className={activity.bac_resolution_file_url ? "text-xs text-green-800" : "text-xs text-amber-800"}>
+                  {activity.bac_resolution_file_url
+                    ? `${activity.bac_resolution_date ? "Dated " + activity.bac_resolution_date + ". " : ""}Required before advancing to Award Recommended.`
+                    : "Upload the signed BAC Resolution document before advancing to Award Recommended."}
+                </p>
+              </div>
+              <BacResolutionDialog
+                procurementId={activity.id}
+                divisionId={divisionId}
+                currentNumber={activity.bac_resolution_number}
+                currentDate={activity.bac_resolution_date}
+                currentFileUrl={activity.bac_resolution_file_url}
+              />
+            </CardContent>
+          </Card>
+      )}
+
+      {/* Notice of Award upload — at noa_issued stage */}
+      {activity.status === "active" &&
+        activity.current_stage === "noa_issued" &&
+        permissions.canUploadResolution &&
+        divisionId && (
+          <Card className={activity.noa_file_url ? "border-green-300 bg-green-50" : "border-amber-300 bg-amber-50"}>
+            <CardContent className="flex items-start justify-between gap-3 py-4">
+              <div className="space-y-1">
+                <p className={activity.noa_file_url ? "text-sm font-medium text-green-900" : "text-sm font-medium text-amber-900"}>
+                  {activity.noa_file_url ? "Notice of Award on file" : "Notice of Award required"}
+                </p>
+                <p className={activity.noa_file_url ? "text-xs text-green-800" : "text-xs text-amber-800"}>
+                  Upload the signed Notice of Award document. Required before advancing to Contract Signing.
+                </p>
+              </div>
+              <ProcurementDocumentUpload
+                procurementId={activity.id}
+                divisionId={divisionId}
+                docType="noa"
+                currentPath={activity.noa_file_url}
+                variant="compact"
+              />
+            </CardContent>
+          </Card>
+      )}
+
+      {/* Signed Contract upload — at contract_signing stage */}
+      {activity.status === "active" &&
+        activity.current_stage === "contract_signing" &&
+        permissions.canUploadResolution &&
+        divisionId && (
+          <Card className={activity.signed_contract_file_url ? "border-green-300 bg-green-50" : "border-amber-300 bg-amber-50"}>
+            <CardContent className="flex items-start justify-between gap-3 py-4">
+              <div className="space-y-1">
+                <p className={activity.signed_contract_file_url ? "text-sm font-medium text-green-900" : "text-sm font-medium text-amber-900"}>
+                  {activity.signed_contract_file_url ? "Signed Contract on file" : "Signed Contract required"}
+                </p>
+                <p className={activity.signed_contract_file_url ? "text-xs text-green-800" : "text-xs text-amber-800"}>
+                  Upload the fully signed contract. Required before advancing to NTP Issued.
+                </p>
+              </div>
+              <ProcurementDocumentUpload
+                procurementId={activity.id}
+                divisionId={divisionId}
+                docType="signed_contract"
+                currentPath={activity.signed_contract_file_url}
+                variant="compact"
+              />
+            </CardContent>
+          </Card>
+      )}
+
+      {/* Notice to Proceed upload — at ntp_issued stage */}
+      {activity.status === "active" &&
+        activity.current_stage === "ntp_issued" &&
+        permissions.canUploadResolution &&
+        divisionId && (
+          <Card className={activity.ntp_file_url ? "border-green-300 bg-green-50" : "border-amber-300 bg-amber-50"}>
+            <CardContent className="flex items-start justify-between gap-3 py-4">
+              <div className="space-y-1">
+                <p className={activity.ntp_file_url ? "text-sm font-medium text-green-900" : "text-sm font-medium text-amber-900"}>
+                  {activity.ntp_file_url ? "Notice to Proceed on file" : "Notice to Proceed required"}
+                </p>
+                <p className={activity.ntp_file_url ? "text-xs text-green-800" : "text-xs text-amber-800"}>
+                  Upload the signed Notice to Proceed. Required before the procurement can be marked as Completed.
+                </p>
+              </div>
+              <ProcurementDocumentUpload
+                procurementId={activity.id}
+                divisionId={divisionId}
+                docType="ntp"
+                currentPath={activity.ntp_file_url}
+                variant="compact"
+              />
             </CardContent>
           </Card>
       )}
@@ -311,6 +468,7 @@ export default async function ProcurementActivityDetailPage({
                   canAdvance={permissions.canAdvance}
                   canRecordBid={permissions.canRecordBid}
                   canEvaluate={permissions.canEvaluate}
+                  canConfirm={permissions.canConfirm}
                   canRecommendAward={permissions.canRecommendAward}
                   canApproveAward={permissions.canApproveAward}
                   canFail={permissions.canFail}

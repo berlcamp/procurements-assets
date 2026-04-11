@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useDivision } from "@/lib/hooks/use-division"
+import { usePermissions } from "@/lib/hooks/use-permissions"
+import { Forbidden } from "@/components/shared/forbidden"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -29,6 +31,7 @@ interface FiscalYear {
 
 export default function FiscalYearsPage() {
   const { divisionId, loading: divisionLoading } = useDivision()
+  const { can, loading: permsLoading } = usePermissions()
   const [years, setYears] = useState<FiscalYear[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -99,6 +102,18 @@ export default function FiscalYearsPage() {
     planning: "secondary",
     closing: "secondary",
     closed: "outline",
+  }
+
+  if (permsLoading) {
+    return <p className="text-sm text-muted-foreground">Loading…</p>
+  }
+
+  if (!can("division.settings")) {
+    return (
+      <Forbidden
+        message="You don't have permission to manage fiscal years. Only roles with division.settings (e.g., Division Admin) can access this page."
+      />
+    )
   }
 
   return (

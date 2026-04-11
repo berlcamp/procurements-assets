@@ -6,6 +6,7 @@ import {
   getBudgetUtilizationByOffice,
   getCertifiedObligationsTotal,
 } from "@/lib/actions/budget"
+import { getUserPermissions } from "@/lib/actions/roles"
 import {
   Card,
   CardContent,
@@ -22,7 +23,7 @@ import { PlusIcon, LayoutListIcon, ArrowRightLeftIcon, FileBarChartIcon } from "
 export default async function BudgetDashboardPage() {
   const fiscalYear = await getActiveFiscalYear()
 
-  const [allocations, pendingAdjustments, utilization, certifiedObligated] =
+  const [allocations, pendingAdjustments, utilization, certifiedObligated, permissions] =
     await Promise.all([
       fiscalYear ? getBudgetAllocations(fiscalYear.id) : Promise.resolve([]),
       fiscalYear
@@ -34,7 +35,11 @@ export default async function BudgetDashboardPage() {
       fiscalYear
         ? getCertifiedObligationsTotal(fiscalYear.id)
         : Promise.resolve(0),
+      getUserPermissions(),
     ])
+
+  const canCreateAllocation = permissions.includes("budget.create")
+  const canApproveAdjustments = permissions.includes("budget.approve_adj")
 
   const totals = allocations.reduce(
     (acc, a) => {
@@ -68,14 +73,16 @@ export default async function BudgetDashboardPage() {
             </p>
           )}
         </div>
-        <div className="flex gap-2">
-          <Link href="/dashboard/budget/allocations/new">
-            <Button size="sm">
-              <PlusIcon className="mr-1.5 h-3.5 w-3.5" />
-              New Allocation
-            </Button>
-          </Link>
-        </div>
+        {canCreateAllocation && (
+          <div className="flex gap-2">
+            <Link href="/dashboard/budget/allocations/new">
+              <Button size="sm">
+                <PlusIcon className="mr-1.5 h-3.5 w-3.5" />
+                New Allocation
+              </Button>
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* Summary stats */}
@@ -146,11 +153,13 @@ export default async function BudgetDashboardPage() {
             <CardContent>
               <p className="text-3xl font-bold">{pendingAdjustments.length}</p>
               <p className="text-xs text-muted-foreground mt-1">awaiting approval</p>
-              <Link href="/dashboard/budget/adjustments?status=pending" className="block mt-3">
-                <Button variant="outline" size="sm" className="w-full">
-                  Review
-                </Button>
-              </Link>
+              {canApproveAdjustments && (
+                <Link href="/dashboard/budget/adjustments?status=pending" className="block mt-3">
+                  <Button variant="outline" size="sm" className="w-full">
+                    Review
+                  </Button>
+                </Link>
+              )}
             </CardContent>
           </Card>
 

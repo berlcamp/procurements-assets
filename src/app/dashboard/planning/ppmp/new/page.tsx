@@ -1,9 +1,21 @@
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
 import { PpmpForm } from "@/components/planning/ppmp-form"
+import { Forbidden } from "@/components/shared/forbidden"
+import { getUserPermissions } from "@/lib/actions/roles"
 import { ChevronRightIcon, ClipboardListIcon } from "lucide-react"
 
-export default function NewPpmpPage() {
+export default async function NewPpmpPage() {
+  const permissions = await getUserPermissions()
+  if (!permissions.includes("ppmp.create") && !permissions.includes("ppmp.edit")) {
+    return (
+      <Forbidden
+        message="You don't have permission to create PPMPs. Only roles with ppmp.create (e.g., End User, Division Admin) can access this page."
+        backHref="/dashboard/planning/ppmp"
+        backLabel="Back to PPMP list"
+      />
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}

@@ -21,7 +21,6 @@ import {
 import { getPurchaseRequestById } from "@/lib/actions/procurement"
 import { PROCUREMENT_METHOD_LABELS } from "@/lib/schemas/procurement"
 import { RecordBidDialog } from "@/components/procurement/record-bid-dialog"
-import { BidEvaluationForm } from "@/components/procurement/bid-evaluation-form"
 import { AbstractOfCanvass } from "@/components/procurement/abstract-of-canvass"
 import { RecommendAwardButton } from "@/components/procurement/recommend-award-button"
 import type { BidWithDetails, PrItem } from "@/types/database"
@@ -55,9 +54,18 @@ export default async function BidsPage({
   }
 
   const canRecord = permissions.canRecordBid && activity.status === "active"
-  const canEvaluate = permissions.canEvaluate && activity.status === "active" &&
-    ["quotations_received", "canvass_received", "evaluation", "comparison", "abstract_prepared",
-     "preliminary_examination", "technical_evaluation", "financial_evaluation"].includes(activity.current_stage)
+  const EVAL_STAGES = [
+    "quotations_received", "canvass_received",
+    "evaluation", "comparison", "abstract_prepared",
+    "preliminary_examination", "technical_evaluation", "financial_evaluation",
+    "post_qualification", "bac_resolution",
+  ]
+  // Secretariat draft permission
+  const canDraft = permissions.canEvaluate && activity.status === "active" &&
+    EVAL_STAGES.includes(activity.current_stage)
+  // BAC voting-member confirmation permission
+  const canConfirm = permissions.canConfirm && activity.status === "active" &&
+    EVAL_STAGES.includes(activity.current_stage)
   const hasEvaluatedBids = bids.some(b => b.status === "evaluated" || b.status === "awarded")
   // Recommend Award available from evaluation through award_recommended (so users can recover
   // from manual stage advances that bypassed the actual award action).
@@ -176,17 +184,24 @@ export default async function BidsPage({
         </CardContent>
       </Card>
 
-      {/* Bid Evaluation Form (for BAC) */}
-      {canEvaluate && bids.length >= 3 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Evaluate Bids</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <BidEvaluationForm
-              procurementId={id}
-              bids={bids}
-            />
+      {/* Bid Evaluation has moved to the dedicated /evaluation page so BAC
+          Secretariat drafting and BAC member confirmation can share one UI. */}
+      {(canDraft || canConfirm) && bids.length >= minBidsRequired && (
+        <Card className="border-blue-300 bg-blue-50">
+          <CardContent className="flex items-start justify-between gap-3 py-4">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-blue-900">
+                {canDraft ? "Draft the BAC Evaluation" : "Confirm the BAC Evaluation"}
+              </p>
+              <p className="text-xs text-blue-800">
+                {canDraft
+                  ? "Enter the evaluation verdicts. Saving invalidates any prior BAC member confirmations."
+                  : "Review the BAC Secretariat's draft and confirm your agreement."}
+              </p>
+            </div>
+            <Button size="sm" nativeButton={false} render={<Link href={`/dashboard/procurement/activities/${id}/evaluation`} />}>
+              Open Evaluation
+            </Button>
           </CardContent>
         </Card>
       )}

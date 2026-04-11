@@ -924,6 +924,9 @@ export interface BidEvaluation {
   financial_pass: boolean | null
   evaluation_score: string | null
   remarks: string | null
+  status: 'confirmed' | 'stale'
+  confirmed_at: string
+  invalidated_at: string | null
   created_at: string
   updated_at: string
 }
@@ -977,6 +980,20 @@ export interface ProcurementActivity {
   performance_security_reference: string | null
   performance_security_received_at: string | null
   performance_security_returned_at: string | null
+  bac_resolution_number: string | null
+  bac_resolution_date: string | null
+  bac_resolution_file_url: string | null
+  bac_resolution_uploaded_at: string | null
+  bac_resolution_uploaded_by: string | null
+  noa_file_url: string | null
+  noa_issued_at: string | null
+  noa_uploaded_by: string | null
+  signed_contract_file_url: string | null
+  contract_signed_at: string | null
+  signed_contract_uploaded_by: string | null
+  ntp_file_url: string | null
+  ntp_issued_at: string | null
+  ntp_uploaded_by: string | null
   status: ProcurementActivityStatus
   deleted_at: string | null
   created_at: string

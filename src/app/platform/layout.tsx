@@ -7,6 +7,7 @@ import {
   ClipboardList,
   Code2,
   Wallet,
+  Users,
 } from "lucide-react"
 import type { NavGroup } from "@/components/layout/sidebar"
 
@@ -22,6 +23,11 @@ const navGroups: NavGroup[] = [
         label: "Divisions",
         href: "/platform/divisions",
         icon: <Building2 className="h-4 w-4" />,
+      },
+      {
+        label: "Users",
+        href: "/platform/users",
+        icon: <Users className="h-4 w-4" />,
       },
       {
         label: "Announcements",

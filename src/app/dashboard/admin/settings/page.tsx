@@ -6,6 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { systemSettingSchema, type SystemSettingInput } from "@/lib/schemas/admin"
 import { getSettings, upsertSetting, deleteSetting } from "@/lib/actions/settings"
 import { useDivision } from "@/lib/hooks/use-division"
+import { usePermissions } from "@/lib/hooks/use-permissions"
+import { Forbidden } from "@/components/shared/forbidden"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -22,6 +24,7 @@ import type { SystemSetting } from "@/types/database"
 
 export default function SettingsPage() {
   const { divisionId } = useDivision()
+  const { can, loading: permsLoading } = usePermissions()
   const [settings, setSettings] = useState<SystemSetting[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -77,6 +80,18 @@ export default function SettingsPage() {
     },
     {}
   )
+
+  if (permsLoading) {
+    return <p className="text-sm text-muted-foreground">Loading…</p>
+  }
+
+  if (!can("division.settings")) {
+    return (
+      <Forbidden
+        message="You don't have permission to view or edit division settings. Only roles with division.settings (e.g., Division Admin) can access this page."
+      />
+    )
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">

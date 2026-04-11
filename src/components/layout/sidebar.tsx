@@ -25,6 +25,11 @@ export interface NavItem {
   label: string;
   href: string;
   icon?: React.ReactNode;
+  /**
+   * If set, the item is only shown when the user has at least one of these
+   * permission codes. Undefined or empty means always visible.
+   */
+  permissions?: string[];
 }
 
 export interface NavGroup {

@@ -87,7 +87,10 @@ export async function getProcurementActivityById(
     .is("deleted_at", null)
     .single()
 
-  if (error) return null
+  if (error) {
+    console.error("getProcurementActivityById error:", { id, error })
+    return null
+  }
 
   // Backfill requester separately — purchase_requests.requested_by FKs auth.users,
   // not user_profiles, so PostgREST cannot embed it.
@@ -162,44 +165,49 @@ export async function getProcurementUserPermissions(_procurementId: string): Pro
   canManage: boolean
   canRecordBid: boolean
   canEvaluate: boolean
+  canConfirm: boolean
   canRecommendAward: boolean
   canApproveAward: boolean
   canFail: boolean
   canAdvance: boolean
+  canUploadResolution: boolean
 }> {
   const supabase = await createClient()
   const ctx = await getUserRoleContext(supabase)
 
   const defaults = {
-    canManage: false, canRecordBid: false, canEvaluate: false,
+    canManage: false, canRecordBid: false, canEvaluate: false, canConfirm: false,
     canRecommendAward: false, canApproveAward: false, canFail: false, canAdvance: false,
+    canUploadResolution: false,
   }
 
   if (!ctx) return defaults
 
   const { roleNames } = ctx
 
-  const isManager = roleNames.some(r =>
-    ["supply_officer", "bac_secretariat", "division_admin"].includes(r)
+  // BAC Secretariat is now the sole scribe for procurement activities.
+  // division_admin retains override access.
+  const isSecretariat = roleNames.some(r =>
+    ["bac_secretariat", "division_admin"].includes(r)
   )
-  const isEvaluator = roleNames.some(r =>
-    ["bac_chair", "bac_member", "division_admin"].includes(r)
-  )
-  const isBacChair = roleNames.some(r =>
-    ["bac_chair", "division_admin"].includes(r)
-  )
+  // BAC voting members — their only action is to Confirm the Secretariat's draft.
+  const isConfirmer = roleNames.some(r =>
+    ["bac_chair", "bac_member"].includes(r)
+  ) || roleNames.includes("division_admin")
   const isApprover = roleNames.some(r =>
     ["hope", "division_chief", "division_admin"].includes(r)
   )
 
   return {
-    canManage: isManager,
-    canRecordBid: isManager,
-    canEvaluate: isEvaluator,
-    canRecommendAward: isBacChair,
+    canManage: isSecretariat,
+    canRecordBid: isSecretariat,
+    canEvaluate: isSecretariat,          // drafting the evaluation
+    canConfirm: isConfirmer,              // confirming the Secretariat's draft
+    canRecommendAward: isSecretariat,     // Secretariat enters the recommendation
     canApproveAward: isApprover,
-    canFail: isManager,
-    canAdvance: isManager,
+    canFail: isSecretariat,
+    canAdvance: isSecretariat,
+    canUploadResolution: isSecretariat,
   }
 }
 
@@ -670,4 +678,215 @@ export async function failProcurement(
 
   revalidatePath("/dashboard/procurement")
   return { error: null }
+}
+
+// ============================================================
+// BAC confirmation workflow
+// ============================================================
+
+/**
+ * Fetch the calling user's active confirmation status for every bid in the
+ * given procurement.
+ */
+export async function getMyBidConfirmationStatus(
+  procurementId: string
+): Promise<{
+  hasConfirmed: boolean
+  hasStaleConfirmation: boolean
+  confirmedBidIds: Set<string>
+}> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { hasConfirmed: false, hasStaleConfirmation: false, confirmedBidIds: new Set() }
+  }
+
+  const { data: bids } = await supabase
+    .schema("procurements")
+    .from("bids")
+    .select("id")
+    .eq("procurement_id", procurementId)
+    .is("deleted_at", null)
+
+  const bidIds = (bids ?? []).map((b: { id: string }) => b.id)
+  if (bidIds.length === 0) {
+    return { hasConfirmed: false, hasStaleConfirmation: false, confirmedBidIds: new Set() }
+  }
+
+  const { data: rows } = await supabase
+    .schema("procurements")
+    .from("bid_evaluations")
+    .select("bid_id, status")
+    .in("bid_id", bidIds)
+    .eq("evaluator_id", user.id)
+
+  const evalRows = (rows ?? []) as Array<{ bid_id: string; status: 'confirmed' | 'stale' }>
+  const confirmedBidIds = new Set(
+    evalRows.filter(r => r.status === "confirmed").map(r => r.bid_id)
+  )
+  const hasStaleConfirmation = evalRows.some(r => r.status === "stale")
+  const hasConfirmed = confirmedBidIds.size > 0 && confirmedBidIds.size === bidIds.length
+
+  return { hasConfirmed, hasStaleConfirmation, confirmedBidIds }
+}
+
+/**
+ * Count the confirmations across the procurement so the UI can show
+ * quorum progress (e.g., "2 of 3 BAC members have confirmed").
+ */
+export async function getProcurementConfirmationProgress(
+  procurementId: string
+): Promise<{ confirmedMembers: number; required: number }> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .schema("procurements")
+    .rpc("procurement_evaluator_count", { p_procurement_id: procurementId })
+
+  if (error) {
+    console.error("procurement_evaluator_count error:", error)
+    return { confirmedMembers: 0, required: 3 }
+  }
+
+  return { confirmedMembers: (data as number) ?? 0, required: 3 }
+}
+
+/**
+ * BAC voting member confirms the Secretariat's current evaluation draft.
+ */
+export async function confirmBidEvaluations(
+  procurementId: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .schema("procurements")
+    .rpc("confirm_bid_evaluations", { p_procurement_id: procurementId })
+
+  if (error) return { error: error.message }
+
+  const meta = await getProcMeta(procurementId)
+  if (meta) {
+    await notifyRoleInDivision(
+      ["bac_secretariat"],
+      meta.division_id,
+      {
+        title: "BAC member confirmed evaluation",
+        message: `A BAC member confirmed the evaluation draft for ${meta.procurement_number}.`,
+        type: "info",
+        reference_type: "procurement",
+        reference_id: procurementId,
+      }
+    )
+  }
+
+  revalidatePath(`/dashboard/procurement/activities/${procurementId}`)
+  revalidatePath(`/dashboard/procurement/activities/${procurementId}/evaluation`)
+  return { error: null }
+}
+
+/**
+ * BAC Secretariat uploads the signed BAC Resolution (number, date, file URL).
+ * Required before advancing from bac_resolution → award_recommended.
+ */
+export async function uploadBacResolution(input: {
+  procurement_id: string
+  resolution_number: string
+  resolution_date: string
+  file_url: string
+}): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .schema("procurements")
+    .rpc("upload_bac_resolution", {
+      p_procurement_id:    input.procurement_id,
+      p_resolution_number: input.resolution_number,
+      p_resolution_date:   input.resolution_date,
+      p_file_url:          input.file_url,
+    })
+
+  if (error) return { error: error.message }
+
+  const meta = await getProcMeta(input.procurement_id)
+  if (meta) {
+    await notifyRoleInDivision(
+      ["bac_chair", "bac_member", "hope"],
+      meta.division_id,
+      {
+        title: "BAC Resolution uploaded",
+        message: `The BAC Resolution for ${meta.procurement_number} has been uploaded.`,
+        type: "info",
+        reference_type: "procurement",
+        reference_id: input.procurement_id,
+      }
+    )
+  }
+
+  revalidatePath(`/dashboard/procurement/activities/${input.procurement_id}`)
+  return { error: null }
+}
+
+export type ProcurementDocumentType =
+  | "bac_resolution"
+  | "noa"
+  | "signed_contract"
+  | "ntp"
+
+const DOC_TYPE_LABELS: Record<ProcurementDocumentType, string> = {
+  bac_resolution:  "BAC Resolution",
+  noa:             "Notice of Award",
+  signed_contract: "Signed Contract",
+  ntp:             "Notice to Proceed",
+}
+
+/**
+ * Persist a storage path onto procurement_activities after the client has
+ * finished uploading the file directly to the procurement-documents bucket.
+ */
+export async function setProcurementDocumentPath(input: {
+  procurement_id: string
+  doc_type: ProcurementDocumentType
+  path: string
+}): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .schema("procurements")
+    .rpc("set_procurement_document_url", {
+      p_procurement_id: input.procurement_id,
+      p_doc_type:       input.doc_type,
+      p_file_url:       input.path,
+    })
+
+  if (error) return { error: error.message }
+
+  const meta = await getProcMeta(input.procurement_id)
+  if (meta) {
+    await notifyRoleInDivision(
+      ["bac_chair", "bac_member", "hope"],
+      meta.division_id,
+      {
+        title: `${DOC_TYPE_LABELS[input.doc_type]} uploaded`,
+        message: `The ${DOC_TYPE_LABELS[input.doc_type]} for ${meta.procurement_number} has been uploaded.`,
+        type: "info",
+        reference_type: "procurement",
+        reference_id: input.procurement_id,
+      }
+    )
+  }
+
+  revalidatePath(`/dashboard/procurement/activities/${input.procurement_id}`)
+  return { error: null }
+}
+
+/**
+ * Returns the current user's division UUID so client components can build
+ * the storage path convention `{division_id}/{procurement_id}/…`.
+ */
+export async function getMyDivisionId(): Promise<string | null> {
+  const supabase = await createClient()
+  const ctx = await getUserRoleContext(supabase)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const profile = ctx?.profile as any
+  return profile?.division_id ?? null
 }
