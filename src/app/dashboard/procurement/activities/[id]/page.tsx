@@ -142,33 +142,42 @@ export default async function ProcurementActivityDetailPage({
       {activity.status === "active" &&
         permissions.canConfirm &&
         !permissions.canEvaluate &&
-        EVAL_STAGES.includes(activity.current_stage) && (
-          <Card className="border-blue-300 bg-blue-50">
-            <CardContent className="flex items-start justify-between gap-3 py-4">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-blue-900">
-                  {myConfirmation.hasConfirmed && !myConfirmation.hasStaleConfirmation
-                    ? "Evaluation Confirmed"
-                    : myConfirmation.hasStaleConfirmation
-                      ? "Evaluation Revised — Please Re-confirm"
-                      : "Confirm BAC Evaluation"}
-                </p>
-                <p className="text-xs text-blue-800">
-                  {myConfirmation.hasConfirmed && !myConfirmation.hasStaleConfirmation
-                    ? `You have confirmed the Secretariat's draft. ${quorum.confirmedMembers} of ${quorum.required} BAC members confirmed.`
-                    : myConfirmation.hasStaleConfirmation
-                      ? "The BAC Secretariat updated the evaluation after your previous confirmation. Please re-confirm."
-                      : `Review the Secretariat's evaluation draft and click Confirm. ${quorum.confirmedMembers} of ${quorum.required} BAC members have confirmed.`}
-                </p>
-              </div>
-              <Button size="sm" nativeButton={false} render={<Link href={`/dashboard/procurement/activities/${id}/evaluation`} />}>
-                {myConfirmation.hasConfirmed && !myConfirmation.hasStaleConfirmation
-                  ? "View Evaluation"
-                  : "Open to Confirm"}
-              </Button>
-            </CardContent>
-          </Card>
-      )}
+        EVAL_STAGES.includes(activity.current_stage) && (() => {
+          // Stale rows in history don't override a fresh confirmed row.
+          // Only show "please re-confirm" when the user has no current
+          // confirmed row AND at least one stale row exists.
+          const confirmed       = myConfirmation.hasConfirmed
+          const needsReconfirm  = !confirmed && myConfirmation.hasStaleConfirmation
+          const quorumSuffix    = quorum.required > 0
+            ? `${quorum.confirmedMembers} of ${quorum.required} BAC members confirmed.`
+            : `${quorum.confirmedMembers} confirmations recorded.`
+
+          return (
+            <Card className={confirmed ? "border-green-300 bg-green-50" : "border-blue-300 bg-blue-50"}>
+              <CardContent className="flex items-start justify-between gap-3 py-4">
+                <div className="space-y-1">
+                  <p className={confirmed ? "text-sm font-medium text-green-900" : "text-sm font-medium text-blue-900"}>
+                    {confirmed
+                      ? "You have already confirmed this evaluation"
+                      : needsReconfirm
+                        ? "Evaluation Revised — Please Re-confirm"
+                        : "Confirm BAC Evaluation"}
+                  </p>
+                  <p className={confirmed ? "text-xs text-green-800" : "text-xs text-blue-800"}>
+                    {confirmed
+                      ? `Your confirmation is on file. ${quorumSuffix}`
+                      : needsReconfirm
+                        ? "The BAC Secretariat updated the evaluation after your previous confirmation. Please review and re-confirm."
+                        : `Review the Secretariat's evaluation draft and click Confirm. ${quorumSuffix}`}
+                  </p>
+                </div>
+                <Button size="sm" nativeButton={false} render={<Link href={`/dashboard/procurement/activities/${id}/evaluation`} />}>
+                  {confirmed ? "View Evaluation" : "Open to Confirm"}
+                </Button>
+              </CardContent>
+            </Card>
+          )
+        })()}
 
       {/* BAC Resolution upload — shown while at bac_resolution stage for the Secretariat */}
       {activity.status === "active" &&

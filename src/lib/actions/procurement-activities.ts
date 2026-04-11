@@ -732,22 +732,44 @@ export async function getMyBidConfirmationStatus(
 
 /**
  * Count the confirmations across the procurement so the UI can show
- * quorum progress (e.g., "2 of 3 BAC members have confirmed").
+ * quorum progress (e.g., "2 of 3 BAC members have confirmed"). Reads
+ * the required count from procurement_method_ceilings.min_bac_quorum
+ * so adjusting the ceiling (e.g. to 2 for a small BAC) is reflected
+ * in the UI without a code change.
  */
 export async function getProcurementConfirmationProgress(
   procurementId: string
 ): Promise<{ confirmedMembers: number; required: number }> {
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .schema("procurements")
-    .rpc("procurement_evaluator_count", { p_procurement_id: procurementId })
 
-  if (error) {
-    console.error("procurement_evaluator_count error:", error)
-    return { confirmedMembers: 0, required: 3 }
+  // Fetch count and required in parallel
+  const [countRes, activityRes] = await Promise.all([
+    supabase
+      .schema("procurements")
+      .rpc("procurement_evaluator_count", { p_procurement_id: procurementId }),
+    supabase
+      .schema("procurements")
+      .from("procurement_activities")
+      .select("procurement_method")
+      .eq("id", procurementId)
+      .maybeSingle(),
+  ])
+
+  const confirmedMembers = (countRes.data as number) ?? 0
+
+  let required = 0
+  const method = activityRes.data?.procurement_method
+  if (method) {
+    const { data: ceiling } = await supabase
+      .schema("procurements")
+      .from("procurement_method_ceilings")
+      .select("min_bac_quorum")
+      .eq("procurement_mode", method)
+      .maybeSingle()
+    required = (ceiling?.min_bac_quorum as number | null) ?? 0
   }
 
-  return { confirmedMembers: (data as number) ?? 0, required: 3 }
+  return { confirmedMembers, required }
 }
 
 /**

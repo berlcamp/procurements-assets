@@ -66,7 +66,20 @@ export function BidEvaluationForm({
   requiredMembers = 3,
 }: BidEvaluationFormProps) {
   const [loading, setLoading] = useState(false)
+  // Local flag flipped synchronously after a successful confirm so the
+  // button hides immediately, without waiting for the server component
+  // re-render to push down a new `hasConfirmed` prop.
+  const [justConfirmed, setJustConfirmed] = useState(false)
   const router = useRouter()
+
+  // Either the server-fetched prop OR the local optimistic flag means
+  // "this user has confirmed the current draft". Stale rows in history
+  // don't matter — what matters is whether a fresh confirmed row exists
+  // for every bid.
+  const effectiveHasConfirmed = hasConfirmed || justConfirmed
+  // Only show the "please re-confirm" banner when the user had a previous
+  // confirmation that got invalidated AND they haven't re-confirmed yet.
+  const showReconfirmBanner = !effectiveHasConfirmed && hasStaleConfirmation
 
   const [evals, setEvals] = useState<EvalRow[]>(
     bids.map(b => ({
@@ -125,13 +138,17 @@ export function BidEvaluationForm({
       return
     }
 
+    // Flip local flag BEFORE router.refresh() so the button hides instantly
+    setJustConfirmed(true)
     toast.success("You confirmed the BAC Secretariat's evaluation draft")
     router.refresh()
   }
 
   const isDraftMode = mode === "draft"
   const locked = !isDraftMode
-  const quorumMet = confirmedMembers >= requiredMembers
+  // requiredMembers = 0 means the quorum rule is waived (e.g. SVP / Shopping)
+  const quorumWaived = requiredMembers <= 0
+  const quorumMet = quorumWaived || confirmedMembers >= requiredMembers
 
   return (
     <div className="space-y-4">
@@ -155,7 +172,7 @@ export function BidEvaluationForm({
       )}
 
       {/* Stale confirmation banner */}
-      {!isDraftMode && hasStaleConfirmation && !hasConfirmed && (
+      {!isDraftMode && showReconfirmBanner && (
         <div className="rounded-md border border-orange-300 bg-orange-50 px-3 py-2 text-xs text-orange-900 flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
           <div>
@@ -169,10 +186,18 @@ export function BidEvaluationForm({
       {/* Quorum progress */}
       <div className="text-xs text-muted-foreground">
         BAC confirmations:{" "}
-        <span className={quorumMet ? "text-green-700 font-medium" : "font-medium"}>
-          {confirmedMembers} of {requiredMembers}
-        </span>
-        {quorumMet && " — quorum met"}
+        {quorumWaived ? (
+          <span className="font-medium">
+            {confirmedMembers} recorded — quorum waived for this method
+          </span>
+        ) : (
+          <>
+            <span className={quorumMet ? "text-green-700 font-medium" : "font-medium"}>
+              {confirmedMembers} of {requiredMembers}
+            </span>
+            {quorumMet && " — quorum met"}
+          </>
+        )}
       </div>
 
       <Table>
@@ -268,14 +293,17 @@ export function BidEvaluationForm({
           </Button>
         )}
 
-        {!isDraftMode && hasConfirmed && !hasStaleConfirmation && (
-          <div className="flex items-center gap-2 text-sm text-green-700">
+        {!isDraftMode && effectiveHasConfirmed && (
+          <div
+            className="inline-flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-3 py-1.5 text-sm font-medium text-green-800"
+            aria-live="polite"
+          >
             <ShieldCheck className="h-4 w-4" />
-            You have confirmed this evaluation.
+            You have already confirmed this evaluation
           </div>
         )}
 
-        {!isDraftMode && (!hasConfirmed || hasStaleConfirmation) && (
+        {!isDraftMode && !effectiveHasConfirmed && (
           <Button onClick={handleConfirm} disabled={loading || bids.length === 0}>
             {loading
               ? "Confirming..."
