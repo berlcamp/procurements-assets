@@ -27,6 +27,7 @@ type AppItemWithLot = AppItem & {
   source_ppmp_lot?: { ppmp_lot_items: PpmpLotItemPick[] } | null
   ppmp_creator_name?: string | null
   has_active_pr?: boolean
+  active_pr_number?: string | null
 }
 
 interface PrCreateFormProps {
@@ -342,7 +343,7 @@ export function PrCreateForm({ fiscalYear, offices }: PrCreateFormProps) {
                     const isSelected = selectedIds.includes(item.id)
                     const disabled = taken || modeBlocked
                     const reason = taken
-                      ? "An active Purchase Request already exists for this APP item"
+                      ? `Already in active PR${item.active_pr_number ? ` (${item.active_pr_number})` : ""} — cancel that PR to re-enable this item`
                       : modeBlocked
                         ? `Different mode (${MODE_LABELS[itemMode] ?? itemMode}) — start a separate PR`
                         : undefined
@@ -391,7 +392,7 @@ export function PrCreateForm({ fiscalYear, offices }: PrCreateFormProps) {
                               )}
                               {taken && (
                                 <Badge variant="outline" className="text-xs border-amber-400 text-amber-700">
-                                  PR exists
+                                  {item.active_pr_number ?? "PR exists"}
                                 </Badge>
                               )}
                               {!taken && modeBlocked && (

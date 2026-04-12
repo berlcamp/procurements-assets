@@ -19,7 +19,7 @@
 | [x]    | 7     | **Procurement Core (PR + Suppliers)**           | Sonnet   | Purchase Requests, supplier registry, budget certification                                                                      | PR is the entry point for all procurement methods                |
 | [x]    | 8     | **Procurement Workflows (SVP + Shopping)**      | **Opus** | Small Value Procurement and Shopping workflows end-to-end                                                                       | Most common methods in DepEd; quickest to deliver value          |
 | [x]    | 9     | **Procurement Workflows (Competitive Bidding)** | **Opus** | Full competitive bidding with BAC evaluation                                                                                    | Most complex method; requires all procurement infrastructure     |
-| [ ]    | 10    | **Procurement Workflows (Other Methods)**       | Sonnet   | Direct contracting, repeat order, emergency, negotiated, agency-to-agency                                                       | Completes RA 12009 coverage                                      |
+| [x]    | 10    | **Procurement Workflows (Other Methods)**       | Sonnet   | Direct contracting, repeat order, emergency, negotiated, agency-to-agency                                                       | Completes RA 12009 coverage                                      |
 | [ ]    | 11    | **Purchase Orders & Delivery**                  | Sonnet   | PO creation, delivery recording, inspection, obligation tracking                                                                | Bridges procurement to asset management                          |
 | [ ]    | 12    | **Asset Management (Inventory)**                | Sonnet   | Item catalog, stock-in/out, stock cards, inventory tracking                                                                     | Assets from deliveries enter inventory first                     |
 | [ ]    | 13    | **Asset Management (Property)**                 | **Opus** | Asset registration, PAR/ICS, custodian management, depreciation                                                                 | Depends on inventory for incoming assets                         |
@@ -1112,7 +1112,7 @@ Additional columns/considerations:
 
 ---
 
-## [ ] PHASE 10: Procurement Workflows (Other Methods)
+## [x] PHASE 10: Procurement Workflows (Other Methods)
 
 ### A. Scope
 

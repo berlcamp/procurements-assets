@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { AmountDisplay } from "@/components/shared/amount-display"
-import { getMyPrs, getPrsRequiringMyAction } from "@/lib/actions/procurement"
+import { getMyPrs, getPrsRequiringMyAction, getAllDivisionPrs } from "@/lib/actions/procurement"
 import { getUserPermissions } from "@/lib/actions/roles"
 import { format } from "date-fns"
 import type { PurchaseRequestWithDetails } from "@/types/database"
@@ -69,9 +69,10 @@ function PrTable({ prs }: { prs: PurchaseRequestWithDetails[] }) {
 }
 
 export default async function PurchaseRequestsPage() {
-  const [myPrs, actionPrs, permissions] = await Promise.all([
+  const [myPrs, actionPrs, allDivisionPrs, permissions] = await Promise.all([
     getMyPrs(),
     getPrsRequiringMyAction(),
+    getAllDivisionPrs(),
     getUserPermissions(),
   ])
 
@@ -102,6 +103,20 @@ export default async function PurchaseRequestsPage() {
           </CardHeader>
           <CardContent>
             <PrTable prs={actionPrs} />
+          </CardContent>
+        </Card>
+      )}
+
+      {allDivisionPrs !== null && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">All Division Purchase Requests</CardTitle>
+            <CardDescription>
+              All Purchase Requests across the division
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PrTable prs={allDivisionPrs} />
           </CardContent>
         </Card>
       )}

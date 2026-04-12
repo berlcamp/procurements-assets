@@ -254,6 +254,45 @@ export async function getPurchaseRequests(
   return (data ?? []) as PurchaseRequestWithDetails[]
 }
 
+export async function getAllDivisionPrs(
+  fiscalYearId?: string
+): Promise<PurchaseRequestWithDetails[] | null> {
+  const supabase = await createClient()
+
+  const { data: hasPermission, error: permError } = await supabase
+    .schema("procurements")
+    .rpc("has_permission", { p_permission_code: "ppmp.view_all" })
+
+  if (permError) {
+    console.error("getAllDivisionPrs permission check error:", permError)
+    return null
+  }
+  if (!hasPermission) return null
+
+  const ctx = await getUserRoleContext(supabase)
+  const isAuditor = ctx?.roleNames.includes("auditor") ?? false
+
+  let query = supabase
+    .schema("procurements")
+    .from("purchase_requests")
+    .select(PR_SELECT)
+    .is("deleted_at", null)
+    .neq("status", "cancelled")
+    .order("created_at", { ascending: false })
+
+  if (!isAuditor) {
+    query = query.neq("status", "draft")
+  }
+  if (fiscalYearId) query = query.eq("fiscal_year_id", fiscalYearId)
+
+  const { data, error } = await query
+  if (error) {
+    console.error("getAllDivisionPrs error:", error)
+    return []
+  }
+  return (data ?? []) as PurchaseRequestWithDetails[]
+}
+
 export async function getPurchaseRequestById(
   id: string
 ): Promise<PurchaseRequestWithDetails | null> {
@@ -415,6 +454,8 @@ export async function getApprovedAppItemsForOffice(
   lot?: Pick<AppLot, 'id' | 'lot_name' | 'lot_number'> | null
   source_ppmp_lot?: { ppmp_lot_items: Pick<PpmpLotItem, 'id' | 'item_number' | 'description' | 'quantity' | 'unit' | 'estimated_unit_cost' | 'estimated_total_cost' | 'specification'>[] } | null
   ppmp_creator_name?: string | null
+  has_active_pr?: boolean
+  active_pr_number?: string | null
 })[]> {
   const supabase = await createClient()
   const ctx = await getUserRoleContext(supabase)
@@ -462,17 +503,27 @@ export async function getApprovedAppItemsForOffice(
   const items = (data ?? []) as Array<Record<string, unknown> & { id: string; source_ppmp_id: string | null }>
   if (items.length === 0) return []
 
-  // Find which items already have an active PR (not cancelled, not soft-deleted)
+  // Find which items already have an active PR (not cancelled, not soft-deleted).
+  // The link is through pr_items.app_item_id → purchase_requests (legacy column was dropped).
   const itemIds = items.map(i => i.id)
   const { data: takenRows } = await supabase
     .schema("procurements")
-    .from("purchase_requests")
-    .select("app_item_id")
+    .from("pr_items")
+    .select("app_item_id, purchase_request:purchase_requests!inner(id, pr_number, status)")
     .in("app_item_id", itemIds)
-    .neq("status", "cancelled")
     .is("deleted_at", null)
+    .neq("purchase_request.status", "cancelled" as never)
+    .is("purchase_request.deleted_at" as never, null)
 
-  const takenSet = new Set((takenRows ?? []).map(r => r.app_item_id as string))
+  // Build a map: app_item_id → pr_number of the first active PR found
+  const takenMap = new Map<string, string>()
+  for (const row of takenRows ?? []) {
+    const appItemId = row.app_item_id as string
+    if (!takenMap.has(appItemId)) {
+      const pr = row.purchase_request as unknown as { pr_number: string }
+      takenMap.set(appItemId, pr.pr_number)
+    }
+  }
 
   // Enrich with PPMP creator name
   const ppmpIds = [...new Set(items.map(i => i.source_ppmp_id).filter((id): id is string => !!id))]
@@ -512,7 +563,8 @@ export async function getApprovedAppItemsForOffice(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return items.map(i => ({
     ...i,
-    has_active_pr: takenSet.has(i.id),
+    has_active_pr: takenMap.has(i.id),
+    active_pr_number: takenMap.get(i.id) ?? null,
     ppmp_creator_name: (i.source_ppmp_id && creatorByPpmpId.get(i.source_ppmp_id)) || null,
   })) as any[]
 }
