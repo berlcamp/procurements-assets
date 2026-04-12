@@ -1247,3 +1247,73 @@ export interface DeliveryWithItems extends Delivery {
 export interface DeliveryItemWithPoItem extends DeliveryItem {
   po_item?: Pick<PoItem, 'id' | 'description' | 'unit' | 'quantity' | 'unit_cost'> | null
 }
+
+// ============================================================
+// Phase 12: Asset Management — Inventory types
+// ============================================================
+
+export type ItemCategory = 'consumable' | 'semi_expendable' | 'ppe'
+export type MovementType = 'stock_in' | 'stock_out' | 'adjustment' | 'transfer_in' | 'transfer_out' | 'return'
+
+export interface ItemCatalog {
+  id: string
+  division_id: string
+  code: string
+  name: string
+  description: string | null
+  category: ItemCategory
+  unit: string
+  account_code_id: string | null
+  useful_life_years: number | null
+  is_active: boolean
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+export interface Inventory {
+  id: string
+  division_id: string
+  item_catalog_id: string
+  office_id: string
+  current_quantity: string
+  reorder_point: string
+  location: string | null
+  last_count_date: string | null
+  last_count_quantity: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+export interface StockMovement {
+  id: string
+  division_id: string
+  inventory_id: string
+  movement_type: MovementType
+  quantity: string
+  reference_type: string | null
+  reference_id: string | null
+  remarks: string | null
+  office_id: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export interface ItemCatalogWithDetails extends ItemCatalog {
+  account_code?: Pick<AccountCode, 'id' | 'name' | 'code' | 'expense_class'> | null
+}
+
+export interface InventoryWithDetails extends Inventory {
+  item_catalog?: ItemCatalogWithDetails | null
+  office?: Pick<Office, 'id' | 'name' | 'code'> | null
+}
+
+export interface StockMovementWithDetails extends StockMovement {
+  inventory?: Pick<Inventory, 'id' | 'item_catalog_id' | 'office_id'> & {
+    item_catalog?: Pick<ItemCatalog, 'id' | 'code' | 'name' | 'unit'> | null
+  } | null
+  created_by_profile?: { id: string; first_name: string; last_name: string } | null
+}

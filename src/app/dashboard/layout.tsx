@@ -21,6 +21,7 @@ import {
   Gavel,
   ClipboardCheck,
   Truck,
+  ListTree,
 } from "lucide-react"
 import type { NavGroup } from "@/components/layout/sidebar"
 
@@ -222,6 +223,12 @@ const navGroups: NavGroup[] = [
         href: "/dashboard/admin/roles",
         icon: <ShieldCheck className="h-4 w-4" />,
         permissions: ["roles.assign", "users.manage"],
+      },
+      {
+        label: "Item Catalog",
+        href: "/dashboard/admin/item-catalog",
+        icon: <ListTree className="h-4 w-4" />,
+        permissions: ["inventory.manage", "asset.manage"],
       },
       {
         label: "Fiscal Years",
