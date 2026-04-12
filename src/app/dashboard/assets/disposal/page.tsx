@@ -22,10 +22,12 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Eye, CheckCircle } from "lucide-react"
+import { Eye, CheckCircle, Undo2 } from "lucide-react"
+import { toast } from "sonner"
 import {
   getAssetsForDisposal,
   getDisposedAssets,
+  revertDisposal,
 } from "@/lib/actions/assets"
 import { DisposalDialog } from "@/components/assets/disposal-dialog"
 import {
@@ -144,6 +146,22 @@ export default function AssetDisposalPage() {
                               title="Complete Disposal"
                             >
                               <CheckCircle className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={async () => {
+                                const result = await revertDisposal(asset.id)
+                                if (result.error) {
+                                  toast.error(result.error)
+                                } else {
+                                  toast.success("Disposal reverted — asset is active again")
+                                  loadData()
+                                }
+                              }}
+                              title="Revert to Active"
+                            >
+                              <Undo2 className="h-4 w-4" />
                             </Button>
                           </div>
                         </TableCell>

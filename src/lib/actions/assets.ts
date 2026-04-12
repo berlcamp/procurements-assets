@@ -699,6 +699,32 @@ export async function completeDisposal(
 }
 
 // ============================================================
+// Revert Disposal
+// ============================================================
+
+export async function revertDisposal(
+  assetId: string,
+  remarks?: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .schema("procurements")
+    .rpc("revert_disposal", {
+      p_asset_id: assetId,
+      p_remarks: remarks ?? null,
+    })
+
+  if (error) {
+    console.error("revertDisposal error:", error)
+    return { error: error.message }
+  }
+
+  revalidatePath("/dashboard/assets")
+  return { error: null }
+}
+
+// ============================================================
 // Depreciation
 // ============================================================
 

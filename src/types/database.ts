@@ -1353,6 +1353,7 @@ export interface Asset {
   disposal_date: string | null
   disposal_method: string | null
   disposal_reference: string | null
+  disposal_reason: string | null
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -1378,6 +1379,7 @@ export interface AssetAssignment {
 
 export interface DepreciationRecord {
   id: string
+  division_id: string
   asset_id: string
   period_year: number
   period_month: number

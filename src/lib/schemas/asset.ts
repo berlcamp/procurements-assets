@@ -95,7 +95,13 @@ export const registerAssetManualSchema = z.object({
   custodian_id: z.string().uuid().nullable().optional(),
   useful_life_years: z.number().int().min(1).nullable().optional(),
   residual_value: z.number().min(0).nullable().optional(),
-})
+}).refine(
+  (data) => {
+    if (data.residual_value != null && data.residual_value > data.acquisition_cost) return false
+    return true
+  },
+  { message: "Residual value cannot exceed acquisition cost", path: ["residual_value"] }
+)
 
 export type RegisterAssetManualInput = z.infer<typeof registerAssetManualSchema>
 

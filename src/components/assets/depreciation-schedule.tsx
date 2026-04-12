@@ -68,7 +68,7 @@ export function DepreciationSchedule({
       : new Date().getFullYear()
     let lastMonth = records.length > 0
       ? records[records.length - 1].period_month
-      : new Date().getMonth() // 0-indexed, so current month - 1
+      : new Date().getMonth() + 1 // getMonth() is 0-indexed, DB uses 1-12
 
     const currentBookValue = acquisitionCost - lastAccum
     if (currentBookValue > residualValue && projected.length < totalMonths) {

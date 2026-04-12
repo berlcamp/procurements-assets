@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Button } from "@/components/ui/button"
@@ -55,6 +56,20 @@ export function StockOutDialog({
       remarks: "",
     },
   })
+
+  // Reset form when inventory item changes or dialog opens
+  const inventoryId = inventory?.id
+  useEffect(() => {
+    if (open && inventoryId) {
+      reset({
+        inventory_id: inventoryId,
+        quantity: 0,
+        reference_type: "ris",
+        reference_id: null,
+        remarks: "",
+      })
+    }
+  }, [inventoryId, open, reset])
 
   async function onSubmit(data: StockOutInput) {
     const result = await stockOutForIssuance({

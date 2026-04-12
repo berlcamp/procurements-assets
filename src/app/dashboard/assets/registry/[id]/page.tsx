@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ArrowLeft } from "lucide-react"
 import { getAssetById, getAssetAssignments, getDepreciationSchedule } from "@/lib/actions/assets"
 import { DepreciationSchedule } from "@/components/assets/depreciation-schedule"
+import { QRCodeDisplay } from "@/components/assets/qr-code-display"
 import {
   ASSET_TYPE_LABELS,
   CONDITION_STATUS_LABELS,
@@ -62,12 +63,18 @@ export default async function AssetDetailPage({
 
       {/* Header */}
       <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold font-mono">{asset.property_number}</h1>
-          <p className="text-muted-foreground">{asset.description ?? "No description"}</p>
-          {asset.brand_model && (
-            <p className="text-sm text-muted-foreground">{asset.brand_model}</p>
-          )}
+        <div className="flex items-start gap-4">
+          <QRCodeDisplay
+            propertyNumber={asset.property_number}
+            description={asset.description}
+          />
+          <div>
+            <h1 className="text-2xl font-bold font-mono">{asset.property_number}</h1>
+            <p className="text-muted-foreground">{asset.description ?? "No description"}</p>
+            {asset.brand_model && (
+              <p className="text-sm text-muted-foreground">{asset.brand_model}</p>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Badge variant={asset.status === "active" ? "default" : asset.status === "disposed" ? "outline" : "destructive"}>
