@@ -19,6 +19,8 @@ import {
   ScrollText,
   FileText,
   Gavel,
+  ClipboardCheck,
+  Truck,
 } from "lucide-react"
 import type { NavGroup } from "@/components/layout/sidebar"
 
@@ -136,6 +138,18 @@ const navGroups: NavGroup[] = [
           "po.approve",
           "delivery.inspect",
         ],
+      },
+      {
+        label: "Purchase Orders",
+        href: "/dashboard/procurement/purchase-orders",
+        icon: <ClipboardCheck className="h-4 w-4" />,
+        permissions: ["po.create", "po.approve", "proc.manage"],
+      },
+      {
+        label: "Deliveries",
+        href: "/dashboard/procurement/deliveries",
+        icon: <Truck className="h-4 w-4" />,
+        permissions: ["delivery.inspect", "po.create", "proc.manage"],
       },
     ],
   },

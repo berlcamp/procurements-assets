@@ -24,6 +24,8 @@ import {
   getProcurementConfirmationProgress,
   getMyDivisionId,
 } from "@/lib/actions/procurement-activities"
+import { getPoForProcurement } from "@/lib/actions/purchase-orders"
+import { PoCreateDialog } from "@/components/procurement/po-create-dialog"
 import { PROCUREMENT_METHOD_LABELS } from "@/lib/schemas/procurement"
 import { format } from "date-fns"
 
@@ -33,7 +35,7 @@ export default async function ProcurementActivityDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const [activity, stages, permissions, bids, myConfirmation, quorum, divisionId] = await Promise.all([
+  const [activity, stages, permissions, bids, myConfirmation, quorum, divisionId, existingPo] = await Promise.all([
     getProcurementActivityById(id),
     getProcurementStages(id),
     getProcurementUserPermissions(id),
@@ -41,6 +43,7 @@ export default async function ProcurementActivityDetailPage({
     getMyBidConfirmationStatus(id),
     getProcurementConfirmationProgress(id),
     getMyDivisionId(),
+    getPoForProcurement(id),
   ])
 
   if (!activity) notFound()
@@ -340,6 +343,45 @@ export default async function ProcurementActivityDetailPage({
                 currentPath={activity.ntp_file_url}
                 variant="compact"
               />
+            </CardContent>
+          </Card>
+      )}
+
+      {/* Purchase Order section */}
+      {activity.awarded_supplier_id && !existingPo && permissions.canAdvance && (
+          <Card className="border-blue-300 bg-blue-50">
+            <CardContent className="flex items-start justify-between gap-3 py-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-blue-900">Ready for Purchase Order</p>
+                <p className="text-xs text-blue-800">
+                  This procurement has been awarded. Create a Purchase Order to proceed with delivery.
+                </p>
+              </div>
+              <PoCreateDialog
+                procurementId={activity.id}
+                procurementNumber={activity.procurement_number}
+                supplierName={activity.supplier?.name ?? "Unknown supplier"}
+                contractAmount={activity.contract_amount}
+                abcAmount={activity.abc_amount}
+              />
+            </CardContent>
+          </Card>
+      )}
+
+      {existingPo && (
+          <Card className="border-green-300 bg-green-50">
+            <CardContent className="flex items-start justify-between gap-3 py-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-green-900">
+                  Purchase Order: {existingPo.po_number}
+                </p>
+                <p className="text-xs text-green-800">
+                  Status: {existingPo.status.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
+                </p>
+              </div>
+              <Button size="sm" nativeButton={false} render={<Link href={`/dashboard/procurement/purchase-orders/${existingPo.id}`} />}>
+                View PO
+              </Button>
             </CardContent>
           </Card>
       )}

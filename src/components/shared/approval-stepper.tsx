@@ -145,6 +145,36 @@ export const AGENCY_TO_AGENCY_STEPS: Omit<WorkflowStep, "status">[] = [
   { id: "completed",             label: "Completed",             description: "Procurement completed" },
 ]
 
+export const PO_STEPS: Omit<WorkflowStep, "status">[] = [
+  { id: "draft",                label: "Draft",              description: "PO created from awarded procurement" },
+  { id: "approved",             label: "Approved",           description: "HOPE/Division Chief approves" },
+  { id: "issued",               label: "Issued",             description: "PO sent to supplier" },
+  { id: "partially_delivered",  label: "Partial Delivery",   description: "Some items delivered" },
+  { id: "fully_delivered",      label: "Fully Delivered",    description: "All items delivered" },
+  { id: "completed",            label: "Completed",          description: "Inspection accepted, PO closed" },
+]
+
+/**
+ * Build step statuses for a PO based on its current status.
+ */
+export function buildPoSteps(status: string): WorkflowStep[] {
+  const statusOrder = PO_STEPS.map(s => s.id)
+  const currentIdx = statusOrder.indexOf(status)
+
+  if (status === "cancelled") {
+    return PO_STEPS.map(step => ({
+      ...step,
+      status: "skipped" as StepStatus,
+    }))
+  }
+
+  return PO_STEPS.map((step, i) => {
+    if (i < currentIdx) return { ...step, status: "completed" as StepStatus }
+    if (i === currentIdx) return { ...step, status: "current" as StepStatus }
+    return { ...step, status: "pending" as StepStatus }
+  })
+}
+
 /**
  * Build step statuses for a procurement activity based on its method and current stage.
  */

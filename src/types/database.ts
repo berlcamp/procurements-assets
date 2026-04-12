@@ -1096,3 +1096,107 @@ export interface ProcurementSummary {
   total_awarded: string
   total_savings: string
 }
+
+// ── Phase 11: Purchase Orders & Delivery ─────────────────────
+
+export type PoStatus = 'draft' | 'approved' | 'issued' | 'partially_delivered' | 'fully_delivered' | 'completed' | 'cancelled'
+export type InspectionStatus = 'pending' | 'passed' | 'failed' | 'partial_acceptance'
+
+export interface PurchaseOrder {
+  id: string
+  division_id: string
+  po_number: string
+  procurement_id: string
+  supplier_id: string
+  office_id: string
+  fiscal_year_id: string
+  total_amount: string
+  delivery_date: string | null
+  delivery_address: string | null
+  payment_terms: string | null
+  status: PoStatus
+  approved_by: string | null
+  approved_at: string | null
+  issued_at: string | null
+  cancellation_reason: string | null
+  cancelled_by: string | null
+  cancelled_at: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+export interface PoItem {
+  id: string
+  purchase_order_id: string
+  pr_item_id: string | null
+  bid_item_id: string | null
+  description: string
+  unit: string
+  quantity: string
+  unit_cost: string
+  total_cost: string
+  delivered_quantity: string
+  accepted_quantity: string
+  remarks: string | null
+  office_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Delivery {
+  id: string
+  division_id: string
+  purchase_order_id: string
+  delivery_number: string
+  delivery_date: string
+  received_by: string | null
+  inspection_date: string | null
+  inspected_by: string | null
+  inspection_status: InspectionStatus
+  inspection_report_number: string | null
+  remarks: string | null
+  office_id: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+export interface DeliveryItem {
+  id: string
+  delivery_id: string
+  po_item_id: string
+  quantity_delivered: string
+  quantity_accepted: string
+  quantity_rejected: string
+  rejection_reason: string | null
+  remarks: string | null
+  office_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface PurchaseOrderWithDetails extends PurchaseOrder {
+  procurement?: Pick<ProcurementActivity, 'id' | 'procurement_number' | 'procurement_method' | 'abc_amount' | 'contract_amount'> | null
+  supplier?: Pick<Supplier, 'id' | 'name' | 'trade_name' | 'tin'> | null
+  office?: Pick<Office, 'id' | 'name' | 'code'> | null
+  fiscal_year?: Pick<FiscalYear, 'id' | 'year' | 'status'> | null
+  po_items?: PoItemWithPrItem[]
+  deliveries?: DeliveryWithItems[]
+}
+
+export interface PoItemWithPrItem extends PoItem {
+  pr_item?: Pick<PrItem, 'id' | 'description' | 'unit' | 'quantity' | 'estimated_unit_cost'> | null
+}
+
+export interface DeliveryWithItems extends Delivery {
+  delivery_items?: DeliveryItemWithPoItem[]
+  received_by_profile?: { id: string; first_name: string; last_name: string } | null
+  inspected_by_profile?: { id: string; first_name: string; last_name: string } | null
+}
+
+export interface DeliveryItemWithPoItem extends DeliveryItem {
+  po_item?: Pick<PoItem, 'id' | 'description' | 'unit' | 'quantity' | 'unit_cost'> | null
+}

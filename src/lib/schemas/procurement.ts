@@ -398,3 +398,64 @@ export const AGENCY_TO_AGENCY_STAGE_LABELS: Record<string, string> = {
   moa_execution:         "MOA/MOU Execution",
   completed:             "Completed",
 }
+
+// ============================================================
+// Phase 11: Purchase Order & Delivery schemas
+// ============================================================
+
+export const createPoSchema = z.object({
+  procurement_id: z.string().uuid("Procurement activity is required"),
+})
+export type CreatePoInput = z.infer<typeof createPoSchema>
+
+export const approvePoSchema = z.object({
+  remarks: z.string().nullable().optional(),
+})
+export type ApprovePoInput = z.infer<typeof approvePoSchema>
+
+export const deliveryItemSchema = z.object({
+  po_item_id: z.string().uuid(),
+  quantity_delivered: z.coerce
+    .number()
+    .positive("Quantity must be greater than zero"),
+})
+
+export const recordDeliverySchema = z.object({
+  purchase_order_id: z.string().uuid(),
+  delivery_date: z.string().min(1, "Delivery date is required"),
+  items: z.array(deliveryItemSchema).min(1, "At least one item is required"),
+  remarks: z.string().nullable().optional(),
+})
+export type RecordDeliveryInput = z.infer<typeof recordDeliverySchema>
+
+export const inspectionItemSchema = z.object({
+  delivery_item_id: z.string().uuid(),
+  quantity_accepted: z.coerce.number().min(0),
+  quantity_rejected: z.coerce.number().min(0),
+  rejection_reason: z.string().nullable().optional(),
+})
+
+export const completeInspectionSchema = z.object({
+  delivery_id: z.string().uuid(),
+  results: z.array(inspectionItemSchema).min(1, "At least one inspection result is required"),
+  inspection_report_number: z.string().nullable().optional(),
+  remarks: z.string().nullable().optional(),
+})
+export type CompleteInspectionInput = z.infer<typeof completeInspectionSchema>
+
+export const PO_STATUS_LABELS: Record<string, string> = {
+  draft:                "Draft",
+  approved:             "Approved",
+  issued:               "Issued",
+  partially_delivered:  "Partially Delivered",
+  fully_delivered:      "Fully Delivered",
+  completed:            "Completed",
+  cancelled:            "Cancelled",
+}
+
+export const INSPECTION_STATUS_LABELS: Record<string, string> = {
+  pending:              "Pending",
+  passed:               "Passed",
+  failed:               "Failed",
+  partial_acceptance:   "Partial Acceptance",
+}
