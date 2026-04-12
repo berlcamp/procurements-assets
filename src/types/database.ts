@@ -296,6 +296,37 @@ export type FiscalYearStatus = 'planning' | 'open' | 'closing' | 'closed'
 export type BudgetAllocationStatus = 'active' | 'inactive' | 'closed'
 export type BudgetAdjustmentType = 'realignment' | 'augmentation' | 'reduction' | 'transfer_in' | 'transfer_out'
 export type BudgetAdjustmentStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
+export type SubAroStatus = 'draft' | 'active' | 'fully_allocated' | 'expired' | 'cancelled'
+export type AllotmentClass = 'current' | 'continuing'
+
+export interface SubAllotmentReleaseOrder {
+  id: string
+  division_id: string
+  fiscal_year_id: string
+  sub_aro_number: string
+  aro_number: string | null
+  allotment_class: AllotmentClass
+  fund_source_id: string
+  releasing_office: string | null
+  release_date: string | null
+  validity_date: string | null
+  purpose: string | null
+  total_amount: string
+  allocated_amount: string
+  status: SubAroStatus
+  document_url: string | null
+  remarks: string | null
+  created_by: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface SubAroWithDetails extends SubAllotmentReleaseOrder {
+  fiscal_year?: Pick<FiscalYear, 'id' | 'year' | 'status'> | null
+  fund_source?: Pick<FundSource, 'id' | 'name' | 'code'> | null
+  allocations?: BudgetAllocationWithDetails[]
+}
 
 export interface FiscalYear {
   id: string
@@ -316,6 +347,7 @@ export interface BudgetAllocation {
   office_id: string
   fund_source_id: string
   account_code_id: string
+  sub_aro_id: string | null
   original_amount: string
   adjusted_amount: string
   obligated_amount: string
@@ -333,6 +365,7 @@ export interface BudgetAllocationWithDetails extends BudgetAllocation {
   fund_source?: Pick<FundSource, 'id' | 'name' | 'code'>
   account_code?: Pick<AccountCode, 'id' | 'name' | 'code' | 'expense_class'>
   fiscal_year?: Pick<FiscalYear, 'id' | 'year' | 'status'>
+  sub_aro?: Pick<SubAllotmentReleaseOrder, 'id' | 'sub_aro_number' | 'aro_number' | 'allotment_class'> | null
 }
 
 export interface BudgetAdjustment {
@@ -810,6 +843,20 @@ export interface ObligationRequest {
   created_at: string
   updated_at: string
   created_by: string | null
+}
+
+export interface ObligationRequestWithDetails extends ObligationRequest {
+  purchase_request?: Pick<PurchaseRequest, 'id' | 'pr_number' | 'purpose' | 'status' | 'total_estimated_cost'> & {
+    office?: Pick<Office, 'id' | 'name' | 'code'> | null
+    fiscal_year?: Pick<FiscalYear, 'id' | 'year'> | null
+  } | null
+  procurement?: Pick<ProcurementActivity, 'id' | 'procurement_number' | 'procurement_method' | 'status'> | null
+  budget_allocation?: Pick<BudgetAllocation, 'id' | 'adjusted_amount' | 'obligated_amount'> & {
+    fund_source?: Pick<FundSource, 'id' | 'name' | 'code'> | null
+    account_code?: { id: string; code: string; name: string } | null
+  } | null
+  office?: Pick<Office, 'id' | 'name' | 'code'> | null
+  certified_by_profile?: { id: string; first_name: string; last_name: string } | null
 }
 
 // Joined types for UI

@@ -71,6 +71,7 @@ export default async function AllocationsPage() {
               <TableRow>
                 <TableHead>Office</TableHead>
                 <TableHead>Fund Source</TableHead>
+                <TableHead>Sub-ARO</TableHead>
                 <TableHead>Account Code</TableHead>
                 <TableHead className="text-right">Adjusted</TableHead>
                 <TableHead className="text-right">Obligated</TableHead>
@@ -90,6 +91,9 @@ export default async function AllocationsPage() {
                   <TableRow key={a.id}>
                     <TableCell className="font-medium">{office?.name ?? "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{fs?.name ?? "—"}</TableCell>
+                    <TableCell className="text-xs font-mono text-muted-foreground">
+                      {a.sub_aro?.sub_aro_number ?? "—"}
+                    </TableCell>
                     <TableCell>
                       <span className="font-mono text-xs">{ac?.code}</span>
                       <span className="ml-1.5 text-xs text-muted-foreground">{ac?.expense_class}</span>

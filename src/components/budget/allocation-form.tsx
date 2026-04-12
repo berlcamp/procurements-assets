@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { createClient } from "@/lib/supabase/client"
-import type { FiscalYear, Office, FundSource, AccountCode } from "@/types/database"
+import type { FiscalYear, Office, FundSource, AccountCode, SubAllotmentReleaseOrder } from "@/types/database"
 
 export function AllocationForm() {
   const router = useRouter()
@@ -28,6 +28,7 @@ export function AllocationForm() {
   const [offices, setOffices] = useState<Office[]>([])
   const [fundSources, setFundSources] = useState<FundSource[]>([])
   const [accountCodes, setAccountCodes] = useState<AccountCode[]>([])
+  const [subAros, setSubAros] = useState<SubAllotmentReleaseOrder[]>([])
 
   const {
     register,
@@ -66,11 +67,13 @@ export function AllocationForm() {
       supabase.schema("procurements").from("offices").select("id, name, code").is("deleted_at", null).order("name"),
       supabase.schema("procurements").from("fund_sources").select("id, name, code").eq("is_active", true).order("name"),
       supabase.schema("procurements").from("account_codes").select("id, name, code, expense_class").eq("is_active", true).order("code"),
-    ]).then(([fy, off, fs, ac]) => {
+      supabase.schema("procurements").from("sub_allotment_release_orders").select("id, sub_aro_number, aro_number, total_amount, allocated_amount, fund_source_id, status").in("status", ["active", "draft"]).is("deleted_at", null).order("sub_aro_number"),
+    ]).then(([fy, off, fs, ac, sa]) => {
       setFiscalYears((fy.data ?? []) as FiscalYear[])
       setOffices((off.data ?? []) as Office[])
       setFundSources((fs.data ?? []) as FundSource[])
       setAccountCodes((ac.data ?? []) as AccountCode[])
+      setSubAros((sa.data ?? []) as SubAllotmentReleaseOrder[])
     })
   }, [])
 
@@ -182,6 +185,37 @@ export function AllocationForm() {
         {errors.account_code_id && (
           <p className="text-xs text-destructive">{errors.account_code_id.message}</p>
         )}
+      </div>
+
+      {/* Sub-ARO (optional) */}
+      <div className="space-y-2">
+        <Label>Sub-ARO (Funding Authority)</Label>
+        <Select
+          onValueChange={(v) => { setValue("sub_aro_id", v === "__none__" ? null : v) }}
+          value={watch("sub_aro_id") ?? "__none__"}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select Sub-ARO (optional)" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">No Sub-ARO</SelectItem>
+            {subAros.map((sa) => {
+              const remaining = parseFloat(sa.total_amount) - parseFloat(sa.allocated_amount)
+              return (
+                <SelectItem key={sa.id} value={sa.id}>
+                  {sa.sub_aro_number}
+                  {sa.aro_number ? ` (${sa.aro_number})` : ""}
+                  {" — ₱"}
+                  {remaining.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                  {" available"}
+                </SelectItem>
+              )
+            })}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          Link this allocation to a Sub-Allotment Release Order for fund authority tracking.
+        </p>
       </div>
 
       {/* Original Amount */}

@@ -83,6 +83,26 @@ const navGroups: NavGroup[] = [
           "budget.view_all",
         ],
       },
+      {
+        label: "Sub-AROs",
+        href: "/dashboard/budget/sub-aros",
+        icon: <ScrollText className="h-4 w-4" />,
+        permissions: [
+          "budget.create",
+          "budget.certify",
+          "budget.view_all",
+        ],
+      },
+      {
+        label: "Obligations",
+        href: "/dashboard/budget/obligations",
+        icon: <ScrollText className="h-4 w-4" />,
+        permissions: [
+          "budget.certify",
+          "budget.view_all",
+          "budget.approve_adj",
+        ],
+      },
     ],
   },
   {

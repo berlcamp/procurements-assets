@@ -1177,7 +1177,7 @@ No new tables — uses existing procurement tables. Each method uses different s
 
 ---
 
-## [ ] PHASE 11: Purchase Orders & Delivery
+## [x] PHASE 11: Purchase Orders & Delivery
 
 ### A. Scope
 

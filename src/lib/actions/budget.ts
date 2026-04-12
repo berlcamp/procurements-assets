@@ -12,6 +12,7 @@ import type {
   BudgetUtilizationByFundSource,
   FiscalYear,
 } from "@/types/database"
+import type { ObligationRequestWithDetails } from "@/types/database"
 import type {
   BudgetAllocationInput,
   BudgetAdjustmentInput,
@@ -40,6 +41,105 @@ export async function getFiscalYears(): Promise<FiscalYear[]> {
     .select("*")
     .order("year", { ascending: false })
   return (data ?? []) as FiscalYear[]
+}
+
+// ============================================================
+// Obligation Requests
+// ============================================================
+
+const OBR_SELECT = `
+  *,
+  purchase_request:purchase_requests(
+    id, pr_number, purpose, status, total_estimated_cost,
+    office:offices(id, name, code),
+    fiscal_year:fiscal_years(id, year)
+  ),
+  procurement:procurement_activities(id, procurement_number, procurement_method, status),
+  budget_allocation:budget_allocations(
+    id, adjusted_amount, obligated_amount,
+    fund_source:fund_sources(id, name, code),
+    account_code:account_codes(id, code, name)
+  ),
+  office:offices(id, name, code)
+` as const
+
+export async function getObligationRequests(): Promise<ObligationRequestWithDetails[]> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .schema("procurements")
+    .from("obligation_requests")
+    .select(OBR_SELECT)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    console.error("getObligationRequests error:", error)
+    return []
+  }
+
+  const obrs = (data ?? []) as ObligationRequestWithDetails[]
+
+  // Backfill certified_by profiles
+  const certifierIds = new Set<string>()
+  obrs.forEach(o => { if (o.certified_by) certifierIds.add(o.certified_by) })
+  if (certifierIds.size > 0) {
+    const { data: profiles } = await supabase
+      .schema("procurements")
+      .from("user_profiles")
+      .select("id, first_name, last_name")
+      .in("id", Array.from(certifierIds))
+    const profileMap = new Map(profiles?.map(p => [p.id, p]) ?? [])
+    obrs.forEach(o => {
+      if (o.certified_by) o.certified_by_profile = profileMap.get(o.certified_by) ?? null
+    })
+  }
+
+  return obrs
+}
+
+export interface ObligationSummary {
+  total_count: number
+  certified_count: number
+  obligated_count: number
+  cancelled_count: number
+  total_certified_amount: number
+  total_obligated_amount: number
+}
+
+export async function getObligationSummary(): Promise<ObligationSummary> {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .schema("procurements")
+    .from("obligation_requests")
+    .select("status, amount")
+    .is("deleted_at", null)
+
+  if (error || !data) {
+    console.error("getObligationSummary error:", error)
+    return {
+      total_count: 0,
+      certified_count: 0,
+      obligated_count: 0,
+      cancelled_count: 0,
+      total_certified_amount: 0,
+      total_obligated_amount: 0,
+    }
+  }
+
+  return {
+    total_count: data.length,
+    certified_count: data.filter(d => d.status === "certified").length,
+    obligated_count: data.filter(d => d.status === "obligated").length,
+    cancelled_count: data.filter(d => d.status === "cancelled").length,
+    total_certified_amount: data
+      .filter(d => d.status === "certified")
+      .reduce((s, d) => s + parseFloat(d.amount ?? 0), 0),
+    total_obligated_amount: data
+      .filter(d => d.status === "obligated")
+      .reduce((s, d) => s + parseFloat(d.amount ?? 0), 0),
+  }
 }
 
 // ============================================================
@@ -95,7 +195,8 @@ export async function getBudgetAllocations(
       office:offices(id, name, code),
       fund_source:fund_sources(id, name, code),
       account_code:account_codes(id, name, code, expense_class),
-      fiscal_year:fiscal_years(id, year, status)
+      fiscal_year:fiscal_years(id, year, status),
+      sub_aro:sub_allotment_release_orders(id, sub_aro_number, aro_number, allotment_class)
     `)
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
@@ -186,6 +287,7 @@ export async function createBudgetAllocation(
     office_id: input.office_id,
     fund_source_id: input.fund_source_id,
     account_code_id: input.account_code_id,
+    sub_aro_id: input.sub_aro_id ?? null,
     original_amount: parseFloat(input.original_amount),
     adjusted_amount: parseFloat(input.original_amount),
     obligated_amount: 0,
@@ -433,4 +535,174 @@ export async function getBudgetUtilizationByFundSource(
     return []
   }
   return (data ?? []) as BudgetUtilizationByFundSource[]
+}
+
+// ============================================================
+// Sub-ARO CRUD
+// ============================================================
+
+import type { SubAroWithDetails } from "@/types/database"
+import type { SubAroInput } from "@/lib/schemas/budget"
+
+const SUB_ARO_SELECT = `
+  *,
+  fiscal_year:fiscal_years(id, year, status),
+  fund_source:fund_sources(id, name, code)
+` as const
+
+const SUB_ARO_DETAIL_SELECT = `
+  *,
+  fiscal_year:fiscal_years(id, year, status),
+  fund_source:fund_sources(id, name, code),
+  allocations:budget_allocations(
+    *,
+    office:offices(id, name, code),
+    account_code:account_codes(id, name, code, expense_class)
+  )
+` as const
+
+export async function getSubAros(
+  fiscalYearId?: string
+): Promise<SubAroWithDetails[]> {
+  const supabase = await createClient()
+
+  let query = supabase
+    .schema("procurements")
+    .from("sub_allotment_release_orders")
+    .select(SUB_ARO_SELECT)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+
+  if (fiscalYearId) query = query.eq("fiscal_year_id", fiscalYearId)
+
+  const { data, error } = await query
+  if (error) {
+    console.error("getSubAros error:", error)
+    return []
+  }
+  return (data ?? []) as SubAroWithDetails[]
+}
+
+export async function getSubAroById(
+  id: string
+): Promise<SubAroWithDetails | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .schema("procurements")
+    .from("sub_allotment_release_orders")
+    .select(SUB_ARO_DETAIL_SELECT)
+    .eq("id", id)
+    .is("deleted_at", null)
+    .single()
+
+  if (error) {
+    console.error("getSubAroById error:", error)
+    return null
+  }
+  return data as SubAroWithDetails
+}
+
+export async function getActiveSubAros(
+  fiscalYearId?: string
+): Promise<SubAroWithDetails[]> {
+  const supabase = await createClient()
+
+  let query = supabase
+    .schema("procurements")
+    .from("sub_allotment_release_orders")
+    .select(SUB_ARO_SELECT)
+    .in("status", ["active", "draft"])
+    .is("deleted_at", null)
+    .order("sub_aro_number")
+
+  if (fiscalYearId) query = query.eq("fiscal_year_id", fiscalYearId)
+
+  const { data, error } = await query
+  if (error) {
+    console.error("getActiveSubAros error:", error)
+    return []
+  }
+  return (data ?? []) as SubAroWithDetails[]
+}
+
+export async function createSubAro(
+  input: SubAroInput
+): Promise<{ error: string | null; id?: string }> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Unauthorized" }
+
+  const { data: profile } = await supabase
+    .schema("procurements")
+    .from("user_profiles")
+    .select("division_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!profile?.division_id) return { error: "No division assigned" }
+
+  const { data, error } = await supabase
+    .schema("procurements")
+    .from("sub_allotment_release_orders")
+    .insert({
+      division_id: profile.division_id,
+      fiscal_year_id: input.fiscal_year_id,
+      sub_aro_number: input.sub_aro_number,
+      aro_number: input.aro_number ?? null,
+      allotment_class: input.allotment_class,
+      fund_source_id: input.fund_source_id,
+      releasing_office: input.releasing_office ?? null,
+      release_date: input.release_date || null,
+      validity_date: input.validity_date || null,
+      purpose: input.purpose ?? null,
+      total_amount: parseFloat(input.total_amount),
+      status: "active",
+      remarks: input.remarks ?? null,
+      created_by: user.id,
+    })
+    .select("id")
+    .single()
+
+  if (error) {
+    console.error("createSubAro error:", error)
+    return { error: error.message }
+  }
+
+  revalidatePath("/dashboard/budget")
+  revalidatePath("/dashboard/budget/sub-aros")
+  return { error: null, id: data.id }
+}
+
+export async function updateSubAro(
+  id: string,
+  input: Partial<SubAroInput>
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+
+  const updateData: Record<string, unknown> = {}
+  if (input.sub_aro_number !== undefined) updateData.sub_aro_number = input.sub_aro_number
+  if (input.aro_number !== undefined) updateData.aro_number = input.aro_number || null
+  if (input.allotment_class !== undefined) updateData.allotment_class = input.allotment_class
+  if (input.fund_source_id !== undefined) updateData.fund_source_id = input.fund_source_id
+  if (input.releasing_office !== undefined) updateData.releasing_office = input.releasing_office || null
+  if (input.release_date !== undefined) updateData.release_date = input.release_date || null
+  if (input.validity_date !== undefined) updateData.validity_date = input.validity_date || null
+  if (input.purpose !== undefined) updateData.purpose = input.purpose || null
+  if (input.total_amount !== undefined) updateData.total_amount = parseFloat(input.total_amount)
+  if (input.remarks !== undefined) updateData.remarks = input.remarks || null
+
+  const { error } = await supabase
+    .schema("procurements")
+    .from("sub_allotment_release_orders")
+    .update(updateData)
+    .eq("id", id)
+
+  if (error) {
+    console.error("updateSubAro error:", error)
+    return { error: error.message }
+  }
+
+  revalidatePath("/dashboard/budget/sub-aros")
+  return { error: null }
 }
