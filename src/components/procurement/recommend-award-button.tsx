@@ -73,7 +73,7 @@ export function RecommendAwardButton({
             <DialogTitle>Recommend Award</DialogTitle>
             <DialogDescription>
               Confirm that this bid is the Lowest Calculated Responsive Bid (LCRB) and the BAC recommends
-              awarding the contract to this supplier. The HOPE will then approve the award.
+              awarding the contract to this supplier. The Schools Division Superintendent will then approve the award.
             </DialogDescription>
           </DialogHeader>
 

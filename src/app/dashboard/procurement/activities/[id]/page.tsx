@@ -11,6 +11,8 @@ import { ProcurementReviewActions } from "@/components/procurement/procurement-r
 import { PhilgepsReferenceDialog } from "@/components/procurement/philgeps-reference-dialog"
 import { BacResolutionDialog } from "@/components/procurement/bac-resolution-dialog"
 import { ProcurementDocumentUpload } from "@/components/procurement/procurement-document-upload"
+import { PerformanceSecurityDialog } from "@/components/procurement/performance-security-dialog"
+import { ProcurementDocumentsList } from "@/components/procurement/procurement-documents-list"
 import {
   getProcurementActivityById,
   getProcurementStages,
@@ -111,6 +113,26 @@ export default async function ProcurementActivityDetailPage({
               <Button size="sm" nativeButton={false} render={<Link href={`/dashboard/procurement/activities/${id}/bids`} />}>
                 Go to Bids
               </Button>
+            </CardContent>
+          </Card>
+      )}
+
+      {/* Awaiting SDS approval — visible to non-approvers at award_recommended */}
+      {activity.status === "active" &&
+        activity.current_stage === "award_recommended" &&
+        !permissions.canApproveAward && (
+          <Card className="border-blue-300 bg-blue-50">
+            <CardContent className="py-4">
+              <p className="text-sm font-medium text-blue-900">
+                Awaiting Schools Division Superintendent Approval
+              </p>
+              <p className="text-xs text-blue-800 mt-1">
+                The BAC has recommended {activity.supplier?.name ?? "a supplier"} for award.
+                The <strong>Schools Division Superintendent</strong> (Head of Procuring
+                Entity under RA 12009) must now log in and click <strong>Approve
+                Award</strong> to advance to NOA Issued. Until then, no further action
+                is required from the BAC Secretariat or BAC members.
+              </p>
             </CardContent>
           </Card>
       )}
@@ -235,6 +257,38 @@ export default async function ProcurementActivityDetailPage({
           </Card>
       )}
 
+      {/* Performance Security — required at noa_issued before advancing to contract_signing */}
+      {activity.status === "active" &&
+        (activity.current_stage === "noa_issued" || activity.current_stage === "contract_signing") &&
+        activity.performance_security_required &&
+        permissions.canManage && (() => {
+          const isRecorded = !!activity.performance_security_received_at
+          return (
+            <Card className={isRecorded ? "border-green-300 bg-green-50" : "border-amber-300 bg-amber-50"}>
+              <CardContent className="flex items-start justify-between gap-3 py-4">
+                <div className="space-y-1">
+                  <p className={isRecorded ? "text-sm font-medium text-green-900" : "text-sm font-medium text-amber-900"}>
+                    {isRecorded ? "Performance Security on file" : "Performance Security required"}
+                  </p>
+                  <p className={isRecorded ? "text-xs text-green-800" : "text-xs text-amber-800"}>
+                    {isRecorded
+                      ? `${activity.performance_security_form?.replace(/_/g, " ")} · ${activity.performance_security_reference} · ₱${parseFloat(activity.performance_security_amount ?? "0").toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      : "RA 12009 IRR §39 requires the winning bidder to post performance security (typically 5% of contract amount in cash, or 30% as a surety bond) before the contract is signed. Record it here once received."}
+                  </p>
+                </div>
+                <PerformanceSecurityDialog
+                  procurementId={activity.id}
+                  suggestedAmount={activity.performance_security_amount}
+                  isRecorded={isRecorded}
+                  currentForm={activity.performance_security_form}
+                  currentReference={activity.performance_security_reference}
+                  currentAmount={activity.performance_security_amount}
+                />
+              </CardContent>
+            </Card>
+          )
+        })()}
+
       {/* Signed Contract upload — at contract_signing stage */}
       {activity.status === "active" &&
         activity.current_stage === "contract_signing" &&
@@ -297,7 +351,7 @@ export default async function ProcurementActivityDetailPage({
                 <p className="text-sm font-medium text-red-900">No bid has been recommended yet</p>
                 <p className="text-xs text-red-800">
                   This procurement is at the &quot;Award Recommended&quot; stage but no supplier has been
-                  selected. The BAC Chair must go to the Bids page and click <strong>Recommend Award</strong> on the winning bid before HOPE can approve.
+                  selected. The BAC Secretariat must go to the Bids page and click <strong>Recommend Award</strong> on the winning bid before the Schools Division Superintendent can approve.
                 </p>
               </div>
               <Button size="sm" nativeButton={false} render={<Link href={`/dashboard/procurement/activities/${id}/bids`} />}>
@@ -579,6 +633,51 @@ export default async function ProcurementActivityDetailPage({
                   <span>{format(new Date(activity.updated_at), "MMM d, yyyy")}</span>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Documents — all uploaded files for this procurement, downloadable */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Documents</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ProcurementDocumentsList
+                documents={[
+                  {
+                    key: "bac_resolution",
+                    label: activity.bac_resolution_number
+                      ? `BAC Resolution — ${activity.bac_resolution_number}`
+                      : "BAC Resolution",
+                    path: activity.bac_resolution_file_url,
+                    uploadedAt: activity.bac_resolution_uploaded_at,
+                    meta: activity.bac_resolution_date
+                      ? `Dated ${activity.bac_resolution_date}`
+                      : null,
+                  },
+                  {
+                    key: "noa",
+                    label: "Notice of Award",
+                    path: activity.noa_file_url,
+                    uploadedAt: activity.noa_issued_at,
+                    meta: null,
+                  },
+                  {
+                    key: "signed_contract",
+                    label: "Signed Contract",
+                    path: activity.signed_contract_file_url,
+                    uploadedAt: activity.contract_signed_at,
+                    meta: null,
+                  },
+                  {
+                    key: "ntp",
+                    label: "Notice to Proceed",
+                    path: activity.ntp_file_url,
+                    uploadedAt: activity.ntp_issued_at,
+                    meta: null,
+                  },
+                ]}
+              />
             </CardContent>
           </Card>
         </div>

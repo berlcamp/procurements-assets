@@ -9,12 +9,39 @@ export interface UserRoleSummary {
 }
 
 interface ProfileSummary {
+  first_name: string | null
+  middle_name: string | null
+  last_name: string | null
+  suffix: string | null
+  /** Convenience: assembled "First Middle Last, Suffix" or null if no name parts. */
+  full_name: string | null
   office_name: string | null
   roles: UserRoleSummary[]
 }
 
+const EMPTY: ProfileSummary = {
+  first_name: null,
+  middle_name: null,
+  last_name: null,
+  suffix: null,
+  full_name: null,
+  office_name: null,
+  roles: [],
+}
+
+function buildFullName(
+  first: string | null,
+  middle: string | null,
+  last: string | null,
+  suffix: string | null,
+): string | null {
+  const parts = [first, middle, last].filter(Boolean).join(" ")
+  if (!parts) return null
+  return suffix ? `${parts}, ${suffix}` : parts
+}
+
 export function useProfile(): ProfileSummary & { loading: boolean } {
-  const [data, setData] = useState<ProfileSummary>({ office_name: null, roles: [] })
+  const [data, setData] = useState<ProfileSummary>(EMPTY)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -26,7 +53,7 @@ export function useProfile(): ProfileSummary & { loading: boolean } {
 
       const [{ data: profile }, { data: rolesData }] = await Promise.all([
         supabase.schema("procurements").from("user_profiles")
-          .select("office:offices!office_id(name)")
+          .select("first_name, middle_name, last_name, suffix, office:offices!office_id(name)")
           .eq("id", user.id)
           .single(),
         supabase.schema("procurements").from("user_roles")
@@ -52,7 +79,20 @@ export function useProfile(): ProfileSummary & { loading: boolean } {
         }
       })
 
-      setData({ office_name, roles })
+      const first_name = profile?.first_name ?? null
+      const middle_name = profile?.middle_name ?? null
+      const last_name = profile?.last_name ?? null
+      const suffix = profile?.suffix ?? null
+
+      setData({
+        first_name,
+        middle_name,
+        last_name,
+        suffix,
+        full_name: buildFullName(first_name, middle_name, last_name, suffix),
+        office_name,
+        roles,
+      })
       setLoading(false)
     }
 

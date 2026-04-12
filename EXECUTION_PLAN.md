@@ -18,7 +18,7 @@
 | [x]    | 6     | **Planning Module (APP)**                       | **Opus** | APP auto-populated from approved PPMPs, HOPE row-level review, BAC lot finalization, INDICATIVE/FINAL, PR enablement            | APP must exist before procurement can reference it               |
 | [x]    | 7     | **Procurement Core (PR + Suppliers)**           | Sonnet   | Purchase Requests, supplier registry, budget certification                                                                      | PR is the entry point for all procurement methods                |
 | [x]    | 8     | **Procurement Workflows (SVP + Shopping)**      | **Opus** | Small Value Procurement and Shopping workflows end-to-end                                                                       | Most common methods in DepEd; quickest to deliver value          |
-| [ ]    | 9     | **Procurement Workflows (Competitive Bidding)** | **Opus** | Full competitive bidding with BAC evaluation                                                                                    | Most complex method; requires all procurement infrastructure     |
+| [x]    | 9     | **Procurement Workflows (Competitive Bidding)** | **Opus** | Full competitive bidding with BAC evaluation                                                                                    | Most complex method; requires all procurement infrastructure     |
 | [ ]    | 10    | **Procurement Workflows (Other Methods)**       | Sonnet   | Direct contracting, repeat order, emergency, negotiated, agency-to-agency                                                       | Completes RA 12009 coverage                                      |
 | [ ]    | 11    | **Purchase Orders & Delivery**                  | Sonnet   | PO creation, delivery recording, inspection, obligation tracking                                                                | Bridges procurement to asset management                          |
 | [ ]    | 12    | **Asset Management (Inventory)**                | Sonnet   | Item catalog, stock-in/out, stock cards, inventory tracking                                                                     | Assets from deliveries enter inventory first                     |
@@ -1036,7 +1036,7 @@ bid_items (id, bid_id, pr_item_id, offered_unit_cost, offered_total_cost, brand_
 
 ---
 
-## [ ] PHASE 9: Procurement Workflows (Competitive Bidding)
+## [x] PHASE 9: Procurement Workflows (Competitive Bidding)
 
 ### A. Scope
 

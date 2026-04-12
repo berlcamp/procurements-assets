@@ -2,6 +2,7 @@ import { SidebarProvider, Sidebar } from "@/components/layout/sidebar"
 import { Topbar } from "@/components/layout/topbar"
 import { ActionCountsProvider } from "@/components/layout/action-counts-provider"
 import { getUserPermissions } from "@/lib/actions/roles"
+import { createClient } from "@/lib/supabase/server"
 import {
   LayoutDashboard,
   ClipboardList,
@@ -235,9 +236,21 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const permissions = await getUserPermissions()
-  const permSet = new Set(permissions)
-  const visibleNavGroups = filterNavByPermissions(navGroups, permSet)
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const isSuperAdmin = user?.user_metadata?.is_super_admin === true
+
+  // Super admin sees every nav item — they manage everything across divisions
+  // and aren't bound by division-scoped permissions.
+  let visibleNavGroups: NavGroup[]
+  if (isSuperAdmin) {
+    visibleNavGroups = navGroups
+  } else {
+    const permissions = await getUserPermissions()
+    visibleNavGroups = filterNavByPermissions(navGroups, new Set(permissions))
+  }
 
   return (
     <SidebarProvider navGroups={visibleNavGroups} sectionTitle="Division Portal">

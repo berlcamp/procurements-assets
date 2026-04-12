@@ -100,9 +100,12 @@ export function ProcurementReviewActions({
   if (status !== "active") return null
 
   const nextStage = getNextStage(procurementMethod, currentStage)
-  // Don't show advance for award_recommended (handled by approve_award)
-  // or bac_resolution (award must be selected via Recommend Award first)
-  const showAdvance = canAdvance && nextStage && currentStage !== "award_recommended" && currentStage !== "bac_resolution"
+  // Don't show Advance at award_recommended — that transition is handled by
+  // the HOPE-only Approve Award action. Every other stage (including
+  // bac_resolution) shows the button; the DB-level stage gates raise clear
+  // exceptions if prerequisites are missing (e.g. BAC Resolution file
+  // missing, no awarded supplier).
+  const showAdvance = canAdvance && nextStage && currentStage !== "award_recommended"
   const showApproveAward = canApproveAward && currentStage === "award_recommended"
   const showFail = canFail
   // Secretariat sees a "Draft Evaluation" button at evaluation-capable stages.
@@ -218,12 +221,12 @@ export function ProcurementReviewActions({
           <DialogHeader>
             <DialogTitle>
               {action === "advance" && `Advance to ${getNextStageLabel(nextStage ?? "")}`}
-              {action === "approve_award" && "Approve Award"}
+              {action === "approve_award" && "Approve Award (Schools Division Superintendent)"}
               {action === "fail" && "Fail Procurement"}
             </DialogTitle>
             <DialogDescription>
               {action === "advance" && "This will move the procurement to the next workflow stage."}
-              {action === "approve_award" && "Approve the recommended award to the winning bidder."}
+              {action === "approve_award" && "As Schools Division Superintendent (Head of Procuring Entity), approve the BAC's recommended award to the winning bidder. The procurement will advance to NOA Issued."}
               {action === "fail" && "Mark this procurement as failed. The Purchase Request will be returned to approved status."}
             </DialogDescription>
           </DialogHeader>

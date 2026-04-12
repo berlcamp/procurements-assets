@@ -83,10 +83,12 @@ function useBreadcrumbs(): Crumb[] {
 
 function UserDropdown() {
   const { user } = useAuth()
-  const { office_name, roles } = useProfile()
+  const { full_name, office_name, roles } = useProfile()
   const router = useRouter()
 
-  const displayName = user?.user_metadata?.full_name ?? user?.email ?? "User"
+  // Prefer the editable profile name from user_profiles; fall back to the
+  // Google OAuth name in user_metadata only while the profile is loading.
+  const displayName = full_name ?? user?.user_metadata?.full_name ?? user?.email ?? "User"
   const email = user?.email ?? ""
   const initials = displayName
     .split(" ")

@@ -912,3 +912,53 @@ export async function getMyDivisionId(): Promise<string | null> {
   const profile = ctx?.profile as any
   return profile?.division_id ?? null
 }
+
+export type PerformanceSecurityForm =
+  | "cash"
+  | "bank_draft"
+  | "managers_check"
+  | "irrevocable_loc"
+  | "surety_bond"
+  | "bank_guarantee"
+
+/**
+ * BAC Secretariat records the winning bidder's performance security so the
+ * procurement can advance from noa_issued → contract_signing.
+ */
+export async function recordPerformanceSecurity(input: {
+  procurement_id: string
+  amount: string
+  form: PerformanceSecurityForm
+  reference: string
+}): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .schema("procurements")
+    .rpc("record_performance_security", {
+      p_procurement_id: input.procurement_id,
+      p_amount:         parseFloat(input.amount),
+      p_form:           input.form,
+      p_reference:      input.reference,
+    })
+
+  if (error) return { error: error.message }
+
+  const meta = await getProcMeta(input.procurement_id)
+  if (meta) {
+    await notifyRoleInDivision(
+      ["bac_chair", "bac_member", "hope"],
+      meta.division_id,
+      {
+        title: "Performance security recorded",
+        message: `The winning bidder's performance security for ${meta.procurement_number} has been recorded. The procurement can now advance to Contract Signing.`,
+        type: "info",
+        reference_type: "procurement",
+        reference_id: input.procurement_id,
+      }
+    )
+  }
+
+  revalidatePath(`/dashboard/procurement/activities/${input.procurement_id}`)
+  return { error: null }
+}
