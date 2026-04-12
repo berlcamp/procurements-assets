@@ -196,13 +196,20 @@ export function StockInDialog({
                   value={watch("item_catalog_id")}
                   onValueChange={(v) => setValue("item_catalog_id", v ?? "")}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select an item from catalog" />
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select an item from catalog">
+                      {(() => {
+                        const sel = catalogItems.find(i => i.id === watch("item_catalog_id"))
+                        return sel ? `${sel.code} — ${sel.name} (${sel.unit})` : null
+                      })()}
+                    </SelectValue>
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="w-[var(--radix-select-trigger-width)] max-w-none">
                     {catalogItems.map((item) => (
                       <SelectItem key={item.id} value={item.id}>
-                        {item.code} — {item.name} ({item.unit})
+                        <span className="font-mono text-xs">{item.code}</span>
+                        <span className="ml-1">— {item.name}</span>
+                        <span className="ml-1 text-muted-foreground">({item.unit})</span>
                       </SelectItem>
                     ))}
                   </SelectContent>

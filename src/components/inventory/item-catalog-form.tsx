@@ -97,48 +97,47 @@ export function ItemCatalogForm({
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Category *</Label>
-          <Select
-            value={category}
-            onValueChange={(v) => setValue("category", v as ItemCatalogInput["category"])}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
-            <SelectContent>
-              {ITEM_CATEGORIES.map((cat) => (
-                <SelectItem key={cat} value={cat}>
-                  {ITEM_CATEGORY_LABELS[cat]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {errors.category && (
-            <p className="text-sm text-destructive">{errors.category.message}</p>
-          )}
-        </div>
+      <div className="space-y-2">
+        <Label>Category *</Label>
+        <Select
+          value={category}
+          onValueChange={(v) => setValue("category", v as ItemCatalogInput["category"])}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select category" />
+          </SelectTrigger>
+          <SelectContent>
+            {ITEM_CATEGORIES.map((cat) => (
+              <SelectItem key={cat} value={cat}>
+                {ITEM_CATEGORY_LABELS[cat]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {errors.category && (
+          <p className="text-sm text-destructive">{errors.category.message}</p>
+        )}
+      </div>
 
-        <div className="space-y-2">
-          <Label>Account Code</Label>
-          <Select
-            value={watch("account_code_id") ?? "none"}
-            onValueChange={(v) => setValue("account_code_id", v === "none" ? null : v)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select account code" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">None</SelectItem>
-              {accountCodes.map((ac) => (
-                <SelectItem key={ac.id} value={ac.id}>
-                  {ac.code} — {ac.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="space-y-2">
+        <Label>Account Code</Label>
+        <Select
+          value={watch("account_code_id") ?? "none"}
+          onValueChange={(v) => setValue("account_code_id", v === "none" ? null : v)}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select account code" />
+          </SelectTrigger>
+          <SelectContent className="w-[var(--radix-select-trigger-width)] max-w-none">
+            <SelectItem value="none">None</SelectItem>
+            {accountCodes.map((ac) => (
+              <SelectItem key={ac.id} value={ac.id}>
+                <span className="font-mono text-xs">{ac.code}</span>
+                <span className="ml-1 text-muted-foreground">— {ac.name}</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {(category === "semi_expendable" || category === "ppe") && (
