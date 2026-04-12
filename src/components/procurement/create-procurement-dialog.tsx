@@ -28,7 +28,7 @@ export function CreateProcurementDialog() {
   const [loading, setLoading] = useState(false)
   const [prs, setPrs] = useState<PurchaseRequestWithDetails[]>([])
   const [selectedPrId, setSelectedPrId] = useState("")
-  const [method, setMethod] = useState<"svp" | "shopping" | "competitive_bidding">("svp")
+  const [method, setMethod] = useState<string>("svp")
   const [splitWarning, setSplitWarning] = useState<SplitContractWarning | null>(null)
   const router = useRouter()
 
@@ -45,13 +45,13 @@ export function CreateProcurementDialog() {
 
   const selectedPr = prs.find(p => p.id === selectedPrId)
 
-  // Default the method to the PR's procurement_mode when it matches svp/shopping
+  // Default the method to the PR's planned procurement_mode when it matches a known method
   useEffect(() => {
     if (!selectedPr) return
-    const planned = selectedPr.procurement_mode?.toLowerCase().trim()
-    if (planned === "svp") setMethod("svp")
-    else if (planned === "shopping") setMethod("shopping")
-    else if (planned === "competitive_bidding" || planned === "competitive bidding" || planned === "bidding") setMethod("competitive_bidding")
+    const planned = selectedPr.procurement_mode?.toLowerCase().trim().replace(/ /g, "_")
+    const KNOWN = ["svp", "shopping", "competitive_bidding", "direct_contracting", "repeat_order", "emergency", "negotiated", "agency_to_agency"]
+    const normalized = planned === "bidding" ? "competitive_bidding" : planned
+    if (normalized && KNOWN.includes(normalized)) setMethod(normalized)
   }, [selectedPr])
 
   useEffect(() => {
@@ -84,7 +84,7 @@ export function CreateProcurementDialog() {
     setLoading(true)
     const result = await createProcurementActivity({
       purchase_request_id: selectedPrId,
-      procurement_method: method,
+      procurement_method: method as "svp" | "shopping" | "competitive_bidding" | "direct_contracting" | "repeat_order" | "emergency" | "negotiated" | "agency_to_agency",
     })
     setLoading(false)
 
@@ -167,9 +167,9 @@ export function CreateProcurementDialog() {
           {/* Planned-mode mismatch warning */}
           {selectedPr?.procurement_mode &&
             (() => {
-              const planned = selectedPr.procurement_mode.toLowerCase().trim()
-              const normalizedPlanned = planned === "competitive bidding" || planned === "bidding" ? "competitive_bidding" : planned
-              if (normalizedPlanned !== method && ["svp", "shopping", "competitive_bidding"].includes(normalizedPlanned)) {
+              const planned = selectedPr.procurement_mode.toLowerCase().trim().replace(/ /g, "_")
+              const normalizedPlanned = planned === "bidding" ? "competitive_bidding" : planned === "small_value" ? "svp" : planned
+              if (normalizedPlanned !== method && normalizedPlanned) {
                 return (
                   <div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
                     <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
@@ -219,44 +219,52 @@ export function CreateProcurementDialog() {
           {/* Method Selector */}
           <div className="space-y-2">
             <Label>Procurement Method</Label>
-            <div className="flex gap-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="method"
-                  value="svp"
-                  checked={method === "svp"}
-                  onChange={() => setMethod("svp")}
-                  className="accent-primary"
-                />
-                <span className="text-sm">Small Value Procurement (SVP)</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="method"
-                  value="shopping"
-                  checked={method === "shopping"}
-                  onChange={() => setMethod("shopping")}
-                  className="accent-primary"
-                />
-                <span className="text-sm">Shopping</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="method"
-                  value="competitive_bidding"
-                  checked={method === "competitive_bidding"}
-                  onChange={() => setMethod("competitive_bidding")}
-                  className="accent-primary"
-                />
-                <span className="text-sm">Competitive Bidding</span>
-              </label>
-            </div>
+            <select
+              value={method}
+              onChange={e => setMethod(e.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <optgroup label="Competitive Methods">
+                <option value="svp">Small Value Procurement (SVP)</option>
+                <option value="shopping">Shopping</option>
+                <option value="competitive_bidding">Competitive Bidding</option>
+              </optgroup>
+              <optgroup label="Alternative Methods">
+                <option value="direct_contracting">Direct Contracting</option>
+                <option value="repeat_order">Repeat Order</option>
+                <option value="emergency">Emergency Purchase</option>
+                <option value="negotiated">Negotiated Procurement</option>
+                <option value="agency_to_agency">Agency-to-Agency</option>
+              </optgroup>
+            </select>
             {method === "competitive_bidding" && (
               <p className="text-xs text-muted-foreground">
                 For procurements above SVP/Shopping thresholds. Requires BAC evaluation, PhilGEPS publication, and full 17-step workflow.
+              </p>
+            )}
+            {method === "direct_contracting" && (
+              <p className="text-xs text-muted-foreground">
+                For proprietary items or exclusive dealers. Requires written justification and BAC recommendation.
+              </p>
+            )}
+            {method === "repeat_order" && (
+              <p className="text-xs text-muted-foreground">
+                Repeat of an existing contract within 6 months, with price increase ≤ 25%.
+              </p>
+            )}
+            {method === "emergency" && (
+              <p className="text-xs text-muted-foreground">
+                For imminent danger or calamity. Purchase first, documentation post-facto within 30 days.
+              </p>
+            )}
+            {method === "negotiated" && (
+              <p className="text-xs text-muted-foreground">
+                Requires 2 prior failed biddings on this PR. BAC negotiates terms with supplier.
+              </p>
+            )}
+            {method === "agency_to_agency" && (
+              <p className="text-xs text-muted-foreground">
+                Procurement from another government agency. Requires MOA/MOU. No BAC required.
               </p>
             )}
           </div>

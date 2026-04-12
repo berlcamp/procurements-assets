@@ -351,7 +351,11 @@ export async function createProcurementActivity(
 
   const { data, error } = await supabase.schema("procurements").rpc(
     "create_procurement_activity",
-    { p_pr_id: input.purchase_request_id, p_method: input.procurement_method }
+    {
+      p_pr_id: input.purchase_request_id,
+      p_method: input.procurement_method,
+      p_reference_procurement_id: input.reference_procurement_id ?? null,
+    }
   )
 
   if (error) return { id: null, error: error.message }
@@ -961,4 +965,148 @@ export async function recordPerformanceSecurity(input: {
 
   revalidatePath(`/dashboard/procurement/activities/${input.procurement_id}`)
   return { error: null }
+}
+
+// ============================================================
+// Phase 10 — Alternative methods: supplier assignment + metadata
+// ============================================================
+
+export async function setProcurementSupplier(input: {
+  procurement_id: string
+  supplier_id: string
+  contract_amount: string
+}): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  const { error } = await supabase.schema("procurements").rpc(
+    "set_procurement_supplier",
+    {
+      p_procurement_id:  input.procurement_id,
+      p_supplier_id:     input.supplier_id,
+      p_contract_amount: parseFloat(input.contract_amount),
+    }
+  )
+  if (error) return { error: error.message }
+  revalidatePath(`/dashboard/procurement/activities/${input.procurement_id}`)
+  return { error: null }
+}
+
+export async function setDirectContractingJustification(input: {
+  procurement_id: string
+  justification_type: string
+  justification_text: string
+  price_reasonableness_note: string
+}): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  const { error } = await supabase.schema("procurements").rpc(
+    "set_direct_contracting_justification",
+    {
+      p_procurement_id:       input.procurement_id,
+      p_justification_type:   input.justification_type,
+      p_justification_text:   input.justification_text,
+      p_price_reasonableness: input.price_reasonableness_note,
+    }
+  )
+  if (error) return { error: error.message }
+  revalidatePath(`/dashboard/procurement/activities/${input.procurement_id}`)
+  return { error: null }
+}
+
+export async function setRepeatOrderReference(input: {
+  procurement_id: string
+  reference_procurement_id: string
+  price_increase_percentage: string
+}): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  const { error } = await supabase.schema("procurements").rpc(
+    "set_repeat_order_reference",
+    {
+      p_procurement_id:            input.procurement_id,
+      p_reference_procurement_id:  input.reference_procurement_id,
+      p_price_increase_percentage: parseFloat(input.price_increase_percentage),
+    }
+  )
+  if (error) return { error: error.message }
+  revalidatePath(`/dashboard/procurement/activities/${input.procurement_id}`)
+  return { error: null }
+}
+
+export async function setEmergencyDetails(input: {
+  procurement_id: string
+  emergency_type: string
+  emergency_justification: string
+  emergency_purchase_date: string
+}): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  const { error } = await supabase.schema("procurements").rpc(
+    "set_emergency_details",
+    {
+      p_procurement_id:         input.procurement_id,
+      p_emergency_type:         input.emergency_type,
+      p_emergency_justification: input.emergency_justification,
+      p_emergency_purchase_date: input.emergency_purchase_date,
+    }
+  )
+  if (error) return { error: error.message }
+  revalidatePath(`/dashboard/procurement/activities/${input.procurement_id}`)
+  return { error: null }
+}
+
+export async function setNegotiationDetails(input: {
+  procurement_id: string
+  negotiation_records_note: string
+}): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  const { error } = await supabase.schema("procurements").rpc(
+    "set_negotiation_details",
+    {
+      p_procurement_id:      input.procurement_id,
+      p_negotiation_records: input.negotiation_records_note,
+    }
+  )
+  if (error) return { error: error.message }
+  revalidatePath(`/dashboard/procurement/activities/${input.procurement_id}`)
+  return { error: null }
+}
+
+export async function setAgencyToAgencyDetails(input: {
+  procurement_id: string
+  partner_agency_name: string
+  moa_reference: string
+  moa_date: string
+}): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  const { error } = await supabase.schema("procurements").rpc(
+    "set_agency_to_agency_details",
+    {
+      p_procurement_id: input.procurement_id,
+      p_partner_agency: input.partner_agency_name,
+      p_moa_reference:  input.moa_reference,
+      p_moa_date:       input.moa_date,
+    }
+  )
+  if (error) return { error: error.message }
+  revalidatePath(`/dashboard/procurement/activities/${input.procurement_id}`)
+  return { error: null }
+}
+
+export async function getFailedProcurementsForPr(
+  prId: string
+): Promise<{ count: number; procurements: Array<{ id: string; procurement_number: string; procurement_method: string; failure_reason: string | null; created_at: string }> }> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .schema("procurements")
+    .from("procurement_activities")
+    .select("id, procurement_number, procurement_method, failure_reason, created_at")
+    .eq("purchase_request_id", prId)
+    .eq("status", "failed")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    console.error("getFailedProcurementsForPr error:", error)
+    return { count: 0, procurements: [] }
+  }
+
+  const rows = (data ?? []) as Array<{ id: string; procurement_number: string; procurement_method: string; failure_reason: string | null; created_at: string }>
+  return { count: rows.length, procurements: rows }
 }

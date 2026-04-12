@@ -994,6 +994,25 @@ export interface ProcurementActivity {
   ntp_file_url: string | null
   ntp_issued_at: string | null
   ntp_uploaded_by: string | null
+  // Direct Contracting
+  justification_type: string | null
+  justification_text: string | null
+  price_reasonableness_note: string | null
+  // Repeat Order
+  reference_procurement_id: string | null
+  original_contract_date: string | null
+  price_increase_percentage: string | null
+  // Emergency
+  emergency_type: string | null
+  emergency_justification: string | null
+  emergency_purchase_date: string | null
+  emergency_review_deadline: string | null
+  // Negotiated
+  negotiation_records_note: string | null
+  // Agency-to-Agency
+  partner_agency_name: string | null
+  moa_reference: string | null
+  moa_date: string | null
   status: ProcurementActivityStatus
   deleted_at: string | null
   created_at: string

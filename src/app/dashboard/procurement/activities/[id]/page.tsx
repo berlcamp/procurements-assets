@@ -13,6 +13,8 @@ import { BacResolutionDialog } from "@/components/procurement/bac-resolution-dia
 import { ProcurementDocumentUpload } from "@/components/procurement/procurement-document-upload"
 import { PerformanceSecurityDialog } from "@/components/procurement/performance-security-dialog"
 import { ProcurementDocumentsList } from "@/components/procurement/procurement-documents-list"
+import { SupplierAssignmentDialog } from "@/components/procurement/supplier-assignment-dialog"
+import { MethodSpecificFields } from "@/components/procurement/method-specific-fields"
 import {
   getProcurementActivityById,
   getProcurementStages,
@@ -60,6 +62,7 @@ export default async function ProcurementActivityDetailPage({
   )
 
   const isCompetitiveBidding = activity.procurement_method === "competitive_bidding"
+  const isCompetitiveMethod = ["svp", "shopping", "competitive_bidding"].includes(activity.procurement_method)
   const minBidsRequired = isCompetitiveBidding ? 2 : 3
 
   const EVAL_STAGES = [
@@ -425,36 +428,87 @@ export default async function ProcurementActivityDetailPage({
             </Card>
           )}
 
-          {/* Bid / Quotation Summary */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Bids / Quotations</CardTitle>
-                <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/dashboard/procurement/activities/${id}/bids`} />}>
-                  Manage Bids
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Total Bids</span>
-                <span className="font-medium">{bids.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Responsive</span>
-                <span className="font-medium">{responsiveBids.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Evaluated</span>
-                <span className="font-medium">{bids.filter(b => b.status === "evaluated" || b.status === "awarded").length}</span>
-              </div>
-              {bids.length < minBidsRequired && activity.status === "active" && (
-                <p className="text-xs text-amber-600 pt-1">
-                  Minimum {minBidsRequired} bids required before award. {minBidsRequired - bids.length} more needed.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+          {/* Bid / Quotation Summary — only for competitive methods (SVP, Shopping, CB) */}
+          {isCompetitiveMethod && (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Bids / Quotations</CardTitle>
+                  <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/dashboard/procurement/activities/${id}/bids`} />}>
+                    Manage Bids
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total Bids</span>
+                  <span className="font-medium">{bids.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Responsive</span>
+                  <span className="font-medium">{responsiveBids.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Evaluated</span>
+                  <span className="font-medium">{bids.filter(b => b.status === "evaluated" || b.status === "awarded").length}</span>
+                </div>
+                {bids.length < minBidsRequired && activity.status === "active" && (
+                  <p className="text-xs text-amber-600 pt-1">
+                    Minimum {minBidsRequired} bids required before award. {minBidsRequired - bids.length} more needed.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Supplier Assignment — for non-competitive methods */}
+          {!isCompetitiveMethod && activity.status === "active" && permissions.canManage && (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Supplier</CardTitle>
+                  <SupplierAssignmentDialog
+                    procurementId={activity.id}
+                    abcAmount={activity.abc_amount}
+                    currentSupplierId={activity.awarded_supplier_id}
+                    currentSupplierName={activity.supplier?.name ?? null}
+                    currentContractAmount={activity.contract_amount}
+                  />
+                </div>
+              </CardHeader>
+              <CardContent className="text-sm">
+                {activity.awarded_supplier_id ? (
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Assigned Supplier</span>
+                      <span className="font-medium">{activity.supplier?.name ?? "—"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Contract Amount</span>
+                      <AmountDisplay amount={activity.contract_amount ?? "0"} className="font-semibold" />
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-xs">No supplier assigned yet. Use the button above.</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Method-Specific Fields — for alternative methods */}
+          {!isCompetitiveMethod && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Method Details</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <MethodSpecificFields
+                  activity={activity}
+                  canEdit={permissions.canManage && activity.status === "active"}
+                />
+              </CardContent>
+            </Card>
+          )}
 
           {/* Award Details (shown when awarded) */}
           {activity.awarded_supplier_id && (

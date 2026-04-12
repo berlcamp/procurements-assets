@@ -59,11 +59,39 @@ const COMPETITIVE_BIDDING_STAGE_ORDER = [
   "award_recommended", "award_approved",
   "noa_issued", "contract_signing", "ntp_issued", "completed",
 ]
+const DIRECT_CONTRACTING_STAGE_ORDER = [
+  "created", "justification_prepared", "bac_recommendation",
+  "hope_approval", "contract_signing", "completed",
+]
+const REPEAT_ORDER_STAGE_ORDER = [
+  "created", "reference_verification", "price_verification",
+  "bac_confirmation", "po_issued", "completed",
+]
+const EMERGENCY_STAGE_ORDER = [
+  "created", "emergency_purchase", "purchase_documentation",
+  "bac_post_review", "hope_confirmation", "completed",
+]
+const NEGOTIATED_STAGE_ORDER = [
+  "created", "eligibility_verification", "bac_negotiation",
+  "hope_approval", "contract_signing", "completed",
+]
+const AGENCY_TO_AGENCY_STAGE_ORDER = [
+  "created", "agency_identification", "moa_execution", "completed",
+]
+
+const STAGE_ORDER_MAP: Record<string, string[]> = {
+  svp:                 SVP_STAGE_ORDER,
+  shopping:            SHOPPING_STAGE_ORDER,
+  competitive_bidding: COMPETITIVE_BIDDING_STAGE_ORDER,
+  direct_contracting:  DIRECT_CONTRACTING_STAGE_ORDER,
+  repeat_order:        REPEAT_ORDER_STAGE_ORDER,
+  emergency:           EMERGENCY_STAGE_ORDER,
+  negotiated:          NEGOTIATED_STAGE_ORDER,
+  agency_to_agency:    AGENCY_TO_AGENCY_STAGE_ORDER,
+}
 
 function getNextStage(method: string, current: string): string | null {
-  const stages = method === "svp" ? SVP_STAGE_ORDER
-    : method === "competitive_bidding" ? COMPETITIVE_BIDDING_STAGE_ORDER
-    : SHOPPING_STAGE_ORDER
+  const stages = STAGE_ORDER_MAP[method] ?? SVP_STAGE_ORDER
   const idx = stages.indexOf(current)
   if (idx === -1 || idx >= stages.length - 1) return null
   return stages[idx + 1]
@@ -100,13 +128,12 @@ export function ProcurementReviewActions({
   if (status !== "active") return null
 
   const nextStage = getNextStage(procurementMethod, currentStage)
-  // Don't show Advance at award_recommended — that transition is handled by
-  // the HOPE-only Approve Award action. Every other stage (including
-  // bac_resolution) shows the button; the DB-level stage gates raise clear
-  // exceptions if prerequisites are missing (e.g. BAC Resolution file
-  // missing, no awarded supplier).
-  const showAdvance = canAdvance && nextStage && currentStage !== "award_recommended"
-  const showApproveAward = canApproveAward && currentStage === "award_recommended"
+  // SDS/HOPE approval stages — handled by the Approve Award action, not the
+  // generic Advance button. This covers both the standard competitive flow
+  // (award_recommended) and alternative-method SDS approval stages.
+  const SDS_APPROVAL_STAGES = ["award_recommended", "hope_approval", "hope_confirmation"]
+  const showAdvance = canAdvance && nextStage && !SDS_APPROVAL_STAGES.includes(currentStage)
+  const showApproveAward = canApproveAward && SDS_APPROVAL_STAGES.includes(currentStage)
   const showFail = canFail
   // Secretariat sees a "Draft Evaluation" button at evaluation-capable stages.
   // BAC voting members see a "Confirm Evaluation" button at the same stages.

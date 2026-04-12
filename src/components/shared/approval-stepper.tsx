@@ -102,6 +102,49 @@ export const COMPETITIVE_BIDDING_STEPS: Omit<WorkflowStep, "status">[] = [
   { id: "completed",                  label: "Completed",                  description: "Procurement completed" },
 ]
 
+export const DIRECT_CONTRACTING_STEPS: Omit<WorkflowStep, "status">[] = [
+  { id: "created",                label: "Created",                description: "Procurement activity initiated" },
+  { id: "justification_prepared", label: "Justification Prepared", description: "Written justification and price reasonableness" },
+  { id: "bac_recommendation",     label: "BAC Recommendation",     description: "BAC reviews and recommends" },
+  { id: "hope_approval",          label: "SDS Approval",           description: "Schools Division Superintendent approves" },
+  { id: "contract_signing",       label: "Contract Signing",       description: "Contract executed with supplier" },
+  { id: "completed",              label: "Completed",              description: "Procurement completed" },
+]
+
+export const REPEAT_ORDER_STEPS: Omit<WorkflowStep, "status">[] = [
+  { id: "created",                label: "Created",                description: "Procurement activity initiated" },
+  { id: "reference_verification", label: "Reference Verification", description: "Link and verify original contract" },
+  { id: "price_verification",     label: "Price Verification",     description: "Verify price increase ≤ 25%" },
+  { id: "bac_confirmation",       label: "BAC Confirmation",       description: "BAC confirms the repeat order" },
+  { id: "po_issued",              label: "PO Issued",              description: "Purchase Order issued" },
+  { id: "completed",              label: "Completed",              description: "Procurement completed" },
+]
+
+export const EMERGENCY_STEPS: Omit<WorkflowStep, "status">[] = [
+  { id: "created",                label: "Created",                 description: "Emergency procurement initiated" },
+  { id: "emergency_purchase",     label: "Emergency Purchase",      description: "Immediate purchase executed" },
+  { id: "purchase_documentation", label: "Purchase Documentation",  description: "Post-facto documentation prepared" },
+  { id: "bac_post_review",        label: "BAC Post-Review",         description: "BAC reviews within 30 days" },
+  { id: "hope_confirmation",      label: "SDS Confirmation",        description: "Schools Division Superintendent confirms" },
+  { id: "completed",              label: "Completed",               description: "Procurement completed" },
+]
+
+export const NEGOTIATED_STEPS: Omit<WorkflowStep, "status">[] = [
+  { id: "created",                  label: "Created",                  description: "Procurement activity initiated" },
+  { id: "eligibility_verification", label: "Eligibility Verification", description: "Verify 2 prior failed biddings" },
+  { id: "bac_negotiation",          label: "BAC Negotiation",          description: "BAC negotiates terms with supplier" },
+  { id: "hope_approval",            label: "SDS Approval",             description: "Schools Division Superintendent approves" },
+  { id: "contract_signing",         label: "Contract Signing",         description: "Contract executed with supplier" },
+  { id: "completed",                label: "Completed",                description: "Procurement completed" },
+]
+
+export const AGENCY_TO_AGENCY_STEPS: Omit<WorkflowStep, "status">[] = [
+  { id: "created",               label: "Created",               description: "Procurement activity initiated" },
+  { id: "agency_identification", label: "Agency Identification", description: "Identify partner government agency" },
+  { id: "moa_execution",         label: "MOA/MOU Execution",     description: "MOA/MOU signed and executed" },
+  { id: "completed",             label: "Completed",             description: "Procurement completed" },
+]
+
 /**
  * Build step statuses for a procurement activity based on its method and current stage.
  */
@@ -110,9 +153,17 @@ export function buildProcurementSteps(
   currentStage: string,
   stageHistory: { stage: string; status: string; completed_at: string | null; completed_by: string | null; notes: string | null }[] = []
 ): WorkflowStep[] {
-  const template = method === "svp" ? SVP_STEPS
-    : method === "competitive_bidding" ? COMPETITIVE_BIDDING_STEPS
-    : SHOPPING_STEPS
+  const TEMPLATES: Record<string, Omit<WorkflowStep, "status">[]> = {
+    svp:                 SVP_STEPS,
+    shopping:            SHOPPING_STEPS,
+    competitive_bidding: COMPETITIVE_BIDDING_STEPS,
+    direct_contracting:  DIRECT_CONTRACTING_STEPS,
+    repeat_order:        REPEAT_ORDER_STEPS,
+    emergency:           EMERGENCY_STEPS,
+    negotiated:          NEGOTIATED_STEPS,
+    agency_to_agency:    AGENCY_TO_AGENCY_STEPS,
+  }
+  const template = TEMPLATES[method] ?? SVP_STEPS
   const historyMap = new Map(stageHistory.map(s => [s.stage, s]))
 
   let foundCurrent = false

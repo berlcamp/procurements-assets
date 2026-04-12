@@ -173,9 +173,14 @@ export const BUSINESS_TYPE_OPTIONS = [
 
 export const createProcurementSchema = z.object({
   purchase_request_id: z.string().uuid("Purchase Request is required"),
-  procurement_method: z.enum(["svp", "shopping", "competitive_bidding"], {
+  procurement_method: z.enum([
+    "svp", "shopping", "competitive_bidding",
+    "direct_contracting", "repeat_order", "emergency",
+    "negotiated", "agency_to_agency",
+  ], {
     message: "Procurement method is required",
   }),
+  reference_procurement_id: z.string().uuid().optional().nullable(),
 })
 
 export type CreateProcurementInput = z.infer<typeof createProcurementSchema>
@@ -349,4 +354,47 @@ export const COMPETITIVE_BIDDING_STAGE_LABELS: Record<string, string> = {
   contract_signing:           "Contract Signing",
   ntp_issued:                 "Notice to Proceed",
   completed:                  "Completed",
+}
+
+export const DIRECT_CONTRACTING_STAGE_LABELS: Record<string, string> = {
+  created:                "Created",
+  justification_prepared: "Justification Prepared",
+  bac_recommendation:     "BAC Recommendation",
+  hope_approval:          "SDS Approval",
+  contract_signing:       "Contract Signing",
+  completed:              "Completed",
+}
+
+export const REPEAT_ORDER_STAGE_LABELS: Record<string, string> = {
+  created:                "Created",
+  reference_verification: "Reference Verification",
+  price_verification:     "Price Verification",
+  bac_confirmation:       "BAC Confirmation",
+  po_issued:              "Purchase Order Issued",
+  completed:              "Completed",
+}
+
+export const EMERGENCY_STAGE_LABELS: Record<string, string> = {
+  created:                 "Created",
+  emergency_purchase:      "Emergency Purchase",
+  purchase_documentation:  "Purchase Documentation",
+  bac_post_review:         "BAC Post-Review",
+  hope_confirmation:       "SDS Confirmation",
+  completed:               "Completed",
+}
+
+export const NEGOTIATED_STAGE_LABELS: Record<string, string> = {
+  created:                   "Created",
+  eligibility_verification:  "Eligibility Verification",
+  bac_negotiation:           "BAC Negotiation",
+  hope_approval:             "SDS Approval",
+  contract_signing:          "Contract Signing",
+  completed:                 "Completed",
+}
+
+export const AGENCY_TO_AGENCY_STAGE_LABELS: Record<string, string> = {
+  created:               "Created",
+  agency_identification: "Agency Identification",
+  moa_execution:         "MOA/MOU Execution",
+  completed:             "Completed",
 }
