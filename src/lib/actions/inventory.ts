@@ -183,20 +183,24 @@ export async function getStockMovements(
 
 export async function getReorderAlerts(): Promise<InventoryWithDetails[]> {
   const supabase = await createClient()
+  // PostgREST doesn't support column-to-column comparison,
+  // so fetch all with reorder_point > 0 and filter in JS
   const { data, error } = await supabase
     .schema("procurements")
     .from("inventory")
     .select(INVENTORY_SELECT)
     .is("deleted_at", null)
     .gt("reorder_point", 0)
-    .filter("current_quantity", "lte", "reorder_point")
     .order("current_quantity", { ascending: true })
 
   if (error) {
     console.error("getReorderAlerts error:", error)
     return []
   }
-  return (data ?? []) as InventoryWithDetails[]
+
+  return ((data ?? []) as InventoryWithDetails[]).filter(
+    (inv) => parseFloat(inv.current_quantity) <= parseFloat(inv.reorder_point)
+  )
 }
 
 export async function getInventorySummary(): Promise<{
@@ -207,7 +211,7 @@ export async function getInventorySummary(): Promise<{
 }> {
   const supabase = await createClient()
 
-  const [catalogResult, inventoryResult, lowStockResult, deliveriesResult] =
+  const [catalogResult, inventoryResult, reorderAlerts, deliveriesResult] =
     await Promise.all([
       supabase
         .schema("procurements")
@@ -220,20 +224,14 @@ export async function getInventorySummary(): Promise<{
         .from("inventory")
         .select("id", { count: "exact", head: true })
         .is("deleted_at", null),
-      supabase
-        .schema("procurements")
-        .from("inventory")
-        .select("id", { count: "exact", head: true })
-        .is("deleted_at", null)
-        .gt("reorder_point", 0)
-        .filter("current_quantity", "lte", "reorder_point"),
+      getReorderAlerts(),
       getDeliveriesReadyForStockIn(),
     ])
 
   return {
     totalCatalogItems: catalogResult.count ?? 0,
     totalInventoryRecords: inventoryResult.count ?? 0,
-    lowStockCount: lowStockResult.count ?? 0,
+    lowStockCount: reorderAlerts.length,
     deliveriesReadyCount: deliveriesResult.length,
   }
 }
