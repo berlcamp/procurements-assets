@@ -22,6 +22,10 @@ import {
   ClipboardCheck,
   Truck,
   ListTree,
+  Boxes,
+  ArrowRightLeft,
+  Trash2,
+  FileBarChart,
 } from "lucide-react"
 import type { NavGroup } from "@/components/layout/sidebar"
 
@@ -175,10 +179,10 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: "Inventory",
+    label: "Inventory & Assets",
     items: [
       {
-        label: "Assets",
+        label: "Overview",
         href: "/dashboard/assets",
         icon: <Package className="h-4 w-4" />,
         permissions: [
@@ -188,6 +192,30 @@ const navGroups: NavGroup[] = [
           "asset.dispose",
           "inventory.manage",
         ],
+      },
+      {
+        label: "Property Registry",
+        href: "/dashboard/assets/registry",
+        icon: <Boxes className="h-4 w-4" />,
+        permissions: ["asset.manage", "asset.view_own"],
+      },
+      {
+        label: "Assignments",
+        href: "/dashboard/assets/assignments",
+        icon: <ArrowRightLeft className="h-4 w-4" />,
+        permissions: ["asset.assign", "asset.manage"],
+      },
+      {
+        label: "Disposal",
+        href: "/dashboard/assets/disposal",
+        icon: <Trash2 className="h-4 w-4" />,
+        permissions: ["asset.dispose", "asset.manage"],
+      },
+      {
+        label: "Asset Reports",
+        href: "/dashboard/assets/reports",
+        icon: <FileBarChart className="h-4 w-4" />,
+        permissions: ["asset.manage", "asset.view_own"],
       },
       {
         label: "Requests",

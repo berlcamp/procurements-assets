@@ -1317,3 +1317,86 @@ export interface StockMovementWithDetails extends StockMovement {
   } | null
   created_by_profile?: { id: string; first_name: string; last_name: string } | null
 }
+
+// ============================================================
+// Phase 13: Asset Management — Property types
+// ============================================================
+
+export type AssetType = 'semi_expendable' | 'ppe'
+export type ConditionStatus = 'serviceable' | 'needs_repair' | 'unserviceable' | 'disposed'
+export type AssetStatus = 'active' | 'transferred' | 'for_disposal' | 'disposed' | 'lost' | 'donated'
+export type AssignmentDocType = 'par' | 'ics'
+
+export interface Asset {
+  id: string
+  division_id: string
+  property_number: string
+  item_catalog_id: string
+  office_id: string
+  description: string | null
+  brand_model: string | null
+  serial_number: string | null
+  acquisition_date: string
+  acquisition_cost: string
+  source_po_id: string | null
+  source_delivery_id: string | null
+  source_delivery_item_id: string | null
+  asset_type: AssetType
+  condition_status: ConditionStatus
+  current_custodian_id: string | null
+  location: string | null
+  useful_life_years: number | null
+  residual_value: string
+  accumulated_depreciation: string
+  book_value: string
+  status: AssetStatus
+  disposal_date: string | null
+  disposal_method: string | null
+  disposal_reference: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+export interface AssetAssignment {
+  id: string
+  division_id: string
+  asset_id: string
+  custodian_id: string
+  office_id: string
+  document_type: AssignmentDocType
+  document_number: string
+  assigned_date: string
+  returned_date: string | null
+  remarks: string | null
+  assigned_by: string | null
+  is_current: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface DepreciationRecord {
+  id: string
+  asset_id: string
+  period_year: number
+  period_month: number
+  depreciation_amount: string
+  accumulated_amount: string
+  book_value: string
+  office_id: string
+  created_at: string
+}
+
+export interface AssetWithDetails extends Asset {
+  item_catalog?: ItemCatalogWithDetails | null
+  office?: Pick<Office, 'id' | 'name' | 'code'> | null
+  current_custodian_profile?: { id: string; first_name: string; last_name: string } | null
+}
+
+export interface AssetAssignmentWithDetails extends AssetAssignment {
+  asset?: Pick<Asset, 'id' | 'property_number' | 'description' | 'asset_type' | 'status'> | null
+  custodian_profile?: { id: string; first_name: string; last_name: string } | null
+  assigned_by_profile?: { id: string; first_name: string; last_name: string } | null
+  office?: Pick<Office, 'id' | 'name' | 'code'> | null
+}

@@ -21,6 +21,7 @@ import {
   getInventorySummary,
   getReorderAlerts,
 } from "@/lib/actions/inventory"
+import { getAssetSummary } from "@/lib/actions/assets"
 import { Forbidden } from "@/components/shared/forbidden"
 import {
   Package,
@@ -28,6 +29,10 @@ import {
   ClipboardList,
   BarChart3,
   ArrowRight,
+  Boxes,
+  DollarSign,
+  Trash2,
+  FileText,
 } from "lucide-react"
 
 export default async function AssetDashboardPage() {
@@ -47,18 +52,19 @@ export default async function AssetDashboardPage() {
     ["inventory.manage", "asset.manage"].includes(p)
   )
 
-  const [summary, reorderAlerts] = await Promise.all([
+  const [summary, reorderAlerts, assetSummary] = await Promise.all([
     getInventorySummary(),
     getReorderAlerts(),
+    getAssetSummary(),
   ])
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Inventory</h1>
+          <h1 className="text-2xl font-bold">Inventory & Assets</h1>
           <p className="text-muted-foreground">
-            Track stock levels, manage items, and monitor reorder alerts.
+            Track stock levels, manage property assets, and monitor alerts.
           </p>
         </div>
       </div>
@@ -112,8 +118,59 @@ export default async function AssetDashboardPage() {
         </Card>
       </div>
 
+      {/* Asset Summary Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Assets</CardTitle>
+            <Boxes className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{assetSummary.totalActiveAssets}</div>
+            <p className="text-xs text-muted-foreground">Registered PPE &amp; semi-expendable</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Book Value</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {assetSummary.totalBookValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <p className="text-xs text-muted-foreground">Active assets book value</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">For Disposal</CardTitle>
+            <Trash2 className="h-4 w-4 text-orange-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">
+              {assetSummary.forDisposalCount}
+            </div>
+            <p className="text-xs text-muted-foreground">Pending disposal approval</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending Registration</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{assetSummary.pendingRegistrationCount}</div>
+            <p className="text-xs text-muted-foreground">Delivery items to register</p>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Quick Links */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
         <Card>
           <CardContent className="pt-6">
             <Button
@@ -122,7 +179,33 @@ export default async function AssetDashboardPage() {
               nativeButton={false}
               render={<Link href="/dashboard/assets/inventory" />}
             >
-              View Inventory
+              Inventory
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <Button
+              variant="outline"
+              className="w-full justify-between"
+              nativeButton={false}
+              render={<Link href="/dashboard/assets/registry" />}
+            >
+              Registry
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <Button
+              variant="outline"
+              className="w-full justify-between"
+              nativeButton={false}
+              render={<Link href="/dashboard/assets/assignments" />}
+            >
+              Assignments
               <ArrowRight className="h-4 w-4" />
             </Button>
           </CardContent>
@@ -148,9 +231,22 @@ export default async function AssetDashboardPage() {
                   variant="outline"
                   className="w-full justify-between"
                   nativeButton={false}
-                  render={<Link href="/dashboard/assets/inventory/physical-count" />}
+                  render={<Link href="/dashboard/assets/disposal" />}
                 >
-                  Physical Count
+                  Disposal
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <Button
+                  variant="outline"
+                  className="w-full justify-between"
+                  nativeButton={false}
+                  render={<Link href="/dashboard/assets/reports" />}
+                >
+                  Reports
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </CardContent>
