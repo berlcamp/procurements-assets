@@ -1402,3 +1402,73 @@ export interface AssetAssignmentWithDetails extends AssetAssignment {
   assigned_by_profile?: { id: string; first_name: string; last_name: string } | null
   office?: Pick<Office, 'id' | 'name' | 'code'> | null
 }
+
+// ============================================================
+// Phase 14: Request System
+// ============================================================
+
+export type RequestType = 'supply' | 'equipment' | 'service' | 'procurement'
+export type RequestUrgency = 'low' | 'normal' | 'high' | 'emergency'
+export type RequestStatus =
+  | 'draft' | 'submitted' | 'supervisor_approved'
+  | 'processing' | 'partially_fulfilled' | 'fulfilled'
+  | 'rejected' | 'cancelled'
+export type FulfillmentType = 'stock' | 'procurement' | 'mixed'
+
+export interface SupplyRequest {
+  id: string
+  division_id: string
+  request_number: string
+  request_type: RequestType
+  office_id: string
+  requested_by: string
+  purpose: string
+  urgency: RequestUrgency
+  status: RequestStatus
+  supervisor_id: string | null
+  supervisor_approved_at: string | null
+  supervisor_remarks: string | null
+  processed_by: string | null
+  processed_at: string | null
+  fulfillment_type: FulfillmentType | null
+  linked_pr_id: string | null
+  rejection_reason: string | null
+  rejected_by: string | null
+  rejected_at: string | null
+  cancelled_by: string | null
+  cancelled_at: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+export interface RequestItem {
+  id: string
+  request_id: string
+  item_catalog_id: string | null
+  description: string
+  unit: string
+  quantity_requested: string
+  quantity_issued: string
+  item_number: number
+  inventory_id: string | null
+  remarks: string | null
+  office_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface RequestWithDetails extends SupplyRequest {
+  office?: Pick<Office, 'id' | 'name' | 'code'> | null
+  requested_by_profile?: Pick<UserProfile, 'id' | 'first_name' | 'last_name' | 'position'> | null
+  supervisor_profile?: { id: string; first_name: string; last_name: string } | null
+  processed_by_profile?: { id: string; first_name: string; last_name: string } | null
+  linked_pr?: Pick<PurchaseRequest, 'id' | 'pr_number' | 'status'> | null
+  request_items?: RequestItemWithDetails[]
+}
+
+export interface RequestItemWithDetails extends RequestItem {
+  item_catalog?: Pick<ItemCatalog, 'id' | 'code' | 'name' | 'unit' | 'category'> | null
+  inventory?: Pick<Inventory, 'id' | 'current_quantity' | 'office_id'> | null
+}

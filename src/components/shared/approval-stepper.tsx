@@ -145,6 +145,81 @@ export const AGENCY_TO_AGENCY_STEPS: Omit<WorkflowStep, "status">[] = [
   { id: "completed",             label: "Completed",             description: "Procurement completed" },
 ]
 
+export const REQUEST_STEPS: Omit<WorkflowStep, "status">[] = [
+  { id: "draft",                label: "Draft",              description: "Requester prepares request" },
+  { id: "submitted",            label: "Submitted",          description: "Sent to supervisor" },
+  { id: "supervisor_approved",  label: "Supervisor Approved", description: "Supervisor endorses" },
+  { id: "processing",           label: "Processing",         description: "Supply officer processes" },
+  { id: "fulfilled",            label: "Fulfilled",          description: "Request completed" },
+]
+
+/**
+ * Build step statuses for a request based on its current status.
+ */
+export function buildRequestSteps(
+  status: string,
+  request?: {
+    supervisor_approved_at?: string | null
+    supervisor_remarks?: string | null
+    processed_at?: string | null
+    rejection_reason?: string | null
+  }
+): WorkflowStep[] {
+  const statusOrder = REQUEST_STEPS.map(s => s.id)
+
+  // Terminal states
+  if (status === "cancelled") {
+    return REQUEST_STEPS.map(step => ({
+      ...step,
+      status: "skipped" as StepStatus,
+    }))
+  }
+
+  if (status === "rejected") {
+    const currentIdx = statusOrder.indexOf("submitted")
+    return REQUEST_STEPS.map((step, i) => {
+      if (i < currentIdx) return { ...step, status: "completed" as StepStatus }
+      if (step.id === "submitted" || step.id === "supervisor_approved" || step.id === "processing") {
+        // Mark the step where rejection happened
+        if (i === currentIdx) {
+          return {
+            ...step,
+            status: "rejected" as StepStatus,
+            remarks: request?.rejection_reason || undefined,
+          }
+        }
+      }
+      return { ...step, status: "skipped" as StepStatus }
+    })
+  }
+
+  // partially_fulfilled maps to the "processing" step
+  const effectiveStatus = status === "partially_fulfilled" ? "processing" : status
+  const currentIdx = statusOrder.indexOf(effectiveStatus)
+
+  return REQUEST_STEPS.map((step, i) => {
+    if (i < currentIdx) {
+      const built: WorkflowStep = { ...step, status: "completed" as StepStatus }
+      if (step.id === "supervisor_approved" && request?.supervisor_approved_at) {
+        built.timestamp = request.supervisor_approved_at
+        if (request.supervisor_remarks) built.remarks = request.supervisor_remarks
+      }
+      return built
+    }
+    if (i === currentIdx) {
+      const built: WorkflowStep = { ...step, status: "current" as StepStatus }
+      if (step.id === "processing" && request?.processed_at) {
+        built.timestamp = request.processed_at
+      }
+      if (status === "partially_fulfilled") {
+        built.description = "Partially fulfilled — awaiting remaining items"
+      }
+      return built
+    }
+    return { ...step, status: "pending" as StepStatus }
+  })
+}
+
 export const PO_STEPS: Omit<WorkflowStep, "status">[] = [
   { id: "draft",                label: "Draft",              description: "PO created from awarded procurement" },
   { id: "approved",             label: "Approved",           description: "HOPE/Division Chief approves" },

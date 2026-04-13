@@ -21,9 +21,9 @@
 | [x]    | 9     | **Procurement Workflows (Competitive Bidding)** | **Opus** | Full competitive bidding with BAC evaluation                                                                                    | Most complex method; requires all procurement infrastructure     |
 | [x]    | 10    | **Procurement Workflows (Other Methods)**       | Sonnet   | Direct contracting, repeat order, emergency, negotiated, agency-to-agency                                                       | Completes RA 12009 coverage                                      |
 | [x]    | 11    | **Purchase Orders & Delivery**                  | Sonnet   | PO creation, delivery recording, inspection, obligation tracking                                                                | Bridges procurement to asset management                          |
-| [ ]    | 12    | **Asset Management (Inventory)**                | Sonnet   | Item catalog, stock-in/out, stock cards, inventory tracking                                                                     | Assets from deliveries enter inventory first                     |
-| [ ]    | 13    | **Asset Management (Property)**                 | **Opus** | Asset registration, PAR/ICS, custodian management, depreciation                                                                 | Depends on inventory for incoming assets                         |
-| [ ]    | 14    | **Request System**                              | Sonnet   | Supply/equipment/service requests, fulfillment routing                                                                          | Depends on inventory (stock check) and procurement (PR creation) |
+| [x]    | 12    | **Asset Management (Inventory)**                | Sonnet   | Item catalog, stock-in/out, stock cards, inventory tracking                                                                     | Assets from deliveries enter inventory first                     |
+| [x]    | 13    | **Asset Management (Property)**                 | **Opus** | Asset registration, PAR/ICS, custodian management, depreciation                                                                 | Depends on inventory for incoming assets                         |
+| [x]    | 14    | **Request System**                              | Sonnet   | Supply/equipment/service requests, fulfillment routing                                                                          | Depends on inventory (stock check) and procurement (PR creation) |
 | [ ]    | 15    | **Notifications & Approval Inbox**              | Sonnet   | Unified approvals, in-app notifications, email alerts                                                                           | Cross-cutting; enhances all prior modules                        |
 | [ ]    | 16    | **Reports & Dashboards**                        | Sonnet   | All dashboards, compliance reports, exports                                                                                     | Requires data from all modules to be meaningful                  |
 | [ ]    | 17    | **Document Generation & Compliance**            | Sonnet   | PDF generation (PR, PO, NOA, ICS, PAR), PhilGEPS prep, COA reports                                                              | Polish phase; all data flows must be working                     |
@@ -1272,7 +1272,20 @@ delivery_items (id, delivery_id, po_item_id, quantity_delivered, quantity_accept
 
 ---
 
-## [ ] PHASE 12: Asset Management (Inventory)
+## [x] PHASE 12: Asset Management (Inventory)
+
+### Completion Overview
+
+**Status:** Complete
+**Completed:** 2026-04-13
+
+**What was built:**
+- **Database:** 4 migration files (`20260503`–`20260506`) — `item_catalog`, `inventory`, `stock_movements` tables with RLS policies, triggers (inventory update from movements, reorder alert notifications), and 4 RPCs (`stock_in_from_delivery`, `manual_stock_in`, `stock_out_for_issuance`, `record_physical_count`)
+- **Backend:** 14 server actions in `src/lib/actions/inventory.ts` covering catalog CRUD, stock operations, delivery-to-stock flow, physical counts, and reorder alerts. Zod schemas in `src/lib/schemas/inventory.ts`
+- **Frontend:** 5 pages (asset dashboard, stock list, stock card detail, physical count, item catalog admin) + 5 components in `src/components/inventory/` (item-catalog-form, physical-count-form, stock-in-dialog, stock-out-dialog, inventory-settings-dialog)
+- **Validation:** Negative stock prevention via CHECK constraint + function validation. Reorder point alerts via trigger-based notifications
+
+**Notes:** Stock card display is inline in the detail page rather than a separate reusable component — functionally complete.
 
 ### A. Scope
 
@@ -1363,7 +1376,22 @@ stock_movements (id, inventory_id, movement_type, quantity, reference_type, refe
 
 ---
 
-## [ ] PHASE 13: Asset Management (Property)
+## [x] PHASE 13: Asset Management (Property)
+
+### Completion Overview
+
+**Status:** Complete
+**Completed:** 2026-04-13
+
+**What was built:**
+- **Database:** 4 migration files + 1 bugfix (`20260507`–`20260511`) — `assets`, `asset_assignments`, `depreciation_records` tables with RLS policies (office-scoped + custodian self-access), 2 triggers (custodian update on assignment, book value update on depreciation), and 9 RPCs (`generate_property_number`, `generate_par_ics_number`, `register_asset_from_delivery`, `register_asset_manual`, `transfer_asset`, `calculate_depreciation`, `run_monthly_depreciation`, `initiate_disposal`, `complete_disposal`) + `revert_disposal` in bugfix migration
+- **Backend:** 15+ server actions in `src/lib/actions/assets.ts` covering registry queries, asset registration (from delivery + manual), custody transfers, condition updates, disposal workflow, and depreciation (single + batch). Zod schemas in `src/lib/schemas/asset.ts`
+- **Frontend:** 6 pages (dashboard, registry list, registry detail, assignments, disposal management, reports) + 7 components in `src/components/assets/` (asset-register-dialog, transfer-asset-dialog, depreciation-schedule, depreciation-run-dialog, disposal-dialog, qr-code-display, update-condition-dialog)
+- **Property numbering:** Auto-generated format `{OFFICE}-{YEAR}-{SE|PPE}-{NNNN}` via sequence counters
+- **Depreciation:** Straight-line monthly computation with batch processing for all active PPE
+- **QR codes:** Property number QR generation for asset tagging
+
+**Notes:** Asset registration and custody transfer use dialog-based forms rather than standalone `asset-form.tsx` / `assignment-form.tsx` components — functionally complete.
 
 ### A. Scope
 
@@ -1469,7 +1497,22 @@ depreciation_records (id, asset_id, period_year, period_month, depreciation_amou
 
 ---
 
-## [ ] PHASE 14: Request System
+## [x] PHASE 14: Request System
+
+### Completion Overview
+
+**Status:** Complete
+**Completed:** 2026-04-13
+
+**What was built:**
+- **Database:** 3 migration files (`20260512`–`20260514`) — `requests` and `request_items` tables with 7 RLS policies (creator/supervisor/processor SELECT, INSERT, UPDATE, DELETE), `set_updated_at` + `audit_trigger` triggers, and 8 RPCs (`generate_request_number`, `create_request`, `submit_request`, `approve_request`, `reject_request`, `cancel_request`, `fulfill_request_from_stock`, `complete_service_request`, `route_request_to_procurement`)
+- **Backend:** 14 server actions in `src/lib/actions/requests.ts` (7 queries + 7 mutations) with notification routing to supervisors, supply officers, and requesters. Zod schemas in `src/lib/schemas/request.ts` with 7 validation schemas + constants/labels
+- **Frontend:** 3 pages (tabbed list with My Requests/Pending Approval/For Processing/All, create form, detail with workflow stepper) + 3 components in `src/components/requests/` (request-form with dynamic item array and catalog selector, request-review-actions with approve/reject dialogs, request-fulfillment with stock availability check, fulfill-from-stock, route-to-procurement, and service completion)
+- **ApprovalStepper:** Added `REQUEST_STEPS` template and `buildRequestSteps()` to `src/components/shared/approval-stepper.tsx` with support for partial fulfillment and rejected/cancelled terminal states
+- **Workflow:** draft → submitted (auto-detects supervisor by office type: school_head / section_chief / division_chief) → supervisor_approved → processing → fulfilled. Four fulfillment paths: stock issuance (calls Phase 12 `stock_out_for_issuance`), procurement routing (creates PR via Phase 7 `create_purchase_request`), mixed (partial stock + procurement), and service completion (no stock movement)
+- **Auto-numbering:** `REQ-{OFFICE_CODE}-{YEAR}-{NNNN}` via `sequence_counters` table
+
+**Notes:** Approvals page is integrated as a tab in the list page rather than a separate `/approvals` route — functionally complete. Emergency request bypass was not implemented as a distinct workflow; emergency urgency is a flag on any request type that surfaces it higher in approval/processing queues.
 
 ### A. Scope
 
