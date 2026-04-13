@@ -39,6 +39,37 @@ export async function getUnreadNotificationsCount(): Promise<number> {
   return count ?? 0
 }
 
+export async function getNotificationsPaginated(
+  page: number = 1,
+  pageSize: number = 20,
+  filter?: "all" | "unread" | "read"
+): Promise<{ notifications: Notification[]; total: number }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { notifications: [], total: 0 }
+
+  const from = (page - 1) * pageSize
+  const to = from + pageSize - 1
+
+  let query = supabase
+    .schema("procurements")
+    .from("notifications")
+    .select("*", { count: "exact" })
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .range(from, to)
+
+  if (filter === "unread") query = query.eq("is_read", false)
+  if (filter === "read") query = query.eq("is_read", true)
+
+  const { data, count, error } = await query
+  if (error) {
+    console.error("getNotificationsPaginated error:", error)
+    return { notifications: [], total: 0 }
+  }
+  return { notifications: (data ?? []) as Notification[], total: count ?? 0 }
+}
+
 export async function markNotificationRead(id: string): Promise<void> {
   const supabase = await createClient()
   await supabase

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Bell } from "lucide-react"
 import {
   DropdownMenu,
@@ -16,6 +17,7 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
 } from "@/lib/actions/notifications"
+import { referenceHref } from "@/lib/utils/notification-routes"
 import type { Notification } from "@/types/database"
 
 function relativeTime(dateStr: string): string {
@@ -26,18 +28,6 @@ function relativeTime(dateStr: string): string {
   const hours = Math.floor(mins / 60)
   if (hours < 24) return `${hours}h ago`
   return `${Math.floor(hours / 24)}d ago`
-}
-
-function referenceHref(n: Notification): string | null {
-  if (n.reference_type === "ppmp" && n.reference_id)
-    return `/dashboard/planning/ppmp/${n.reference_id}`
-  if (n.reference_type === "app" && n.reference_id)
-    return `/dashboard/planning/app/${n.reference_id}`
-  if (n.reference_type === "pr" && n.reference_id)
-    return `/dashboard/procurement/purchase-requests/${n.reference_id}`
-  if (n.reference_type === "procurement" && n.reference_id)
-    return `/dashboard/procurement/activities/${n.reference_id}`
-  return null
 }
 
 export function NotificationBell() {
@@ -145,6 +135,17 @@ export function NotificationBell() {
               </button>
             ))
           )}
+        </div>
+
+        {/* View all link */}
+        <div className="border-t px-4 py-2 text-center">
+          <Link
+            href="/dashboard/notifications"
+            className="text-xs text-primary hover:underline"
+            onClick={() => setOpen(false)}
+          >
+            View all notifications
+          </Link>
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

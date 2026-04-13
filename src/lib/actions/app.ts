@@ -13,6 +13,7 @@ import type {
   AppSummary,
 } from "@/types/database"
 import type { AppLotInput, AppHopeReviewInput } from "@/lib/schemas/app"
+import { notifyRoleInDivision, notifyUser } from "@/lib/actions/helpers"
 
 // ============================================================
 // Helpers
@@ -41,6 +42,39 @@ async function getUserRoleContext(supabase: Awaited<ReturnType<typeof createClie
   const roleNames = roles.map(r => r.role?.name).filter((n): n is string => !!n)
 
   return { user, profile, roleNames }
+}
+
+async function getAppDivisionId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  appId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .schema("procurements")
+    .from("apps")
+    .select("division_id")
+    .eq("id", appId)
+    .single()
+  return data?.division_id ?? null
+}
+
+async function getAppIdFromItemId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  appItemId: string
+): Promise<string | null> {
+  const { data: item } = await supabase
+    .schema("procurements")
+    .from("app_items")
+    .select("app_version_id")
+    .eq("id", appItemId)
+    .single()
+  if (!item) return null
+  const { data: version } = await supabase
+    .schema("procurements")
+    .from("app_versions")
+    .select("app_id")
+    .eq("id", item.app_version_id)
+    .single()
+  return version?.app_id ?? null
 }
 
 const LOTS_LOCKED_STATUSES = ["final", "approved", "posted"]
@@ -448,6 +482,26 @@ export async function hopeReviewAppItem(
 
   if (error) return { error: error.message }
 
+  // Notify BAC roles that items have been reviewed
+  const appId = await getAppIdFromItemId(supabase, appItemId)
+  if (appId) {
+    const divisionId = await getAppDivisionId(supabase, appId)
+    if (divisionId) {
+      const actionLabel = input.action === "approve" ? "approved" : "returned with remarks"
+      notifyRoleInDivision(
+        ["bac_chair", "bac_secretariat"],
+        divisionId,
+        {
+          title: "APP Item Reviewed",
+          message: `HOPE has ${actionLabel} an APP item.`,
+          type: "info",
+          reference_type: "app",
+          reference_id: appId,
+        }
+      )
+    }
+  }
+
   revalidatePath("/dashboard/planning/app")
   return { error: null }
 }
@@ -467,6 +521,28 @@ export async function hopeBatchReviewAppItems(
     })
 
   if (error) return { count: null, error: error.message }
+
+  // Notify BAC roles about batch review
+  if (appItemIds.length > 0) {
+    const appId = await getAppIdFromItemId(supabase, appItemIds[0])
+    if (appId) {
+      const divisionId = await getAppDivisionId(supabase, appId)
+      if (divisionId) {
+        const actionLabel = action === "approve" ? "approved" : "returned with remarks"
+        notifyRoleInDivision(
+          ["bac_chair", "bac_secretariat"],
+          divisionId,
+          {
+            title: "APP Items Reviewed",
+            message: `HOPE has ${actionLabel} ${appItemIds.length} APP item(s).`,
+            type: "info",
+            reference_type: "app",
+            reference_id: appId,
+          }
+        )
+      }
+    }
+  }
 
   revalidatePath("/dashboard/planning/app")
   return { count: data as number, error: null }
@@ -600,6 +676,22 @@ export async function finalizeApp(
 
   if (error) return { error: error.message }
 
+  // Notify HOPE that the APP is finalized and ready for approval
+  const divisionId = await getAppDivisionId(supabase, appId)
+  if (divisionId) {
+    notifyRoleInDivision(
+      ["hope"],
+      divisionId,
+      {
+        title: "APP Finalized",
+        message: "The Annual Procurement Plan has been finalized and is ready for your approval.",
+        type: "approval",
+        reference_type: "app",
+        reference_id: appId,
+      }
+    )
+  }
+
   revalidatePath("/dashboard/planning/app")
   revalidatePath(`/dashboard/planning/app/${appId}`)
   return { error: null }
@@ -618,6 +710,22 @@ export async function approveApp(
     })
 
   if (error) return { error: error.message }
+
+  // Notify supply officers and BAC that the APP has been approved
+  const divisionId = await getAppDivisionId(supabase, appId)
+  if (divisionId) {
+    notifyRoleInDivision(
+      ["supply_officer", "bac_chair", "bac_secretariat"],
+      divisionId,
+      {
+        title: "APP Approved",
+        message: "The Annual Procurement Plan has been approved by HOPE. Procurement activities may now proceed.",
+        type: "success",
+        reference_type: "app",
+        reference_id: appId,
+      }
+    )
+  }
 
   revalidatePath("/dashboard/planning/app")
   revalidatePath(`/dashboard/planning/app/${appId}`)

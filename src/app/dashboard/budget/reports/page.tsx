@@ -21,6 +21,11 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Separator } from "@/components/ui/separator"
+import {
+  BudgetUtilizationBarChart,
+  BudgetOfficeExport,
+  BudgetFundSourceExport,
+} from "@/components/reports/budget-report-client"
 
 export default async function BudgetReportsPage() {
   const fiscalYear = await getActiveFiscalYear()
@@ -77,11 +82,21 @@ export default async function BudgetReportsPage() {
         </div>
       )}
 
+      {/* Utilization bar chart */}
+      <BudgetUtilizationBarChart data={byOffice} />
+
       {/* By Office */}
       <Card>
         <CardHeader>
-          <CardTitle>Utilization by Office</CardTitle>
-          <CardDescription>Budget utilization breakdown per office</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Utilization by Office</CardTitle>
+              <CardDescription>Budget utilization breakdown per office</CardDescription>
+            </div>
+            {fiscalYear && (
+              <BudgetOfficeExport data={byOffice} fiscalYear={String(fiscalYear.year)} />
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {byOffice.length === 0 ? (
@@ -167,8 +182,15 @@ export default async function BudgetReportsPage() {
       {/* By Fund Source */}
       <Card>
         <CardHeader>
-          <CardTitle>Utilization by Fund Source</CardTitle>
-          <CardDescription>Budget utilization breakdown per fund source</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Utilization by Fund Source</CardTitle>
+              <CardDescription>Budget utilization breakdown per fund source</CardDescription>
+            </div>
+            {fiscalYear && (
+              <BudgetFundSourceExport data={byFundSource} fiscalYear={String(fiscalYear.year)} />
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {byFundSource.length === 0 ? (

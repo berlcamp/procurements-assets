@@ -17,6 +17,7 @@ import type {
   BudgetAllocationInput,
   BudgetAdjustmentInput,
 } from "@/lib/schemas/budget"
+import { notifyRoleInDivision, notifyUser } from "@/lib/actions/helpers"
 
 // ============================================================
 // Fiscal Year helpers
@@ -422,7 +423,7 @@ export async function createBudgetAdjustment(
     .eq("id", input.budget_allocation_id)
     .single()
 
-  const { error } = await supabase.schema("procurements").from("budget_adjustments").insert({
+  const { data: adj, error } = await supabase.schema("procurements").from("budget_adjustments").insert({
     division_id: profile.division_id,
     budget_allocation_id: input.budget_allocation_id,
     office_id: alloc?.office_id ?? profile.office_id,
@@ -431,9 +432,24 @@ export async function createBudgetAdjustment(
     justification: input.justification,
     reference_number: input.reference_number ?? null,
     created_by: user.id,
-  })
+  }).select("id").single()
 
   if (error) return { error: error.message }
+
+  // Notify HOPE / division admin that a budget adjustment is pending approval
+  if (adj?.id) {
+    notifyRoleInDivision(
+      ["hope", "division_admin"],
+      profile.division_id,
+      {
+        title: "Budget Adjustment Pending",
+        message: `A ${input.adjustment_type} budget adjustment of ₱${parseFloat(input.amount).toLocaleString()} requires your approval.`,
+        type: "approval",
+        reference_type: "budget_adjustment",
+        reference_id: adj.id,
+      }
+    )
+  }
 
   revalidatePath("/dashboard/budget/adjustments")
   return { error: null }
@@ -444,6 +460,14 @@ export async function approveBudgetAdjustment(
   remarks?: string
 ): Promise<{ error: string | null }> {
   const supabase = await createClient()
+
+  // Fetch adjustment before approving so we can notify the creator
+  const { data: adj } = await supabase
+    .schema("procurements")
+    .from("budget_adjustments")
+    .select("created_by, adjustment_type, amount")
+    .eq("id", adjustmentId)
+    .single()
 
   const { error } = await supabase
     .schema("procurements")
@@ -460,6 +484,17 @@ export async function approveBudgetAdjustment(
       .eq("id", adjustmentId)
   }
 
+  // Notify the creator that their adjustment was approved
+  if (adj?.created_by) {
+    notifyUser(adj.created_by, {
+      title: "Budget Adjustment Approved",
+      message: `Your ${adj.adjustment_type} budget adjustment of ₱${parseFloat(adj.amount).toLocaleString()} has been approved.`,
+      type: "success",
+      reference_type: "budget_adjustment",
+      reference_id: adjustmentId,
+    })
+  }
+
   revalidatePath("/dashboard/budget/adjustments")
   revalidatePath(`/dashboard/budget/adjustments/${adjustmentId}`)
   revalidatePath("/dashboard/budget")
@@ -472,6 +507,14 @@ export async function rejectBudgetAdjustment(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient()
 
+  // Fetch adjustment before rejecting so we can notify the creator
+  const { data: adj } = await supabase
+    .schema("procurements")
+    .from("budget_adjustments")
+    .select("created_by, adjustment_type, amount")
+    .eq("id", adjustmentId)
+    .single()
+
   const { error } = await supabase
     .schema("procurements")
     .rpc("reject_budget_adjustment", {
@@ -480,6 +523,17 @@ export async function rejectBudgetAdjustment(
     })
 
   if (error) return { error: error.message }
+
+  // Notify the creator that their adjustment was rejected
+  if (adj?.created_by) {
+    notifyUser(adj.created_by, {
+      title: "Budget Adjustment Rejected",
+      message: `Your ${adj.adjustment_type} budget adjustment of ₱${parseFloat(adj.amount).toLocaleString()} has been rejected.${remarks ? ` Remarks: ${remarks}` : ""}`,
+      type: "warning",
+      reference_type: "budget_adjustment",
+      reference_id: adjustmentId,
+    })
+  }
 
   revalidatePath("/dashboard/budget/adjustments")
   revalidatePath(`/dashboard/budget/adjustments/${adjustmentId}`)

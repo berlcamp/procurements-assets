@@ -108,6 +108,7 @@ export function SidebarProvider({
 
 // ─── Nav Link ─────────────────────────────────────────────────────────────────
 
+const APPROVALS_HREF = "/dashboard/approvals";
 const PLANNING_HREF = "/dashboard/planning";
 const PR_HREF = "/dashboard/procurement/purchase-requests";
 const ACTIVITIES_HREF = "/dashboard/procurement/activities";
@@ -135,16 +136,18 @@ function NavLink({
   activeHref: string | null;
 }) {
   const isActive = activeHref === item.href;
-  const { ppmp, app, pr, procurement } = useActionCounts();
+  const { ppmp, app, pr, procurement, total } = useActionCounts();
   const planningCount = ppmp + app;
   const badge =
-    item.href === PLANNING_HREF && planningCount > 0
-      ? planningCount
-      : item.href === PR_HREF && pr > 0
-        ? pr
-        : item.href === ACTIVITIES_HREF && procurement > 0
-          ? procurement
-          : 0;
+    item.href === APPROVALS_HREF && total > 0
+      ? total
+      : item.href === PLANNING_HREF && planningCount > 0
+        ? planningCount
+        : item.href === PR_HREF && pr > 0
+          ? pr
+          : item.href === ACTIVITIES_HREF && procurement > 0
+            ? procurement
+            : 0;
 
   const linkClassName = cn(
     "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors duration-150",

@@ -54,6 +54,12 @@ const navGroups: NavGroup[] = [
         icon: <LayoutDashboard className="h-4 w-4" />,
         // always visible
       },
+      {
+        label: "Approvals",
+        href: "/dashboard/approvals",
+        icon: <Inbox className="h-4 w-4" />,
+        // always visible — page shows empty state for users without pending items
+      },
     ],
   },
   {

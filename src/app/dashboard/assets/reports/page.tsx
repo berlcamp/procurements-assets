@@ -23,6 +23,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Calculator } from "lucide-react"
 import { getAssetRegistry } from "@/lib/actions/assets"
+import { ExportButton } from "@/components/shared/export-button"
 import { DepreciationRunDialog } from "@/components/assets/depreciation-run-dialog"
 import {
   CONDITION_STATUS_LABELS,
@@ -68,6 +69,34 @@ export default function AssetReportsPage() {
   const ppeTotalBV = ppeAssets.reduce((s, a) => s + parseFloat(a.book_value), 0)
   const seTotalCost = seAssets.reduce((s, a) => s + parseFloat(a.acquisition_cost), 0)
   const seTotalBV = seAssets.reduce((s, a) => s + parseFloat(a.book_value), 0)
+
+  const ASSET_EXPORT_COLUMNS = [
+    { key: "property_number", header: "Property #" },
+    { key: "description", header: "Description" },
+    { key: "serial_number", header: "Serial #" },
+    { key: "office_name", header: "Office" },
+    { key: "custodian", header: "Custodian" },
+    { key: "condition_status", header: "Condition" },
+    { key: "acquisition_cost", header: "Acquisition Cost" },
+    { key: "accumulated_depreciation", header: "Accum. Depreciation" },
+    { key: "book_value", header: "Book Value" },
+  ]
+
+  function toExportData(list: AssetWithDetails[]) {
+    return list.map((a) => ({
+      property_number: a.property_number,
+      description: a.description ?? "",
+      serial_number: a.serial_number ?? "",
+      office_name: a.office?.name ?? "",
+      custodian: a.current_custodian_profile
+        ? `${a.current_custodian_profile.first_name} ${a.current_custodian_profile.last_name}`
+        : "",
+      condition_status: CONDITION_STATUS_LABELS[a.condition_status],
+      acquisition_cost: parseFloat(a.acquisition_cost),
+      accumulated_depreciation: parseFloat(a.accumulated_depreciation),
+      book_value: parseFloat(a.book_value),
+    }))
+  }
 
   function renderAssetTable(list: AssetWithDetails[]) {
     if (loading) {
@@ -151,11 +180,20 @@ export default function AssetReportsPage() {
         <TabsContent value="ppe" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Report on Physical Count of Property, Plant & Equipment</CardTitle>
-              <CardDescription>
-                {ppeAssets.length} PPE asset{ppeAssets.length !== 1 ? "s" : ""}
-                {" — "}Total Cost: {formatCurrency(ppeTotalCost)}, Book Value: {formatCurrency(ppeTotalBV)}
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Report on Physical Count of Property, Plant & Equipment</CardTitle>
+                  <CardDescription>
+                    {ppeAssets.length} PPE asset{ppeAssets.length !== 1 ? "s" : ""}
+                    {" — "}Total Cost: {formatCurrency(ppeTotalCost)}, Book Value: {formatCurrency(ppeTotalBV)}
+                  </CardDescription>
+                </div>
+                <ExportButton
+                  data={toExportData(ppeAssets)}
+                  columns={ASSET_EXPORT_COLUMNS}
+                  filename="rpcppe-report"
+                />
+              </div>
             </CardHeader>
             <CardContent>
               {renderAssetTable(ppeAssets)}
@@ -166,11 +204,20 @@ export default function AssetReportsPage() {
         <TabsContent value="se" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Semi-Expendable Property Report</CardTitle>
-              <CardDescription>
-                {seAssets.length} semi-expendable asset{seAssets.length !== 1 ? "s" : ""}
-                {" — "}Total Cost: {formatCurrency(seTotalCost)}, Book Value: {formatCurrency(seTotalBV)}
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Semi-Expendable Property Report</CardTitle>
+                  <CardDescription>
+                    {seAssets.length} semi-expendable asset{seAssets.length !== 1 ? "s" : ""}
+                    {" — "}Total Cost: {formatCurrency(seTotalCost)}, Book Value: {formatCurrency(seTotalBV)}
+                  </CardDescription>
+                </div>
+                <ExportButton
+                  data={toExportData(seAssets)}
+                  columns={ASSET_EXPORT_COLUMNS}
+                  filename="semi-expendable-report"
+                />
+              </div>
             </CardHeader>
             <CardContent>
               {renderAssetTable(seAssets)}

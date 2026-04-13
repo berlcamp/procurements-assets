@@ -10,16 +10,17 @@ interface ActionCounts {
   app: number
   pr: number
   procurement: number
+  total: number
 }
 
-const ActionCountsContext = createContext<ActionCounts>({ ppmp: 0, app: 0, pr: 0, procurement: 0 })
+const ActionCountsContext = createContext<ActionCounts>({ ppmp: 0, app: 0, pr: 0, procurement: 0, total: 0 })
 
 export function useActionCounts() {
   return useContext(ActionCountsContext)
 }
 
 export function ActionCountsProvider({ children }: { children: React.ReactNode }) {
-  const [counts, setCounts] = useState<ActionCounts>({ ppmp: 0, app: 0, pr: 0, procurement: 0 })
+  const [counts, setCounts] = useState<ActionCounts>({ ppmp: 0, app: 0, pr: 0, procurement: 0, total: 0 })
   const { user } = useAuth()
 
   const refresh = useCallback(() => {

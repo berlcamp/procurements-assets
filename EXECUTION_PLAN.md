@@ -24,7 +24,7 @@
 | [x]    | 12    | **Asset Management (Inventory)**                | Sonnet   | Item catalog, stock-in/out, stock cards, inventory tracking                                                                     | Assets from deliveries enter inventory first                     |
 | [x]    | 13    | **Asset Management (Property)**                 | **Opus** | Asset registration, PAR/ICS, custodian management, depreciation                                                                 | Depends on inventory for incoming assets                         |
 | [x]    | 14    | **Request System**                              | Sonnet   | Supply/equipment/service requests, fulfillment routing                                                                          | Depends on inventory (stock check) and procurement (PR creation) |
-| [ ]    | 15    | **Notifications & Approval Inbox**              | Sonnet   | Unified approvals, in-app notifications, email alerts                                                                           | Cross-cutting; enhances all prior modules                        |
+| [X]    | 15    | **Notifications & Approval Inbox**              | Sonnet   | Unified approvals, in-app notifications, email alerts                                                                           | Cross-cutting; enhances all prior modules                        |
 | [ ]    | 16    | **Reports & Dashboards**                        | Sonnet   | All dashboards, compliance reports, exports                                                                                     | Requires data from all modules to be meaningful                  |
 | [ ]    | 17    | **Document Generation & Compliance**            | Sonnet   | PDF generation (PR, PO, NOA, ICS, PAR), PhilGEPS prep, COA reports                                                              | Polish phase; all data flows must be working                     |
 | [ ]    | 18    | **Optimization, UAT & Launch Prep**             | **Opus** | Performance tuning, edge cases, UAT, bug fixes                                                                                  | Final hardening before deployment                                |
@@ -1603,7 +1603,7 @@ request_items (id, request_id, item_catalog_id, description, unit, quantity_requ
 
 ---
 
-## [ ] PHASE 15: Notifications & Approval Inbox
+## [X] PHASE 15: Notifications & Approval Inbox
 
 ### A. Scope
 

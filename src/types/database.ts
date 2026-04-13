@@ -1472,3 +1472,37 @@ export interface RequestItemWithDetails extends RequestItem {
   item_catalog?: Pick<ItemCatalog, 'id' | 'code' | 'name' | 'unit' | 'category'> | null
   inventory?: Pick<Inventory, 'id' | 'current_quantity' | 'office_id'> | null
 }
+
+// ── Phase 16: Reports & Dashboards ──────────────────────────
+
+export interface ExecutiveDashboardData {
+  budget_total_adjusted: number
+  budget_total_obligated: number
+  budget_total_disbursed: number
+  budget_utilization_pct: number
+  procurement_total: number
+  procurement_active: number
+  procurement_completed: number
+  procurement_failed: number
+  procurement_total_abc: number
+  procurement_total_awarded: number
+  procurement_total_savings: number
+  assets_active_count: number
+  assets_total_book_value: number
+  assets_for_disposal: number
+  pending_approvals_count: number
+}
+
+export interface ComplianceSummary {
+  total_procurements: number
+  completed_procurements: number
+  with_complete_docs: number
+  missing_docs_count: number
+  total_assets: number
+  assets_with_par_ics: number
+  assets_without_par_ics: number
+  obr_total: number
+  obr_certified: number
+  obr_pending: number
+  compliance_score_pct: number
+}
