@@ -26,6 +26,7 @@ import {
   ArrowRightLeft,
   Trash2,
   FileBarChart,
+  Globe,
 } from "lucide-react"
 import type { NavGroup } from "@/components/layout/sidebar"
 
@@ -181,6 +182,12 @@ const navGroups: NavGroup[] = [
         href: "/dashboard/procurement/deliveries",
         icon: <Truck className="h-4 w-4" />,
         permissions: ["delivery.inspect", "po.create", "proc.manage"],
+      },
+      {
+        label: "PhilGEPS",
+        href: "/dashboard/procurement/philgeps",
+        icon: <Globe className="h-4 w-4" />,
+        permissions: ["proc.create", "proc.manage", "bid.award"],
       },
     ],
   },

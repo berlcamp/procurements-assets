@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { PrintDownloadButton } from "@/components/shared/print-download-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ApprovalStepper, buildPoSteps } from "@/components/shared/approval-stepper"
 import { AmountDisplay, formatPeso } from "@/components/shared/amount-display"
@@ -58,6 +59,11 @@ export default async function PurchaseOrderDetailPage({
             {po.supplier?.name ?? "—"} &middot; {po.office?.name ?? "—"}
           </p>
         </div>
+        <PrintDownloadButton
+          downloadUrl={`/api/documents/po/${po.id}`}
+          label="Download PO"
+          fileName={`PO-${po.po_number}`}
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

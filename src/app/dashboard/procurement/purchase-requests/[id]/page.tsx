@@ -10,6 +10,7 @@ import { ApprovalStepper } from "@/components/shared/approval-stepper"
 import { PrItemsView } from "@/components/procurement/pr-items-table"
 import { PrDraftItemsEditor } from "@/components/procurement/pr-draft-items-editor"
 import { PrReviewActions } from "@/components/procurement/pr-review-actions"
+import { PrintDownloadButton } from "@/components/shared/print-download-button"
 import { getPurchaseRequestById, getPrUserPermissions } from "@/lib/actions/procurement"
 import { format } from "date-fns"
 import type { WorkflowStep } from "@/components/shared/approval-stepper"
@@ -112,10 +113,17 @@ export default async function PurchaseRequestDetailPage({
             <AmountDisplay amount={pr.total_estimated_cost} />
           </p>
         </div>
-        <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/dashboard/procurement/purchase-requests" />}>
-          <ChevronLeft className="mr-1 h-4 w-4" />
-          Back
-        </Button>
+        <div className="flex items-center gap-2">
+          <PrintDownloadButton
+            downloadUrl={`/api/documents/pr/${pr.id}`}
+            label="Download PR"
+            fileName={`PR-${pr.pr_number}`}
+          />
+          <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/dashboard/procurement/purchase-requests" />}>
+            <ChevronLeft className="mr-1 h-4 w-4" />
+            Back
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

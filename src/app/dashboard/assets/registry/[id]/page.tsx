@@ -21,6 +21,7 @@ import { ArrowLeft } from "lucide-react"
 import { getAssetById, getAssetAssignments, getDepreciationSchedule } from "@/lib/actions/assets"
 import { DepreciationSchedule } from "@/components/assets/depreciation-schedule"
 import { QRCodeDisplay } from "@/components/assets/qr-code-display"
+import { PrintDownloadButton } from "@/components/shared/print-download-button"
 import {
   ASSET_TYPE_LABELS,
   CONDITION_STATUS_LABELS,
@@ -198,6 +199,7 @@ export default async function AssetDetailPage({
                   <TableHead>Assigned</TableHead>
                   <TableHead>Returned</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="w-16">PDF</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -221,6 +223,14 @@ export default async function AssetDetailPage({
                       ) : (
                         <Badge variant="outline">Returned</Badge>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <PrintDownloadButton
+                        downloadUrl={`/api/documents/${a.document_type}/${a.id}`}
+                        label={a.document_type.toUpperCase()}
+                        fileName={`${a.document_type.toUpperCase()}-${a.document_number}`}
+                        iconOnly
+                      />
                     </TableCell>
                   </TableRow>
                 ))}

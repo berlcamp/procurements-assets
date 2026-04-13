@@ -25,8 +25,8 @@
 | [x]    | 13    | **Asset Management (Property)**                 | **Opus** | Asset registration, PAR/ICS, custodian management, depreciation                                                                 | Depends on inventory for incoming assets                         |
 | [x]    | 14    | **Request System**                              | Sonnet   | Supply/equipment/service requests, fulfillment routing                                                                          | Depends on inventory (stock check) and procurement (PR creation) |
 | [X]    | 15    | **Notifications & Approval Inbox**              | Sonnet   | Unified approvals, in-app notifications, email alerts                                                                           | Cross-cutting; enhances all prior modules                        |
-| [ ]    | 16    | **Reports & Dashboards**                        | Sonnet   | All dashboards, compliance reports, exports                                                                                     | Requires data from all modules to be meaningful                  |
-| [ ]    | 17    | **Document Generation & Compliance**            | Sonnet   | PDF generation (PR, PO, NOA, ICS, PAR), PhilGEPS prep, COA reports                                                              | Polish phase; all data flows must be working                     |
+| [X]    | 16    | **Reports & Dashboards**                        | Sonnet   | All dashboards, compliance reports, exports                                                                                     | Requires data from all modules to be meaningful                  |
+| [x]    | 17    | **Document Generation & Compliance**            | Sonnet   | PDF generation (PR, PO, NOA, ICS, PAR), PhilGEPS prep, COA reports                                                              | Polish phase; all data flows must be working                     |
 | [ ]    | 18    | **Optimization, UAT & Launch Prep**             | **Opus** | Performance tuning, edge cases, UAT, bug fixes                                                                                  | Final hardening before deployment                                |
 
 ### Model Assignment Guide
@@ -1669,7 +1669,7 @@ Uses existing `notifications` and `approval_logs` tables from Phase 3.
 
 ---
 
-## [ ] PHASE 16: Reports & Dashboards
+## [X] PHASE 16: Reports & Dashboards
 
 ### A. Scope
 
@@ -1758,7 +1758,7 @@ No new tables. Create views and RPCs for aggregations:
 
 ---
 
-## [ ] PHASE 17: Document Generation & Compliance
+## [x] PHASE 17: Document Generation & Compliance
 
 ### A. Scope
 
