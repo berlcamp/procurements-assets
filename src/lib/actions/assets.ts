@@ -266,13 +266,13 @@ export async function getDisposedAssets(): Promise<AssetWithDetails[]> {
 
 export async function getAssetSummary(): Promise<{
   totalActiveAssets: number
-  totalBookValue: number
+  totalAcquisitionCost: number
   forDisposalCount: number
   pendingRegistrationCount: number
 }> {
   const supabase = await createClient()
 
-  const [activeResult, disposalResult, bookValueResult] =
+  const [activeResult, disposalResult, costResult] =
     await Promise.all([
       supabase
         .schema("procurements")
@@ -289,13 +289,13 @@ export async function getAssetSummary(): Promise<{
       supabase
         .schema("procurements")
         .from("assets")
-        .select("book_value")
+        .select("acquisition_cost")
         .eq("status", "active")
         .is("deleted_at", null),
     ])
 
-  const totalBookValue = (bookValueResult.data ?? []).reduce(
-    (sum, a) => sum + parseFloat(a.book_value || "0"),
+  const totalAcquisitionCost = (costResult.data ?? []).reduce(
+    (sum, a) => sum + parseFloat(a.acquisition_cost || "0"),
     0
   )
 
@@ -304,7 +304,7 @@ export async function getAssetSummary(): Promise<{
 
   return {
     totalActiveAssets: activeResult.count ?? 0,
-    totalBookValue,
+    totalAcquisitionCost,
     forDisposalCount: disposalResult.count ?? 0,
     pendingRegistrationCount: pendingCount,
   }

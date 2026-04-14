@@ -49,8 +49,8 @@ export const ppmpLotSchema = z.object({
   estimated_budget: z
     .string()
     .min(1, "Estimated budget is required")
-    .refine((v) => !isNaN(parseFloat(v)) && parseFloat(v) >= 0, {
-      message: "Budget must be a non-negative number",
+    .refine((v) => !isNaN(parseFloat(v)) && parseFloat(v) > 0, {
+      message: "Budget must be greater than zero",
     }),
   supporting_documents: z.string().nullable().optional(),
   remarks: z.string().nullable().optional(),

@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
-import { createAdminClient } from "@/lib/supabase/admin"
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -39,27 +38,16 @@ export async function GET(request: NextRequest) {
         const { data: profile } = await supabase
           .schema("procurements")
           .from("user_profiles")
-          .select("id")
+          .select("id, is_active")
           .eq("id", user.id)
           .maybeSingle()
 
         if (!profile) {
-          // No profile — check for pending join request
-          const adminClient = createAdminClient()
-          const { data: pendingRequest } = await adminClient
-            .schema("procurements")
-            .from("division_join_requests")
-            .select("id, status")
-            .eq("user_id", user.id)
-            .eq("status", "pending")
-            .maybeSingle()
+          return NextResponse.redirect(new URL("/account-not-found", origin))
+        }
 
-          if (pendingRequest) {
-            return NextResponse.redirect(new URL("/pending-approval", origin))
-          }
-
-          // No profile, no pending request → onboarding
-          return NextResponse.redirect(new URL("/onboarding", origin))
+        if (!profile.is_active) {
+          return NextResponse.redirect(new URL("/account-deactivated", origin))
         }
       }
 

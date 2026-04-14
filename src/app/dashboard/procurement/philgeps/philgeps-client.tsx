@@ -305,15 +305,17 @@ export function PhilGepsClient({ entries, fiscalYears }: Props) {
                     </TableCell>
                     <TableCell>
                       <Tooltip>
-                        <TooltipTrigger>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => copyRow(entry)}
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </Button>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => copyRow(entry)}
+                            />
+                          }
+                        >
+                          <Copy className="h-3.5 w-3.5" />
                         </TooltipTrigger>
                         <TooltipContent>Copy data for PhilGEPS</TooltipContent>
                       </Tooltip>

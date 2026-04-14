@@ -54,22 +54,16 @@ export async function proxy(request: NextRequest) {
     const { data: profile } = await supabase
       .schema("procurements")
       .from("user_profiles")
-      .select("id")
+      .select("id, is_active")
       .eq("id", user.id)
       .maybeSingle()
 
     if (!profile) {
-      // Check if they have a pending join request
-      const { data: pendingRequest } = await supabase
-        .schema("procurements")
-        .from("division_join_requests")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("status", "pending")
-        .maybeSingle()
+      return NextResponse.redirect(new URL("/account-not-found", request.url))
+    }
 
-      const destination = pendingRequest ? "/pending-approval" : "/onboarding"
-      return NextResponse.redirect(new URL(destination, request.url))
+    if (!profile.is_active) {
+      return NextResponse.redirect(new URL("/account-deactivated", request.url))
     }
   }
 

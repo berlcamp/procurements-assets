@@ -297,6 +297,7 @@ export type BudgetAllocationStatus = 'active' | 'inactive' | 'closed'
 export type BudgetAdjustmentType = 'realignment' | 'augmentation' | 'reduction' | 'transfer_in' | 'transfer_out'
 export type BudgetAdjustmentStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
 export type SubAroStatus = 'draft' | 'active' | 'fully_allocated' | 'expired' | 'cancelled'
+export type SaroStatus = 'draft' | 'active' | 'fully_allocated' | 'expired' | 'cancelled'
 export type AllotmentClass = 'current' | 'continuing'
 
 export interface SubAllotmentReleaseOrder {
@@ -328,6 +329,36 @@ export interface SubAroWithDetails extends SubAllotmentReleaseOrder {
   allocations?: BudgetAllocationWithDetails[]
 }
 
+export interface SpecialAllotmentReleaseOrder {
+  id: string
+  division_id: string
+  fiscal_year_id: string
+  saro_number: string
+  reference_number: string | null
+  allotment_class: AllotmentClass
+  fund_source_id: string
+  program: string | null
+  releasing_office: string | null
+  release_date: string | null
+  validity_date: string | null
+  purpose: string | null
+  total_amount: string
+  allocated_amount: string
+  status: SaroStatus
+  document_url: string | null
+  remarks: string | null
+  created_by: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface SaroWithDetails extends SpecialAllotmentReleaseOrder {
+  fiscal_year?: Pick<FiscalYear, 'id' | 'year' | 'status'> | null
+  fund_source?: Pick<FundSource, 'id' | 'name' | 'code'> | null
+  allocations?: BudgetAllocationWithDetails[]
+}
+
 export interface FiscalYear {
   id: string
   division_id: string
@@ -348,6 +379,7 @@ export interface BudgetAllocation {
   fund_source_id: string
   account_code_id: string
   sub_aro_id: string | null
+  saro_id: string | null
   original_amount: string
   adjusted_amount: string
   obligated_amount: string
@@ -366,6 +398,7 @@ export interface BudgetAllocationWithDetails extends BudgetAllocation {
   account_code?: Pick<AccountCode, 'id' | 'name' | 'code' | 'expense_class'>
   fiscal_year?: Pick<FiscalYear, 'id' | 'year' | 'status'>
   sub_aro?: Pick<SubAllotmentReleaseOrder, 'id' | 'sub_aro_number' | 'aro_number' | 'allotment_class'> | null
+  saro?: Pick<SpecialAllotmentReleaseOrder, 'id' | 'saro_number' | 'reference_number' | 'program' | 'allotment_class'> | null
 }
 
 export interface BudgetAdjustment {
@@ -1521,4 +1554,111 @@ export interface ComplianceSummary {
   obr_certified: number
   obr_pending: number
   compliance_score_pct: number
+}
+
+// ── Fuel Request & Inventory Module ───────────────────────────
+
+export type FuelRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'dispensed'
+export type FuelMovementType = 'stock_in' | 'stock_out' | 'adjustment'
+
+export interface FuelType {
+  id: string
+  division_id: string
+  name: string
+  unit: string
+  price_per_unit: string | null
+  is_active: boolean
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+export interface FuelInventory {
+  id: string
+  division_id: string
+  fuel_type_id: string
+  office_id: string
+  current_liters: string
+  reorder_point: string
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+export interface FuelStockMovement {
+  id: string
+  division_id: string
+  fuel_inventory_id: string
+  movement_type: FuelMovementType
+  quantity_liters: string
+  reference_type: string | null
+  reference_id: string | null
+  remarks: string | null
+  office_id: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export interface FuelRequestPassenger {
+  name: string
+  position: string
+}
+
+export interface FuelRequest {
+  id: string
+  division_id: string
+  request_number: string
+  office_id: string
+  requested_by: string
+  fuel_type_id: string
+  date_of_trip: string
+  destination: string
+  purpose: string
+  vehicle_type: string
+  vehicle_plate_number: string
+  passengers: FuelRequestPassenger[]
+  departure_time: string | null
+  arrival_time_at_dest: string | null
+  departure_from_dest: string | null
+  arrival_time_return: string | null
+  km_departure: string | null
+  km_arrival: string | null
+  distance_traveled_km: string | null
+  liters_requested: string
+  liters_approved: string | null
+  approver_remarks: string | null
+  status: FuelRequestStatus
+  approved_by: string | null
+  approved_at: string | null
+  rejected_by: string | null
+  rejected_at: string | null
+  rejection_reason: string | null
+  cancelled_by: string | null
+  cancelled_at: string | null
+  dispensed_at: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+export interface FuelInventoryWithDetails extends FuelInventory {
+  fuel_type?: FuelType | null
+  office?: Pick<Office, 'id' | 'name' | 'code'> | null
+}
+
+export interface FuelStockMovementWithDetails extends FuelStockMovement {
+  fuel_inventory?: Pick<FuelInventory, 'id' | 'fuel_type_id' | 'office_id'> & {
+    fuel_type?: Pick<FuelType, 'id' | 'name' | 'unit'> | null
+  } | null
+  created_by_profile?: { id: string; first_name: string; last_name: string } | null
+}
+
+export interface FuelRequestWithDetails extends FuelRequest {
+  office?: Pick<Office, 'id' | 'name' | 'code'> | null
+  fuel_type?: Pick<FuelType, 'id' | 'name' | 'unit' | 'price_per_unit'> | null
+  requested_by_profile?: Pick<UserProfile, 'id' | 'first_name' | 'last_name' | 'position'> | null
+  approved_by_profile?: { id: string; first_name: string; last_name: string } | null
 }

@@ -2,7 +2,7 @@
 
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { toast } from "sonner"
 import {
   ppmpProjectSchema, ppmpLotSchema, ppmpLotItemSchema,
@@ -18,6 +18,9 @@ import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
+import { Upload, FileText, X } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
+import { useDivision } from "@/lib/hooks/use-division"
 import {
   Dialog,
   DialogContent,
@@ -158,10 +161,16 @@ interface PpmpLotFormProps {
   onSaved: () => void
 }
 
+const PPMP_BUCKET = "ppmp-documents"
+const EXT_RE = /\.([a-z0-9]+)$/i
+
 export function PpmpLotForm({
   projectId, open, onClose, onSaved,
 }: PpmpLotFormProps) {
   const [saving, setSaving] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { divisionId } = useDivision()
 
   const {
     register, handleSubmit, setValue, watch, reset,
@@ -172,17 +181,46 @@ export function PpmpLotForm({
     defaultValues: {
       procurement_mode: "competitive_bidding",
       pre_procurement_conference: false,
-      estimated_budget: "0",
+      is_cse: false,
+      estimated_budget: "",
     },
   })
 
   async function onSubmit(values: PpmpLotInput) {
     setSaving(true)
+
+    if (selectedFile) {
+      if (selectedFile.size > 50 * 1024 * 1024) {
+        toast.error("File is larger than 50 MB")
+        setSaving(false)
+        return
+      }
+      if (!divisionId) {
+        toast.error("Division not loaded — please try again")
+        setSaving(false)
+        return
+      }
+      const supabase = createClient()
+      const ext = (selectedFile.name.match(EXT_RE)?.[1] ?? "bin").toLowerCase()
+      const path = `${divisionId}/ppmp/${projectId}/${Date.now()}.${ext}`
+      const { error: uploadError } = await supabase
+        .storage
+        .from(PPMP_BUCKET)
+        .upload(path, selectedFile, { cacheControl: "3600", upsert: false, contentType: selectedFile.type || undefined })
+      if (uploadError) {
+        toast.error(`Upload failed: ${uploadError.message}`)
+        setSaving(false)
+        return
+      }
+      values.supporting_documents = path
+    }
+
     const result = await addPpmpLot(projectId, values)
     setSaving(false)
     if (result.error) { toast.error(result.error); return }
     toast.success("Lot added.")
     reset()
+    setSelectedFile(null)
     onSaved()
     onClose()
   }
@@ -403,13 +441,41 @@ export function PpmpLotForm({
                 </h3>
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="ppmp-supporting">Supporting documents</Label>
-                    <Input
-                      id="ppmp-supporting"
-                      {...register("supporting_documents")}
-                      placeholder="e.g. Technical specifications, scope of work"
-                      className="h-11"
+                    <Label>Supporting documents</Label>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.doc,.docx,image/png,image/jpeg,image/webp"
+                      onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
                     />
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="h-11 gap-2"
+                      >
+                        <Upload className="h-4 w-4" />
+                        {selectedFile ? "Replace file" : "Choose file"}
+                      </Button>
+                      {selectedFile && (
+                        <div className="flex min-w-0 items-center gap-1.5 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+                          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{selectedFile.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => { setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = "" }}
+                            className="ml-1 shrink-0 text-muted-foreground hover:text-foreground"
+                            aria-label="Remove file"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">PDF, Word, or image — max 50 MB</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="ppmp-remarks">Remarks</Label>

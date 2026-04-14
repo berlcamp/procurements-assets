@@ -197,7 +197,8 @@ export async function getBudgetAllocations(
       fund_source:fund_sources(id, name, code),
       account_code:account_codes(id, name, code, expense_class),
       fiscal_year:fiscal_years(id, year, status),
-      sub_aro:sub_allotment_release_orders(id, sub_aro_number, aro_number, allotment_class)
+      sub_aro:sub_allotment_release_orders(id, sub_aro_number, aro_number, allotment_class),
+      saro:special_allotment_release_orders(id, saro_number, reference_number, program, allotment_class)
     `)
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
@@ -289,6 +290,7 @@ export async function createBudgetAllocation(
     fund_source_id: input.fund_source_id,
     account_code_id: input.account_code_id,
     sub_aro_id: input.sub_aro_id ?? null,
+    saro_id: input.saro_id ?? null,
     original_amount: parseFloat(input.original_amount),
     adjusted_amount: parseFloat(input.original_amount),
     obligated_amount: 0,
@@ -758,5 +760,177 @@ export async function updateSubAro(
   }
 
   revalidatePath("/dashboard/budget/sub-aros")
+  return { error: null }
+}
+
+// ============================================================
+// SARO CRUD
+// ============================================================
+
+import type { SaroWithDetails } from "@/types/database"
+import type { SaroInput } from "@/lib/schemas/budget"
+
+const SARO_SELECT = `
+  *,
+  fiscal_year:fiscal_years(id, year, status),
+  fund_source:fund_sources(id, name, code)
+` as const
+
+const SARO_DETAIL_SELECT = `
+  *,
+  fiscal_year:fiscal_years(id, year, status),
+  fund_source:fund_sources(id, name, code),
+  allocations:budget_allocations(
+    *,
+    office:offices(id, name, code),
+    account_code:account_codes(id, name, code, expense_class)
+  )
+` as const
+
+export async function getSaros(
+  fiscalYearId?: string
+): Promise<SaroWithDetails[]> {
+  const supabase = await createClient()
+
+  let query = supabase
+    .schema("procurements")
+    .from("special_allotment_release_orders")
+    .select(SARO_SELECT)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+
+  if (fiscalYearId) query = query.eq("fiscal_year_id", fiscalYearId)
+
+  const { data, error } = await query
+  if (error) {
+    console.error("getSaros error:", error)
+    return []
+  }
+  return (data ?? []) as SaroWithDetails[]
+}
+
+export async function getSaroById(
+  id: string
+): Promise<SaroWithDetails | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .schema("procurements")
+    .from("special_allotment_release_orders")
+    .select(SARO_DETAIL_SELECT)
+    .eq("id", id)
+    .is("deleted_at", null)
+    .single()
+
+  if (error) {
+    console.error("getSaroById error:", error)
+    return null
+  }
+  return data as SaroWithDetails
+}
+
+export async function getActiveSaros(
+  fiscalYearId?: string
+): Promise<SaroWithDetails[]> {
+  const supabase = await createClient()
+
+  let query = supabase
+    .schema("procurements")
+    .from("special_allotment_release_orders")
+    .select(SARO_SELECT)
+    .in("status", ["active", "draft"])
+    .is("deleted_at", null)
+    .order("saro_number")
+
+  if (fiscalYearId) query = query.eq("fiscal_year_id", fiscalYearId)
+
+  const { data, error } = await query
+  if (error) {
+    console.error("getActiveSaros error:", error)
+    return []
+  }
+  return (data ?? []) as SaroWithDetails[]
+}
+
+export async function createSaro(
+  input: SaroInput
+): Promise<{ error: string | null; id?: string }> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Unauthorized" }
+
+  const { data: profile } = await supabase
+    .schema("procurements")
+    .from("user_profiles")
+    .select("division_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!profile?.division_id) return { error: "No division assigned" }
+
+  const { data, error } = await supabase
+    .schema("procurements")
+    .from("special_allotment_release_orders")
+    .insert({
+      division_id: profile.division_id,
+      fiscal_year_id: input.fiscal_year_id,
+      saro_number: input.saro_number,
+      reference_number: input.reference_number ?? null,
+      program: input.program ?? null,
+      allotment_class: input.allotment_class,
+      fund_source_id: input.fund_source_id,
+      releasing_office: input.releasing_office ?? null,
+      release_date: input.release_date || null,
+      validity_date: input.validity_date || null,
+      purpose: input.purpose ?? null,
+      total_amount: parseFloat(input.total_amount),
+      status: "active",
+      remarks: input.remarks ?? null,
+      created_by: user.id,
+    })
+    .select("id")
+    .single()
+
+  if (error) {
+    console.error("createSaro error:", error)
+    return { error: error.message }
+  }
+
+  revalidatePath("/dashboard/budget")
+  revalidatePath("/dashboard/budget/saros")
+  return { error: null, id: data.id }
+}
+
+export async function updateSaro(
+  id: string,
+  input: Partial<SaroInput>
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+
+  const updateData: Record<string, unknown> = {}
+  if (input.saro_number !== undefined) updateData.saro_number = input.saro_number
+  if (input.reference_number !== undefined) updateData.reference_number = input.reference_number || null
+  if (input.program !== undefined) updateData.program = input.program || null
+  if (input.allotment_class !== undefined) updateData.allotment_class = input.allotment_class
+  if (input.fund_source_id !== undefined) updateData.fund_source_id = input.fund_source_id
+  if (input.releasing_office !== undefined) updateData.releasing_office = input.releasing_office || null
+  if (input.release_date !== undefined) updateData.release_date = input.release_date || null
+  if (input.validity_date !== undefined) updateData.validity_date = input.validity_date || null
+  if (input.purpose !== undefined) updateData.purpose = input.purpose || null
+  if (input.total_amount !== undefined) updateData.total_amount = parseFloat(input.total_amount)
+  if (input.remarks !== undefined) updateData.remarks = input.remarks || null
+
+  const { error } = await supabase
+    .schema("procurements")
+    .from("special_allotment_release_orders")
+    .update(updateData)
+    .eq("id", id)
+
+  if (error) {
+    console.error("updateSaro error:", error)
+    return { error: error.message }
+  }
+
+  revalidatePath("/dashboard/budget/saros")
   return { error: null }
 }

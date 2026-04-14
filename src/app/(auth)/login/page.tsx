@@ -130,11 +130,12 @@ function LoginForm() {
         </div>
 
         {/* Bottom — footer */}
-        <div className="relative flex items-center justify-between border-t border-white/5 pt-6">
+        <div className="relative flex flex-wrap items-end justify-between gap-x-4 gap-y-2 border-t border-white/5 pt-6">
           <p className="text-xs text-slate-600">Department of Education</p>
-          <p className="text-xs text-slate-600">
-            © {new Date().getFullYear()} PABMS
-          </p>
+          <div className="flex flex-col items-end gap-1 text-xs text-slate-600">
+            <p>Developed and powered by: Keri Software Development Services</p>
+            <p>© {new Date().getFullYear()} PABMS</p>
+          </div>
         </div>
       </div>
 

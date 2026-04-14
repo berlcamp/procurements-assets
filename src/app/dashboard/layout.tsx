@@ -27,6 +27,8 @@ import {
   Trash2,
   FileBarChart,
   Globe,
+  Fuel,
+  Droplets,
 } from "lucide-react"
 import type { NavGroup } from "@/components/layout/sidebar"
 
@@ -99,6 +101,16 @@ const navGroups: NavGroup[] = [
         label: "Sub-AROs",
         href: "/dashboard/budget/sub-aros",
         icon: <ScrollText className="h-4 w-4" />,
+        permissions: [
+          "budget.create",
+          "budget.certify",
+          "budget.view_all",
+        ],
+      },
+      {
+        label: "SAROs",
+        href: "/dashboard/budget/saros",
+        icon: <FileText className="h-4 w-4" />,
         permissions: [
           "budget.create",
           "budget.certify",
@@ -241,6 +253,40 @@ const navGroups: NavGroup[] = [
         href: "/dashboard/reports",
         icon: <BarChart2 className="h-4 w-4" />,
         permissions: ["reports.all", "reports.office"],
+      },
+    ],
+  },
+  {
+    label: "Fuel Management",
+    items: [
+      {
+        label: "Fuel Overview",
+        href: "/dashboard/fuel",
+        icon: <Fuel className="h-4 w-4" />,
+        permissions: [
+          "fuel.request",
+          "fuel.approve",
+          "fuel.manage_inventory",
+          "fuel.view_reports",
+        ],
+      },
+      {
+        label: "Trip Tickets",
+        href: "/dashboard/fuel/requests",
+        icon: <FileText className="h-4 w-4" />,
+        permissions: ["fuel.request", "fuel.approve"],
+      },
+      {
+        label: "Fuel Inventory",
+        href: "/dashboard/fuel/inventory",
+        icon: <Droplets className="h-4 w-4" />,
+        permissions: ["fuel.manage_inventory"],
+      },
+      {
+        label: "Fuel Reports",
+        href: "/dashboard/fuel/reports",
+        icon: <BarChart2 className="h-4 w-4" />,
+        permissions: ["fuel.view_reports"],
       },
     ],
   },

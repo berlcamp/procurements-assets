@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { createClient } from "@/lib/supabase/client"
-import type { FiscalYear, Office, FundSource, AccountCode, SubAllotmentReleaseOrder } from "@/types/database"
+import type { FiscalYear, Office, FundSource, AccountCode, SubAllotmentReleaseOrder, SpecialAllotmentReleaseOrder } from "@/types/database"
 
 export function AllocationForm() {
   const router = useRouter()
@@ -29,6 +29,7 @@ export function AllocationForm() {
   const [fundSources, setFundSources] = useState<FundSource[]>([])
   const [accountCodes, setAccountCodes] = useState<AccountCode[]>([])
   const [subAros, setSubAros] = useState<SubAllotmentReleaseOrder[]>([])
+  const [saros, setSaros] = useState<SpecialAllotmentReleaseOrder[]>([])
 
   const {
     register,
@@ -68,12 +69,14 @@ export function AllocationForm() {
       supabase.schema("procurements").from("fund_sources").select("id, name, code").eq("is_active", true).order("name"),
       supabase.schema("procurements").from("account_codes").select("id, name, code, expense_class").eq("is_active", true).order("code"),
       supabase.schema("procurements").from("sub_allotment_release_orders").select("id, sub_aro_number, aro_number, total_amount, allocated_amount, fund_source_id, status").in("status", ["active", "draft"]).is("deleted_at", null).order("sub_aro_number"),
-    ]).then(([fy, off, fs, ac, sa]) => {
+      supabase.schema("procurements").from("special_allotment_release_orders").select("id, saro_number, reference_number, program, total_amount, allocated_amount, fund_source_id, status").in("status", ["active", "draft"]).is("deleted_at", null).order("saro_number"),
+    ]).then(([fy, off, fs, ac, sa, saro]) => {
       setFiscalYears((fy.data ?? []) as FiscalYear[])
       setOffices((off.data ?? []) as Office[])
       setFundSources((fs.data ?? []) as FundSource[])
       setAccountCodes((ac.data ?? []) as AccountCode[])
       setSubAros((sa.data ?? []) as SubAllotmentReleaseOrder[])
+      setSaros((saro.data ?? []) as SpecialAllotmentReleaseOrder[])
     })
   }, [])
 
@@ -187,34 +190,75 @@ export function AllocationForm() {
         )}
       </div>
 
-      {/* Sub-ARO (optional) */}
+      {/* Funding Authority (Sub-ARO or SARO, optional) */}
       <div className="space-y-2">
-        <Label>Sub-ARO (Funding Authority)</Label>
+        <Label>Funding Authority (Sub-ARO / SARO)</Label>
         <Select
-          onValueChange={(v) => { setValue("sub_aro_id", v === "__none__" ? null : v) }}
-          value={watch("sub_aro_id") ?? "__none__"}
+          onValueChange={(v) => {
+            if (!v || v === "__none__") {
+              setValue("sub_aro_id", null)
+              setValue("saro_id", null)
+            } else if (v.startsWith("sub_aro:")) {
+              setValue("sub_aro_id", v.replace("sub_aro:", ""))
+              setValue("saro_id", null)
+            } else if (v.startsWith("saro:")) {
+              setValue("saro_id", v.replace("saro:", ""))
+              setValue("sub_aro_id", null)
+            }
+          }}
+          value={
+            watch("sub_aro_id") ? `sub_aro:${watch("sub_aro_id")}` :
+            watch("saro_id") ? `saro:${watch("saro_id")}` :
+            "__none__"
+          }
         >
           <SelectTrigger>
-            <SelectValue placeholder="Select Sub-ARO (optional)" />
+            <SelectValue placeholder="Select funding authority (optional)" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__none__">No Sub-ARO</SelectItem>
-            {subAros.map((sa) => {
-              const remaining = parseFloat(sa.total_amount) - parseFloat(sa.allocated_amount)
-              return (
-                <SelectItem key={sa.id} value={sa.id}>
-                  {sa.sub_aro_number}
-                  {sa.aro_number ? ` (${sa.aro_number})` : ""}
-                  {" — ₱"}
-                  {remaining.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
-                  {" available"}
+            <SelectItem value="__none__">No Funding Authority</SelectItem>
+            {subAros.length > 0 && (
+              <>
+                <SelectItem value="__sub_aro_header__" disabled className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Sub-AROs
                 </SelectItem>
-              )
-            })}
+                {subAros.map((sa) => {
+                  const remaining = parseFloat(sa.total_amount) - parseFloat(sa.allocated_amount)
+                  return (
+                    <SelectItem key={`sub_aro:${sa.id}`} value={`sub_aro:${sa.id}`}>
+                      [Sub-ARO] {sa.sub_aro_number}
+                      {sa.aro_number ? ` (${sa.aro_number})` : ""}
+                      {" — ₱"}
+                      {remaining.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                      {" available"}
+                    </SelectItem>
+                  )
+                })}
+              </>
+            )}
+            {saros.length > 0 && (
+              <>
+                <SelectItem value="__saro_header__" disabled className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  SAROs
+                </SelectItem>
+                {saros.map((s) => {
+                  const remaining = parseFloat(s.total_amount) - parseFloat(s.allocated_amount)
+                  return (
+                    <SelectItem key={`saro:${s.id}`} value={`saro:${s.id}`}>
+                      [SARO] {s.saro_number}
+                      {s.program ? ` — ${s.program}` : ""}
+                      {" — ₱"}
+                      {remaining.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                      {" available"}
+                    </SelectItem>
+                  )
+                })}
+              </>
+            )}
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          Link this allocation to a Sub-Allotment Release Order for fund authority tracking.
+          Link this allocation to a Sub-ARO or SARO for fund authority tracking.
         </p>
       </div>
 

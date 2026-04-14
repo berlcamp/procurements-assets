@@ -129,7 +129,7 @@ export default async function DashboardPage() {
               <CardContent>
                 <div className="text-2xl font-bold">{assetSummary?.totalActiveAssets ?? 0}</div>
                 <p className="text-xs text-muted-foreground">
-                  <AmountDisplay amount={assetSummary?.totalBookValue ?? 0} compact /> book value
+                  registered property
                 </p>
               </CardContent>
             </Card>
@@ -246,10 +246,10 @@ export default async function DashboardPage() {
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-xs font-medium text-muted-foreground uppercase">Book Value</CardTitle>
+                <CardTitle className="text-xs font-medium text-muted-foreground uppercase">For Disposal</CardTitle>
               </CardHeader>
               <CardContent>
-                <AmountDisplay amount={assetSummary?.totalBookValue ?? 0} className="text-xl font-bold" />
+                <div className="text-2xl font-bold text-orange-600">{assetSummary?.forDisposalCount ?? 0}</div>
               </CardContent>
             </Card>
             <Card>
