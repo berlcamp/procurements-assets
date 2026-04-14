@@ -185,6 +185,12 @@ export function PpmpProjectTable({
                             <Badge variant="secondary" className="text-sm">
                               {getModeLabel(lot.procurement_mode)}
                             </Badge>
+                            {lot.is_cse && (
+                              <Badge variant="default" className="text-sm bg-blue-600">CSE</Badge>
+                            )}
+                            {lot.schedule_quarter && (
+                              <Badge variant="outline" className="text-sm">{lot.schedule_quarter}</Badge>
+                            )}
                             {lot.pre_procurement_conference && (
                               <Badge variant="outline" className="text-sm">Pre-Proc Conf</Badge>
                             )}

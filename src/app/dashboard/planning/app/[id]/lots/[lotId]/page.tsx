@@ -56,7 +56,7 @@ export default async function LotDetailPage({ params }: Props) {
           </div>
           <p className="text-base text-muted-foreground">
             FY {fy?.year ?? "—"}
-            {typedLot.procurement_method && ` · ${typedLot.procurement_method.replace(/_/g, " ")}`}
+            {` · ${typedLot.procurement_method.replace(/_/g, " ")}`}
           </p>
         </div>
         <Button size="sm" variant="ghost" nativeButton={false} render={<Link href={`/dashboard/planning/app/${id}/lots`} />}>

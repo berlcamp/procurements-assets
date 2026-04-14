@@ -277,11 +277,21 @@ export function AppHopeReview({ items, appId }: AppHopeReviewProps) {
               <AmountDisplay amount={previewItem?.estimated_budget ?? "0"} className="text-sm font-semibold" />
             </DetailRow>
             <DetailRow label="Project Type">
-              {label(previewItem?.project_type)}
+              <span className="flex items-center gap-2">
+                {label(previewItem?.project_type)}
+                {previewItem?.is_cse && (
+                  <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-blue-600">CSE</Badge>
+                )}
+              </span>
             </DetailRow>
             <DetailRow label="Procurement Mode">
               {label(previewItem?.procurement_mode)}
             </DetailRow>
+            {previewItem?.schedule_quarter && (
+              <DetailRow label="Target Quarter">
+                {previewItem.schedule_quarter}
+              </DetailRow>
+            )}
             <DetailRow label="Source of Funds">
               {previewItem?.source_of_funds ?? "—"}
             </DetailRow>

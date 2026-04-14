@@ -21,7 +21,10 @@ export type AppHopeReviewInput = z.infer<typeof appHopeReviewSchema>
 export const appLotSchema = z.object({
   lot_name: z.string().min(3, "Lot name must be at least 3 characters"),
   description: z.string().nullable().optional(),
-  procurement_method: z.string().nullable().optional(),
+  procurement_method: z.enum([
+    'competitive_bidding', 'limited_source_bidding', 'direct_contracting',
+    'repeat_order', 'shopping', 'svp', 'negotiated', 'agency_to_agency', 'emergency',
+  ], { message: "Procurement method is required" }),
 })
 
 export type AppLotInput = z.infer<typeof appLotSchema>

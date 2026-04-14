@@ -98,7 +98,15 @@ export function AppItemsTable({ items, showLotColumn = true }: AppItemsTableProp
                   </TableCell>
                   <TableCell>
                     <div>
-                      <p className="font-medium text-sm">{item.general_description}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-medium text-sm">{item.general_description}</p>
+                        {item.is_cse && (
+                          <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-blue-600">CSE</Badge>
+                        )}
+                        {item.schedule_quarter && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">{item.schedule_quarter}</Badge>
+                        )}
+                      </div>
                       {item.project_type && (
                         <p className="text-xs text-muted-foreground capitalize">
                           {item.project_type.replace(/_/g, " ")}
@@ -134,6 +142,24 @@ export function AppItemsTable({ items, showLotColumn = true }: AppItemsTableProp
                         </TooltipProvider>
                       )}
                       <AmountDisplay amount={item.estimated_budget} className="text-sm" />
+                      {item.indicative_budget && Number(item.indicative_budget) !== Number(item.estimated_budget) && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <span className={cn(
+                                "text-[10px] font-medium",
+                                Number(item.estimated_budget) > Number(item.indicative_budget) ? "text-red-500" : "text-green-600"
+                              )}>
+                                {Number(item.estimated_budget) > Number(item.indicative_budget) ? "+" : ""}
+                                {((Number(item.estimated_budget) - Number(item.indicative_budget)) / Number(item.indicative_budget) * 100).toFixed(1)}%
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="left" className="text-xs">
+                              Indicative: ₱{Number(item.indicative_budget).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="text-sm">

@@ -176,7 +176,7 @@ export const createProcurementSchema = z.object({
   procurement_method: z.enum([
     "svp", "shopping", "competitive_bidding",
     "direct_contracting", "repeat_order", "emergency",
-    "negotiated", "agency_to_agency",
+    "negotiated", "agency_to_agency", "limited_source_bidding",
   ], {
     message: "Procurement method is required",
   }),
@@ -286,14 +286,15 @@ export type AdvanceStageInput = z.infer<typeof advanceStageSchema>
 // ============================================================
 
 export const PROCUREMENT_METHOD_LABELS: Record<string, string> = {
-  svp:                  "Small Value Procurement",
-  shopping:             "Shopping",
-  competitive_bidding:  "Competitive Bidding",
-  direct_contracting:   "Direct Contracting",
-  repeat_order:         "Repeat Order",
-  emergency:            "Emergency Purchase",
-  negotiated:           "Negotiated Procurement",
-  agency_to_agency:     "Agency-to-Agency",
+  svp:                    "Small Value Procurement",
+  shopping:               "Shopping",
+  competitive_bidding:    "Competitive Bidding",
+  direct_contracting:     "Direct Contracting",
+  repeat_order:           "Repeat Order",
+  emergency:              "Emergency Purchase",
+  negotiated:             "Negotiated Procurement",
+  agency_to_agency:       "Agency-to-Agency",
+  limited_source_bidding: "Limited Source Bidding",
 }
 
 export const PROCUREMENT_STATUS_LABELS: Record<string, string> = {
@@ -397,6 +398,20 @@ export const AGENCY_TO_AGENCY_STAGE_LABELS: Record<string, string> = {
   agency_identification: "Agency Identification",
   moa_execution:         "MOA/MOU Execution",
   completed:             "Completed",
+}
+
+export const LIMITED_SOURCE_BIDDING_STAGE_LABELS: Record<string, string> = {
+  created:            "Created",
+  pre_qualification:  "Pre-Qualification",
+  itb_published:      "ITB Published",
+  bid_submission:     "Bid Submission",
+  bid_opening:        "Bid Opening",
+  evaluation:         "Evaluation",
+  post_qualification: "Post-Qualification",
+  award_recommended:  "Award Recommended",
+  award_approved:     "Award Approved",
+  contract_signing:   "Contract Signing",
+  completed:          "Completed",
 }
 
 // ============================================================

@@ -531,6 +531,12 @@ export interface PpmpLot {
   supporting_documents: string | null
   remarks: string | null
   budget_allocation_id: string | null
+  is_cse: boolean
+  schedule_quarter: string | null
+  advertisement_date: string | null
+  bid_opening_date: string | null
+  award_date: string | null
+  contract_signing_date: string | null
   created_at: string
   updated_at: string
 }
@@ -660,6 +666,7 @@ export interface AppItem {
   source_ppmp_project_id: string | null
   source_ppmp_lot_id: string | null
   source_ppmp_id: string | null
+  source_ppmp_project_description: string | null
   item_number: number
   general_description: string
   project_type: string | null
@@ -678,6 +685,15 @@ export interface AppItem {
   lot_id: string | null
   lot_item_number: number | null
   remarks: string | null
+  is_cse: boolean
+  schedule_quarter: string | null
+  advertisement_date: string | null
+  bid_opening_date: string | null
+  award_date: string | null
+  contract_signing_date: string | null
+  indicative_budget: string | null
+  budget_adjusted_by: string | null
+  budget_adjusted_at: string | null
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -691,7 +707,7 @@ export interface AppLot {
   lot_number: number
   lot_name: string
   description: string | null
-  procurement_method: string | null
+  procurement_method: string
   total_estimated_cost: string
   status: AppLotStatus
   finalized_by: string | null
@@ -996,7 +1012,7 @@ export interface BidSecurityStatus {
   error?: string
 }
 
-export type ProcurementMethod = 'svp' | 'shopping' | 'competitive_bidding' | 'direct_contracting' | 'repeat_order' | 'emergency' | 'negotiated' | 'agency_to_agency'
+export type ProcurementMethod = 'svp' | 'shopping' | 'competitive_bidding' | 'direct_contracting' | 'repeat_order' | 'emergency' | 'negotiated' | 'agency_to_agency' | 'limited_source_bidding'
 export type ProcurementActivityStatus = 'active' | 'completed' | 'failed' | 'cancelled'
 export type BidStatus = 'submitted' | 'evaluated' | 'awarded' | 'disqualified'
 export type ProcurementStageStatus = 'completed' | 'current' | 'skipped'

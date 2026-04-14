@@ -7,7 +7,7 @@ import { toast } from "sonner"
 import {
   ppmpProjectSchema, ppmpLotSchema, ppmpLotItemSchema,
   type PpmpProjectInput, type PpmpLotInput, type PpmpLotItemInput,
-  PPMP_PROJECT_TYPE_LABELS, PROCUREMENT_MODES,
+  PPMP_PROJECT_TYPE_LABELS, PROCUREMENT_MODES, SCHEDULE_QUARTERS,
 } from "@/lib/schemas/ppmp"
 import { addPpmpProject, addPpmpLot, addPpmpLotItem } from "@/lib/actions/ppmp"
 import { Button } from "@/components/ui/button"
@@ -241,15 +241,28 @@ export function PpmpLotForm({
                         <p className="text-xs text-destructive">{errors.procurement_mode.message}</p>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3 lg:min-h-[3.25rem] lg:items-center">
-                      <Checkbox
-                        id="pre_proc_conf"
-                        checked={watch("pre_procurement_conference")}
-                        onCheckedChange={(v) => setValue("pre_procurement_conference", !!v)}
-                      />
-                      <Label htmlFor="pre_proc_conf" className="cursor-pointer text-sm leading-snug font-normal">
-                        Pre-procurement conference required
-                      </Label>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3 lg:min-h-[3.25rem] lg:items-center">
+                        <Checkbox
+                          id="pre_proc_conf"
+                          checked={watch("pre_procurement_conference")}
+                          onCheckedChange={(v) => setValue("pre_procurement_conference", !!v)}
+                        />
+                        <Label htmlFor="pre_proc_conf" className="cursor-pointer text-sm leading-snug font-normal">
+                          Pre-procurement conference required
+                        </Label>
+                      </div>
+                      <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3 lg:min-h-[3.25rem] lg:items-center">
+                        <Checkbox
+                          id="is_cse"
+                          checked={watch("is_cse")}
+                          onCheckedChange={(v) => setValue("is_cse", !!v)}
+                        />
+                        <Label htmlFor="is_cse" className="cursor-pointer text-sm leading-snug font-normal">
+                          Common-Use Supplies &amp; Equipment (CSE)
+                          <span className="block text-xs text-muted-foreground font-normal">Must procure from PS-DBM</span>
+                        </Label>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -262,7 +275,23 @@ export function PpmpLotForm({
                 >
                   Schedule
                 </h3>
-                <div className="grid gap-4 sm:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ppmp-quarter">Quarter</Label>
+                    <Select
+                      onValueChange={(v) => { if (v) setValue("schedule_quarter", v as "Q1" | "Q2" | "Q3" | "Q4") }}
+                      value={watch("schedule_quarter") ?? ""}
+                    >
+                      <SelectTrigger id="ppmp-quarter" className="h-11 w-full">
+                        <SelectValue placeholder="Select quarter" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SCHEDULE_QUARTERS.map((q) => (
+                          <SelectItem key={q.value} value={q.value}>{q.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="ppmp-proc-start">Procurement start (MM/YYYY)</Label>
                     <Input
@@ -287,6 +316,44 @@ export function PpmpLotForm({
                       id="ppmp-delivery"
                       {...register("delivery_period")}
                       placeholder="07/2026"
+                      className="h-11 font-mono"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ppmp-adv-date">Advertisement (MM/YYYY)</Label>
+                    <Input
+                      id="ppmp-adv-date"
+                      {...register("advertisement_date")}
+                      placeholder="04/2026"
+                      className="h-11 font-mono"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ppmp-bid-date">Bid opening (MM/YYYY)</Label>
+                    <Input
+                      id="ppmp-bid-date"
+                      {...register("bid_opening_date")}
+                      placeholder="05/2026"
+                      className="h-11 font-mono"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ppmp-award-date">Award (MM/YYYY)</Label>
+                    <Input
+                      id="ppmp-award-date"
+                      {...register("award_date")}
+                      placeholder="06/2026"
+                      className="h-11 font-mono"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ppmp-contract-date">Contract signing (MM/YYYY)</Label>
+                    <Input
+                      id="ppmp-contract-date"
+                      {...register("contract_signing_date")}
+                      placeholder="06/2026"
                       className="h-11 font-mono"
                     />
                   </div>

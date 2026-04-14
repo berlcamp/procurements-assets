@@ -31,11 +31,20 @@ export type PpmpProjectInput = z.infer<typeof ppmpProjectSchema>
 
 export const ppmpLotSchema = z.object({
   lot_title: z.string().nullable().optional(),
-  procurement_mode: z.string().min(1, "Procurement mode is required"),
+  procurement_mode: z.enum([
+    'competitive_bidding', 'limited_source_bidding', 'direct_contracting',
+    'repeat_order', 'shopping', 'svp', 'negotiated', 'agency_to_agency', 'emergency',
+  ], { message: "Procurement mode is required" }),
   pre_procurement_conference: z.boolean().default(false),
+  is_cse: z.boolean().default(false),
   procurement_start: z.string().nullable().optional(),
   procurement_end: z.string().nullable().optional(),
   delivery_period: z.string().nullable().optional(),
+  schedule_quarter: z.enum(['Q1', 'Q2', 'Q3', 'Q4']).nullable().optional(),
+  advertisement_date: z.string().nullable().optional(),
+  bid_opening_date: z.string().nullable().optional(),
+  award_date: z.string().nullable().optional(),
+  contract_signing_date: z.string().nullable().optional(),
   source_of_funds: z.string().nullable().optional(),
   estimated_budget: z
     .string()
@@ -141,13 +150,20 @@ export const PPMP_PROJECT_TYPE_LABELS: Record<string, string> = {
 }
 
 export const PROCUREMENT_MODES = [
-  { value: "competitive_bidding",        label: "Competitive Bidding" },
-  { value: "limited_source_bidding",     label: "Limited Source Bidding" },
-  { value: "direct_contracting",         label: "Direct Contracting" },
-  { value: "repeat_order",               label: "Repeat Order" },
-  { value: "shopping",                   label: "Shopping" },
-  { value: "negotiated_procurement",     label: "Negotiated Procurement" },
-  { value: "small_value",                label: "Small Value Procurement" },
-  { value: "two_stage_bidding",          label: "Two-Stage Bidding" },
-  { value: "by_administration",          label: "By Administration" },
+  { value: "competitive_bidding",    label: "Competitive Bidding" },
+  { value: "limited_source_bidding", label: "Limited Source Bidding" },
+  { value: "direct_contracting",     label: "Direct Contracting" },
+  { value: "repeat_order",           label: "Repeat Order" },
+  { value: "shopping",               label: "Shopping" },
+  { value: "svp",                    label: "Small Value Procurement" },
+  { value: "negotiated",             label: "Negotiated Procurement" },
+  { value: "agency_to_agency",       label: "Agency-to-Agency" },
+  { value: "emergency",              label: "Emergency Purchase" },
+]
+
+export const SCHEDULE_QUARTERS = [
+  { value: "Q1", label: "Q1 (Jan-Mar)" },
+  { value: "Q2", label: "Q2 (Apr-Jun)" },
+  { value: "Q3", label: "Q3 (Jul-Sep)" },
+  { value: "Q4", label: "Q4 (Oct-Dec)" },
 ]

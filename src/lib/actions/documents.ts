@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createPpmp, addPpmpProject, addPpmpLot, addPpmpLotItem } from "@/lib/actions/ppmp"
+import type { PpmpLotInput } from "@/lib/schemas/ppmp"
 import { revalidatePath } from "next/cache"
 
 // ============================================================
@@ -117,8 +118,9 @@ export async function importPpmpFromRows(
 
       const { id: lotId, error: lotError } = await addPpmpLot(projectId, {
         lot_title: lotData.lot_title ?? null,
-        procurement_mode: lotData.procurement_mode,
+        procurement_mode: lotData.procurement_mode as PpmpLotInput["procurement_mode"],
         pre_procurement_conference: false,
+        is_cse: false,
         procurement_start: lotData.procurement_start ?? null,
         procurement_end: lotData.procurement_end ?? null,
         delivery_period: null,

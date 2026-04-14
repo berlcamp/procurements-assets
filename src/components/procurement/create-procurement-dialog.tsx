@@ -21,6 +21,7 @@ import {
   createProcurementActivity,
 } from "@/lib/actions/procurement-activities"
 import { checkSplitContract } from "@/lib/actions/procurement"
+import { PROCUREMENT_METHOD_LABELS } from "@/lib/schemas/procurement"
 import type { PurchaseRequestWithDetails, SplitContractWarning } from "@/types/database"
 
 export function CreateProcurementDialog() {
@@ -49,9 +50,7 @@ export function CreateProcurementDialog() {
   useEffect(() => {
     if (!selectedPr) return
     const planned = selectedPr.procurement_mode?.toLowerCase().trim().replace(/ /g, "_")
-    const KNOWN = ["svp", "shopping", "competitive_bidding", "direct_contracting", "repeat_order", "emergency", "negotiated", "agency_to_agency"]
-    const normalized = planned === "bidding" ? "competitive_bidding" : planned
-    if (normalized && KNOWN.includes(normalized)) setMethod(normalized)
+    if (planned && planned in PROCUREMENT_METHOD_LABELS) setMethod(planned)
   }, [selectedPr])
 
   useEffect(() => {

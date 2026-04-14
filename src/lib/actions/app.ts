@@ -564,7 +564,7 @@ export async function createAppLot(
       p_app_id: appId,
       p_lot_name: input.lot_name,
       p_description: input.description ?? null,
-      p_procurement_method: input.procurement_method ?? null,
+      p_procurement_method: input.procurement_method,
     })
 
   if (error) return { id: null, error: error.message }
@@ -636,7 +636,7 @@ export async function updateAppLot(
     .update({
       ...(input.lot_name !== undefined && { lot_name: input.lot_name }),
       ...(input.description !== undefined && { description: input.description || null }),
-      ...(input.procurement_method !== undefined && { procurement_method: input.procurement_method || null }),
+      ...(input.procurement_method !== undefined && { procurement_method: input.procurement_method }),
     })
     .eq("id", lotId)
     .eq("status", "draft")
@@ -753,4 +753,28 @@ export async function createAppAmendment(
   revalidatePath("/dashboard/planning/app")
   revalidatePath(`/dashboard/planning/app/${appId}`)
   return { versionId: data as string, error: null }
+}
+
+// ============================================================
+// Budget adjustment
+// ============================================================
+
+export async function adjustAppItemBudget(
+  appItemId: string,
+  newBudget: string,
+  notes?: string,
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .schema("procurements")
+    .rpc("adjust_app_item_budget", {
+      p_app_item_id: appItemId,
+      p_new_budget: parseFloat(newBudget),
+      p_notes: notes ?? null,
+    })
+
+  if (error) return { error: error.message }
+
+  revalidatePath("/dashboard/planning/app")
+  return { error: null }
 }

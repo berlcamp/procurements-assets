@@ -25,10 +25,11 @@ import {
   createAppLot, updateAppLot, assignItemsToLot, unassignItemsFromLot, finalizeLot, deleteAppLot,
 } from "@/lib/actions/app"
 import { PROCUREMENT_MODES } from "@/lib/schemas/ppmp"
+import type { AppLotInput } from "@/lib/schemas/app"
 import type { AppItemWithOffice, AppLotWithItems } from "@/types/database"
 import { cn } from "@/lib/utils"
 
-type GroupBy = "mode" | "office" | "none"
+type GroupBy = "mode" | "office" | "cse" | "none"
 
 interface ItemGroup {
   key: string
@@ -102,13 +103,19 @@ export function AppLotManager({
     }
     const map = new Map<string, ItemGroup>()
     for (const item of sorted) {
-      const key = groupBy === "mode"
-        ? (item.procurement_mode ?? "__none__")
-        : (item.source_office_id ?? "__none__")
+      let key: string
+      let label: string
+      if (groupBy === "mode") {
+        key = item.procurement_mode ?? "__none__"
+        label = item.procurement_mode ? (procurementModeLabel[item.procurement_mode] ?? item.procurement_mode.replace(/_/g, " ")) : "No procurement mode"
+      } else if (groupBy === "cse") {
+        key = item.is_cse ? "cse" : "non_cse"
+        label = item.is_cse ? "Common-Use Supplies & Equipment (CSE)" : "Non-CSE Items"
+      } else {
+        key = item.source_office_id ?? "__none__"
+        label = item.source_office?.name ?? "Unknown office"
+      }
       if (!map.has(key)) {
-        const label = groupBy === "mode"
-          ? (item.procurement_mode ? (procurementModeLabel[item.procurement_mode] ?? item.procurement_mode.replace(/_/g, " ")) : "No procurement mode")
-          : (item.source_office?.name ?? "Unknown office")
         map.set(key, { key, label, items: [], total: 0 })
       }
       const g = map.get(key)!
@@ -147,12 +154,13 @@ export function AppLotManager({
 
   const handleCreateLot = () => {
     if (lotName.trim().length < 3) return
+    if (!lotMethod) { setError("Procurement method is required"); return }
     setError(null)
     startTransition(async () => {
       const result = await createAppLot(appId, {
         lot_name: lotName.trim(),
         description: lotDesc.trim() || null,
-        procurement_method: lotMethod || null,
+        procurement_method: lotMethod as "competitive_bidding",
       })
       if (result.error) setError(result.error)
       else {
@@ -199,7 +207,7 @@ export function AppLotManager({
 
   const handleUpdateLot = async (lotId: string, fields: { lot_name?: string; description?: string; procurement_method?: string }) => {
     setError(null)
-    const result = await updateAppLot(lotId, fields)
+    const result = await updateAppLot(lotId, fields as Partial<AppLotInput>)
     if (result.error) setError(result.error)
     else router.refresh()
     return result
@@ -249,7 +257,7 @@ export function AppLotManager({
             )}
             {approvedUnlottedItems.length > 0 && (
               <div className="ml-auto flex items-center gap-1 rounded-md border border-border/60 bg-background p-0.5">
-                {(["mode", "office", "none"] as GroupBy[]).map((g) => (
+                {(["mode", "office", "cse", "none"] as GroupBy[]).map((g) => (
                   <button
                     key={g}
                     onClick={() => setGroupBy(g)}
@@ -260,7 +268,7 @@ export function AppLotManager({
                         : "text-muted-foreground hover:text-foreground"
                     )}
                   >
-                    {g === "mode" ? "By mode" : g === "office" ? "By office" : "Flat"}
+                    {g === "mode" ? "By mode" : g === "office" ? "By office" : g === "cse" ? "By CSE" : "Flat"}
                   </button>
                 ))}
               </div>

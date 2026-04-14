@@ -54,7 +54,7 @@ export function AppLotCard({
     setEditingField(field)
     if (field === "name") setEditValue(lot.lot_name)
     else if (field === "description") setEditValue(lot.description ?? "")
-    else setEditValue(lot.procurement_method ?? "")
+    else setEditValue(lot.procurement_method)
   }
 
   const cancelEdit = () => {
@@ -69,7 +69,7 @@ export function AppLotCard({
     if (editingField === "name" && trimmed.length < 3) return
     if (editingField === "name" && trimmed === lot.lot_name) { cancelEdit(); return }
     if (editingField === "description" && trimmed === (lot.description ?? "")) { cancelEdit(); return }
-    if (editingField === "method" && trimmed === (lot.procurement_method ?? "")) { cancelEdit(); return }
+    if (editingField === "method" && trimmed === lot.procurement_method) { cancelEdit(); return }
 
     const payload = editingField === "name"
       ? { lot_name: trimmed }
@@ -207,7 +207,7 @@ export function AppLotCard({
                   <X className="h-3 w-3" />
                 </Button>
               </span>
-            ) : lot.procurement_method ? (
+            ) : (
               <span
                 className={canEdit ? "cursor-pointer hover:text-foreground transition-colors" : ""}
                 onClick={(e) => { e.stopPropagation(); startEdit("method") }}
@@ -215,15 +215,7 @@ export function AppLotCard({
               >
                 {` · ${procurementModeLabel(lot.procurement_method)}`}
               </span>
-            ) : canEdit ? (
-              <span
-                className="cursor-pointer hover:text-foreground transition-colors ml-1 italic"
-                onClick={(e) => { e.stopPropagation(); startEdit("method") }}
-                title="Click to set procurement method"
-              >
-                · set method
-              </span>
-            ) : null}
+            )}
           </span>
           <AmountDisplay amount={lot.total_estimated_cost} className="font-semibold" />
         </div>
