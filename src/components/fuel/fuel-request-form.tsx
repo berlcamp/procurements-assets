@@ -278,14 +278,13 @@ export function FuelRequestForm({ officeId, fuelTypeMap }: FuelRequestFormProps)
                   <FormLabel>Fuel Type *</FormLabel>
                   <Select
                     onValueChange={field.onChange}
-                    value={field.value || undefined}
+                    value={field.value}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select fuel type">
                         {(value: string) => {
-                          if (!value) return null
                           const opt = fuelOptions.find(o => o.id === value)
-                          return opt ? `${opt.icon} ${opt.label}` : null
+                          return opt ? `${opt.icon} ${opt.label}` : value
                         }}
                       </SelectValue>
                     </SelectTrigger>
