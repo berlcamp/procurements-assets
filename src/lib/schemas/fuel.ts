@@ -95,6 +95,8 @@ export const fuelManualStockInSchema = z.object({
   quantity_liters: z
     .number()
     .positive("Quantity must be greater than zero"),
+  price_per_liter: z.number().positive("Price must be greater than zero").optional(),
+  po_number: z.string().optional(),
   remarks: z.string().nullable().optional(),
 })
 

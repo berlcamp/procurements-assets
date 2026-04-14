@@ -409,51 +409,83 @@ export default function FuelRequestDetailPage() {
             <CardHeader>
               <CardTitle>Actions</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-3">
               {/* Approve button */}
               {canApprove && isPending && (
                 <Dialog open={approveOpen} onOpenChange={setApproveOpen}>
                   <DialogTrigger render={<Button className="w-full" variant="default" />}>
-                    <CheckCircle className="h-4 w-4 mr-1" />
-                    Approve
+                    <CheckCircle className="h-4 w-4 mr-1.5" />
+                    Approve Request
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Approve Fuel Request</DialogTitle>
+                      <DialogTitle className="flex items-center gap-2">
+                        <CheckCircle className="h-5 w-5 text-green-600" />
+                        Approve Fuel Request
+                      </DialogTitle>
                       <DialogDescription>
-                        Approving will deduct {parseFloat(request.liters_requested).toLocaleString()} liters from inventory.
+                        Review and approve this fuel request. Fuel will be deducted from inventory upon approval.
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div>
-                        <Label>Liters to Approve</Label>
+
+                    {/* Request summary */}
+                    <div className="rounded-md border bg-muted/30 p-3 space-y-1.5">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Request</span>
+                        <span className="font-medium">{request.request_number}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Fuel Type</span>
+                        <span className="font-medium">{request.fuel_type?.name ?? "—"}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Liters Requested</span>
+                        <span className="font-bold text-base">{parseFloat(request.liters_requested).toLocaleString()} L</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Destination</span>
+                        <span className="font-medium">{request.destination}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 py-1">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="liters-approved">Liters to Approve</Label>
                         <Input
+                          id="liters-approved"
                           type="number"
                           step="0.01"
                           value={litersApproved}
                           onChange={e => setLitersApproved(e.target.value)}
-                          placeholder={`Default: ${parseFloat(request.liters_requested).toLocaleString()}`}
+                          placeholder={parseFloat(request.liters_requested).toLocaleString()}
                         />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Leave blank to approve full requested amount
+                        <p className="text-xs text-muted-foreground">
+                          Leave blank to approve the full requested amount ({parseFloat(request.liters_requested).toLocaleString()} L)
                         </p>
                       </div>
-                      <div>
-                        <Label>Remarks (optional)</Label>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="approve-remarks">Remarks</Label>
                         <Textarea
+                          id="approve-remarks"
                           value={approveRemarks}
                           onChange={e => setApproveRemarks(e.target.value)}
-                          placeholder="Optional remarks"
+                          placeholder="Add any notes for the requester (optional)"
+                          rows={2}
                         />
                       </div>
                     </div>
+
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setApproveOpen(false)}>
                         Cancel
                       </Button>
                       <Button onClick={handleApprove} disabled={actionLoading}>
-                        {actionLoading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-                        Approve
+                        {actionLoading ? (
+                          <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                        ) : (
+                          <CheckCircle className="h-4 w-4 mr-1.5" />
+                        )}
+                        Confirm Approval
                       </Button>
                     </DialogFooter>
                   </DialogContent>
@@ -464,25 +496,57 @@ export default function FuelRequestDetailPage() {
               {canApprove && isPending && (
                 <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
                   <DialogTrigger render={<Button className="w-full" variant="destructive" />}>
-                    <XCircle className="h-4 w-4 mr-1" />
-                    Reject
+                    <XCircle className="h-4 w-4 mr-1.5" />
+                    Reject Request
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Reject Fuel Request</DialogTitle>
+                      <DialogTitle className="flex items-center gap-2">
+                        <XCircle className="h-5 w-5 text-destructive" />
+                        Reject Fuel Request
+                      </DialogTitle>
                       <DialogDescription>
-                        Please provide a reason for rejection.
+                        This will notify the requester that their trip ticket has been rejected.
+                        A clear reason helps them understand and resubmit if needed.
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="py-4">
-                      <Label>Reason *</Label>
+
+                    {/* Request summary */}
+                    <div className="rounded-md border border-destructive/20 bg-destructive/5 p-3 space-y-1.5">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Request</span>
+                        <span className="font-medium">{request.request_number}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Requester</span>
+                        <span className="font-medium">
+                          {request.requested_by_profile
+                            ? `${request.requested_by_profile.first_name} ${request.requested_by_profile.last_name}`
+                            : "—"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Liters Requested</span>
+                        <span className="font-medium">{parseFloat(request.liters_requested).toLocaleString()} L</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 py-1">
+                      <Label htmlFor="reject-reason">Reason for Rejection *</Label>
                       <Textarea
+                        id="reject-reason"
                         value={rejectReason}
                         onChange={e => setRejectReason(e.target.value)}
-                        placeholder="Why is this request being rejected?"
+                        placeholder="e.g., Insufficient justification, duplicate request, budget constraints..."
                         rows={3}
                       />
+                      {rejectReason.length > 0 && rejectReason.length < 5 && (
+                        <p className="text-xs text-destructive">
+                          Reason must be at least 5 characters
+                        </p>
+                      )}
                     </div>
+
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setRejectOpen(false)}>
                         Cancel
@@ -492,8 +556,12 @@ export default function FuelRequestDetailPage() {
                         onClick={handleReject}
                         disabled={actionLoading || rejectReason.length < 5}
                       >
-                        {actionLoading && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-                        Reject
+                        {actionLoading ? (
+                          <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                        ) : (
+                          <XCircle className="h-4 w-4 mr-1.5" />
+                        )}
+                        Confirm Rejection
                       </Button>
                     </DialogFooter>
                   </DialogContent>
@@ -509,9 +577,9 @@ export default function FuelRequestDetailPage() {
                   disabled={actionLoading}
                 >
                   {actionLoading ? (
-                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
                   ) : (
-                    <Package className="h-4 w-4 mr-1" />
+                    <Package className="h-4 w-4 mr-1.5" />
                   )}
                   Mark as Dispensed
                 </Button>

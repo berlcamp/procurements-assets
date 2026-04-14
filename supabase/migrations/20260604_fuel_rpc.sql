@@ -149,11 +149,11 @@ BEGIN
 
   -- Insert approval log
   INSERT INTO procurements.approval_logs (
-    division_id, reference_type, reference_id,
+    reference_type, reference_id,
     step_name, step_order, action,
     acted_by, acted_at, remarks, office_id
   ) VALUES (
-    v_division_id, 'fuel_request', p_request_id,
+    'fuel_request', p_request_id,
     'Fuel Manager Approval', 1, 'approved',
     v_user_id, NOW(), p_remarks, v_request.office_id
   );
@@ -215,11 +215,11 @@ BEGIN
 
   -- Insert approval log
   INSERT INTO procurements.approval_logs (
-    division_id, reference_type, reference_id,
+    reference_type, reference_id,
     step_name, step_order, action,
     acted_by, acted_at, remarks, office_id
   ) VALUES (
-    v_division_id, 'fuel_request', p_request_id,
+    'fuel_request', p_request_id,
     'Fuel Manager Approval', 1, 'rejected',
     v_user_id, NOW(), p_reason, v_request.office_id
   );

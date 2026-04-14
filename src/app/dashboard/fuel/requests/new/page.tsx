@@ -5,20 +5,19 @@ import { usePermissions } from "@/lib/hooks/use-permissions"
 import { useOffice } from "@/lib/hooks/use-office"
 import { Forbidden } from "@/components/shared/forbidden"
 import { FuelRequestForm } from "@/components/fuel/fuel-request-form"
-import { getFuelTypes } from "@/lib/actions/fuel"
+import { ensureDefaultFuelTypes } from "@/lib/actions/fuel"
 import { Loader2 } from "lucide-react"
-import type { FuelType } from "@/types/database"
 
 export default function NewFuelRequestPage() {
   const { can, loading: permsLoading } = usePermissions()
   const { officeId, loading: officeLoading } = useOffice()
-  const [fuelTypes, setFuelTypes] = useState<FuelType[]>([])
+  const [fuelTypeMap, setFuelTypeMap] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
-      const types = await getFuelTypes()
-      setFuelTypes(types)
+      const typeMap = await ensureDefaultFuelTypes()
+      setFuelTypeMap(typeMap)
       setLoading(false)
     }
     load()
@@ -52,7 +51,7 @@ export default function NewFuelRequestPage() {
           Submit a fuel request using the standard government trip ticket form
         </p>
       </div>
-      <FuelRequestForm officeId={officeId} fuelTypes={fuelTypes} />
+      <FuelRequestForm officeId={officeId} fuelTypeMap={fuelTypeMap} />
     </div>
   )
 }

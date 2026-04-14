@@ -1593,6 +1593,9 @@ export interface FuelStockMovement {
   fuel_inventory_id: string
   movement_type: FuelMovementType
   quantity_liters: string
+  remaining_liters: string | null
+  price_per_liter: string | null
+  po_number: string | null
   reference_type: string | null
   reference_id: string | null
   remarks: string | null

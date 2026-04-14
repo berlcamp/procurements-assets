@@ -117,7 +117,9 @@ export default async function FuelInventoryDetailPage({
                     <TableHead>Date</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead className="text-right">Quantity (L)</TableHead>
-                    <TableHead>Reference</TableHead>
+                    <TableHead className="text-right">Remaining (L)</TableHead>
+                    <TableHead className="text-right">Price/L</TableHead>
+                    <TableHead>PO #</TableHead>
                     <TableHead>Remarks</TableHead>
                     <TableHead>By</TableHead>
                   </TableRow>
@@ -125,7 +127,7 @@ export default async function FuelInventoryDetailPage({
                 <TableBody>
                   {movements.map(mov => (
                     <TableRow key={mov.id}>
-                      <TableCell className="text-sm">
+                      <TableCell className="text-sm whitespace-nowrap">
                         {new Date(mov.created_at).toLocaleString()}
                       </TableCell>
                       <TableCell>
@@ -151,10 +153,20 @@ export default async function FuelInventoryDetailPage({
                           {Math.abs(parseFloat(mov.quantity_liters)).toLocaleString()}
                         </span>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {mov.reference_type ?? "—"}
+                      <TableCell className="text-right text-sm">
+                        {mov.remaining_liters != null
+                          ? parseFloat(mov.remaining_liters).toLocaleString()
+                          : "—"}
                       </TableCell>
-                      <TableCell className="text-sm max-w-[200px] truncate">
+                      <TableCell className="text-right text-sm">
+                        {mov.price_per_liter
+                          ? `${parseFloat(mov.price_per_liter).toFixed(2)}`
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {mov.po_number ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-sm max-w-[180px] truncate">
                         {mov.remarks ?? "—"}
                       </TableCell>
                       <TableCell className="text-sm">

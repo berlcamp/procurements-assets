@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import type {
   FuelType,
   FuelInventoryWithDetails,
@@ -28,9 +29,7 @@ import {
 const FUEL_REQUEST_SELECT = `
   *,
   office:offices(id, name, code),
-  fuel_type:fuel_types(id, name, unit, price_per_unit),
-  requested_by_profile:user_profiles!requested_by(id, first_name, last_name, position),
-  approved_by_profile:user_profiles!approved_by(id, first_name, last_name)
+  fuel_type:fuel_types(id, name, unit, price_per_unit)
 ` as const
 
 const FUEL_INVENTORY_SELECT = `
@@ -44,9 +43,80 @@ const FUEL_MOVEMENT_SELECT = `
   fuel_inventory:fuel_inventory(
     id, fuel_type_id, office_id,
     fuel_type:fuel_types(id, name, unit)
-  ),
-  created_by_profile:user_profiles!created_by(id, first_name, last_name)
+  )
 ` as const
+
+/**
+ * Hydrate fuel requests with user profile data.
+ * PostgREST cannot join fuel_requests → user_profiles because
+ * the FK goes through auth.users, so we fetch profiles separately.
+ */
+async function hydrateFuelRequestProfiles(
+  requests: FuelRequestWithDetails[]
+): Promise<FuelRequestWithDetails[]> {
+  if (requests.length === 0) return requests
+
+  const supabase = await createClient()
+  const userIds = new Set<string>()
+  for (const r of requests) {
+    if (r.requested_by) userIds.add(r.requested_by)
+    if (r.approved_by) userIds.add(r.approved_by)
+  }
+
+  if (userIds.size === 0) return requests
+
+  const { data: profiles } = await supabase
+    .schema("procurements")
+    .from("user_profiles")
+    .select("id, first_name, last_name, position")
+    .in("id", Array.from(userIds))
+
+  const profileMap = new Map(
+    (profiles ?? []).map(p => [p.id, p])
+  )
+
+  return requests.map(r => ({
+    ...r,
+    requested_by_profile: profileMap.get(r.requested_by) ?? null,
+    approved_by_profile: r.approved_by
+      ? profileMap.get(r.approved_by) ?? null
+      : null,
+  }))
+}
+
+/**
+ * Hydrate fuel stock movements with creator profile data.
+ */
+async function hydrateMovementProfiles(
+  movements: FuelStockMovementWithDetails[]
+): Promise<FuelStockMovementWithDetails[]> {
+  if (movements.length === 0) return movements
+
+  const supabase = await createClient()
+  const userIds = new Set<string>()
+  for (const m of movements) {
+    if (m.created_by) userIds.add(m.created_by)
+  }
+
+  if (userIds.size === 0) return movements
+
+  const { data: profiles } = await supabase
+    .schema("procurements")
+    .from("user_profiles")
+    .select("id, first_name, last_name")
+    .in("id", Array.from(userIds))
+
+  const profileMap = new Map(
+    (profiles ?? []).map(p => [p.id, p])
+  )
+
+  return movements.map(m => ({
+    ...m,
+    created_by_profile: m.created_by
+      ? profileMap.get(m.created_by) ?? null
+      : null,
+  }))
+}
 
 // ============================================================
 // Fuel Type queries
@@ -68,6 +138,63 @@ export async function getFuelTypes(): Promise<FuelType[]> {
   return (data ?? []) as FuelType[]
 }
 
+/**
+ * Ensures "Gasoline" and "Diesel" fuel types exist for the user's division.
+ * Returns a map of fuel type name → id.
+ */
+export async function ensureDefaultFuelTypes(): Promise<Record<string, string>> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return {}
+
+  const { data: profile } = await supabase
+    .schema("procurements")
+    .from("user_profiles")
+    .select("division_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!profile?.division_id) return {}
+
+  const admin = createAdminClient()
+  const defaults = ["Gasoline", "Diesel"]
+  const result: Record<string, string> = {}
+
+  for (const name of defaults) {
+    const { data: existing } = await admin
+      .schema("procurements")
+      .from("fuel_types")
+      .select("id")
+      .eq("division_id", profile.division_id)
+      .eq("name", name)
+      .is("deleted_at", null)
+      .maybeSingle()
+
+    if (existing) {
+      result[name] = existing.id
+    } else {
+      const { data: created } = await admin
+        .schema("procurements")
+        .from("fuel_types")
+        .insert({
+          division_id: profile.division_id,
+          name,
+          unit: "liters",
+          is_active: true,
+          created_by: user.id,
+        })
+        .select("id")
+        .single()
+
+      if (created) {
+        result[name] = created.id
+      }
+    }
+  }
+
+  return result
+}
+
 export async function createFuelType(
   input: FuelTypeInput
 ): Promise<{ error: string | null; id?: string }> {
@@ -86,7 +213,8 @@ export async function createFuelType(
 
   if (!profile?.division_id) return { error: "No division assigned" }
 
-  const { data, error } = await supabase
+  const admin = createAdminClient()
+  const { data, error } = await admin
     .schema("procurements")
     .from("fuel_types")
     .insert({
@@ -114,8 +242,8 @@ export async function updateFuelType(
   id: string,
   input: FuelTypeInput
 ): Promise<{ error: string | null }> {
-  const supabase = await createClient()
-  const { error } = await supabase
+  const admin = createAdminClient()
+  const { error } = await admin
     .schema("procurements")
     .from("fuel_types")
     .update({
@@ -197,7 +325,7 @@ export async function getFuelStockMovements(
     console.error("getFuelStockMovements error:", error)
     return []
   }
-  return (data ?? []) as FuelStockMovementWithDetails[]
+  return hydrateMovementProfiles((data ?? []) as FuelStockMovementWithDetails[])
 }
 
 export async function getFuelLowStockAlerts(): Promise<FuelInventoryWithDetails[]> {
@@ -207,13 +335,17 @@ export async function getFuelLowStockAlerts(): Promise<FuelInventoryWithDetails[
     .from("fuel_inventory")
     .select(FUEL_INVENTORY_SELECT)
     .is("deleted_at", null)
-    .filter("current_liters", "lte", "reorder_point")
+    .gt("reorder_point", 0)
 
   if (error) {
     console.error("getFuelLowStockAlerts error:", error)
     return []
   }
-  return (data ?? []) as FuelInventoryWithDetails[]
+
+  // Filter client-side: PostgREST cannot compare two columns directly
+  return ((data ?? []) as FuelInventoryWithDetails[]).filter(inv =>
+    parseFloat(inv.current_liters) <= parseFloat(inv.reorder_point)
+  )
 }
 
 // ============================================================
@@ -231,6 +363,8 @@ export async function fuelManualStockIn(
       p_office_id: input.office_id,
       p_quantity: input.quantity_liters,
       p_remarks: input.remarks ?? null,
+      p_price_per_liter: input.price_per_liter ?? null,
+      p_po_number: input.po_number ?? null,
     })
 
   if (error) {
@@ -286,7 +420,7 @@ export async function getMyFuelRequests(): Promise<FuelRequestWithDetails[]> {
     console.error("getMyFuelRequests error:", error)
     return []
   }
-  return (data ?? []) as FuelRequestWithDetails[]
+  return hydrateFuelRequestProfiles((data ?? []) as FuelRequestWithDetails[])
 }
 
 export async function getPendingFuelApprovals(): Promise<FuelRequestWithDetails[]> {
@@ -303,7 +437,7 @@ export async function getPendingFuelApprovals(): Promise<FuelRequestWithDetails[
     console.error("getPendingFuelApprovals error:", error)
     return []
   }
-  return (data ?? []) as FuelRequestWithDetails[]
+  return hydrateFuelRequestProfiles((data ?? []) as FuelRequestWithDetails[])
 }
 
 export async function getAllFuelRequests(filters?: {
@@ -328,7 +462,7 @@ export async function getAllFuelRequests(filters?: {
     console.error("getAllFuelRequests error:", error)
     return []
   }
-  return (data ?? []) as FuelRequestWithDetails[]
+  return hydrateFuelRequestProfiles((data ?? []) as FuelRequestWithDetails[])
 }
 
 export async function getFuelRequestById(
@@ -347,7 +481,9 @@ export async function getFuelRequestById(
     console.error("getFuelRequestById error:", error)
     return null
   }
-  return data as FuelRequestWithDetails | null
+  if (!data) return null
+  const [hydrated] = await hydrateFuelRequestProfiles([data as FuelRequestWithDetails])
+  return hydrated ?? null
 }
 
 // ============================================================
@@ -384,9 +520,9 @@ export async function getFuelSummary(): Promise<{
     supabase
       .schema("procurements")
       .from("fuel_inventory")
-      .select("id", { count: "exact", head: true })
+      .select("current_liters, reorder_point")
       .is("deleted_at", null)
-      .filter("current_liters", "lte", "reorder_point"),
+      .gt("reorder_point", 0),
   ])
 
   const totalStockLiters = (inventoryRes.data ?? []).reduce(
@@ -394,11 +530,17 @@ export async function getFuelSummary(): Promise<{
     0
   )
 
+  // Count low stock client-side (PostgREST cannot compare two columns)
+  const lowStockCount = (lowStockRes.data ?? []).filter(
+    (r: { current_liters: string; reorder_point: string }) =>
+      parseFloat(r.current_liters) <= parseFloat(r.reorder_point)
+  ).length
+
   return {
     totalStockLiters,
     pendingRequests: pendingRes.count ?? 0,
     approvedThisMonth: approvedRes.count ?? 0,
-    lowStockCount: lowStockRes.count ?? 0,
+    lowStockCount,
   }
 }
 
@@ -429,7 +571,7 @@ export async function getFuelConsumptionReport(
     console.error("getFuelConsumptionReport error:", error)
     return []
   }
-  return (data ?? []) as FuelRequestWithDetails[]
+  return hydrateFuelRequestProfiles((data ?? []) as FuelRequestWithDetails[])
 }
 
 // ============================================================

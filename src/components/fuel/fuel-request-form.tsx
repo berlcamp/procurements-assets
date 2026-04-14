@@ -35,14 +35,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Plus, Trash2, Loader2 } from "lucide-react"
-import type { FuelType } from "@/types/database"
 
 interface FuelRequestFormProps {
   officeId: string
-  fuelTypes: FuelType[]
+  fuelTypeMap: Record<string, string>
 }
 
-export function FuelRequestForm({ officeId, fuelTypes }: FuelRequestFormProps) {
+export function FuelRequestForm({ officeId, fuelTypeMap }: FuelRequestFormProps) {
   const router = useRouter()
 
   const form = useForm<CreateFuelRequestInput>({
@@ -79,7 +78,10 @@ export function FuelRequestForm({ officeId, fuelTypes }: FuelRequestFormProps) {
     router.refresh()
   }
 
-  const activeFuelTypes = fuelTypes.filter(ft => ft.is_active)
+  const fuelOptions = [
+    { label: "Gasoline", id: fuelTypeMap["Gasoline"], icon: "⛽" },
+    { label: "Diesel", id: fuelTypeMap["Diesel"], icon: "🛢️" },
+  ].filter(opt => opt.id)
 
   return (
     <Form {...form}>
@@ -147,11 +149,9 @@ export function FuelRequestForm({ officeId, fuelTypes }: FuelRequestFormProps) {
                 <FormItem>
                   <FormLabel>Vehicle Type *</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select vehicle type" />
-                      </SelectTrigger>
-                    </FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select vehicle type" />
+                    </SelectTrigger>
                     <SelectContent>
                       {VEHICLE_TYPES.map(type => (
                         <SelectItem key={type} value={type}>{type}</SelectItem>
@@ -276,16 +276,23 @@ export function FuelRequestForm({ officeId, fuelTypes }: FuelRequestFormProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Fuel Type *</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select fuel type" />
-                      </SelectTrigger>
-                    </FormControl>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value || undefined}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select fuel type">
+                        {(value: string) => {
+                          if (!value) return null
+                          const opt = fuelOptions.find(o => o.id === value)
+                          return opt ? `${opt.icon} ${opt.label}` : null
+                        }}
+                      </SelectValue>
+                    </SelectTrigger>
                     <SelectContent>
-                      {activeFuelTypes.map(ft => (
-                        <SelectItem key={ft.id} value={ft.id}>
-                          {ft.name} ({ft.unit})
+                      {fuelOptions.map(opt => (
+                        <SelectItem key={opt.id} value={opt.id}>
+                          {opt.icon} {opt.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
