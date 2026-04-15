@@ -13,10 +13,13 @@ import {
 } from "@/components/ui/table"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { getSuppliers, getSupplierStats } from "@/lib/actions/procurement"
+import { getUserPermissions } from "@/lib/actions/roles"
 import type { Supplier } from "@/types/database"
 
 export default async function SuppliersPage() {
-  const [suppliers, stats] = await Promise.all([getSuppliers(), getSupplierStats()])
+  const [suppliers, stats, permissions] = await Promise.all([getSuppliers(), getSupplierStats(), getUserPermissions()])
+
+  const canManage = permissions.includes("supplier.manage")
 
   return (
     <div className="space-y-6">
@@ -25,10 +28,12 @@ export default async function SuppliersPage() {
           <h1 className="text-2xl font-bold">Supplier Registry</h1>
           <p className="text-sm text-muted-foreground">Division supplier registry</p>
         </div>
-        <Button nativeButton={false} render={<Link href="/dashboard/procurement/suppliers/new" />}>
-          <Plus className="mr-1.5 h-4 w-4" />
-          Add Supplier
-        </Button>
+        {canManage && (
+          <Button nativeButton={false} render={<Link href="/dashboard/procurement/suppliers/new" />}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            Add Supplier
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -97,9 +102,11 @@ export default async function SuppliersPage() {
                         <Button size="sm" variant="ghost" nativeButton={false} render={<Link href={`/dashboard/procurement/suppliers/${s.id}`} />}>
                           View
                         </Button>
-                        <Button size="sm" variant="ghost" nativeButton={false} render={<Link href={`/dashboard/procurement/suppliers/${s.id}/edit`} />}>
-                          Edit
-                        </Button>
+                        {canManage && (
+                          <Button size="sm" variant="ghost" nativeButton={false} render={<Link href={`/dashboard/procurement/suppliers/${s.id}/edit`} />}>
+                            Edit
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

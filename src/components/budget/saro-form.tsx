@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
@@ -39,6 +39,16 @@ export function SaroForm() {
       allotment_class: "current",
     },
   })
+
+  const fiscalYearItems = useMemo(
+    () => Object.fromEntries(fiscalYears.map((fy) => [fy.id, `${fy.year} — ${fy.status}${fy.is_active ? " (Active)" : ""}`])),
+    [fiscalYears]
+  )
+
+  const fundSourceItems = useMemo(
+    () => Object.fromEntries(fundSources.map((fs) => [fs.id, `${fs.name} (${fs.code})`])),
+    [fundSources]
+  )
 
   useEffect(() => {
     const supabase = createClient()
@@ -107,6 +117,7 @@ export function SaroForm() {
           <Select
             onValueChange={(v) => { if (v) setValue("fiscal_year_id", v) }}
             value={watch("fiscal_year_id") ?? ""}
+            items={fiscalYearItems}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select fiscal year" />
@@ -130,6 +141,7 @@ export function SaroForm() {
           <Select
             onValueChange={(v) => { if (v) setValue("fund_source_id", v) }}
             value={watch("fund_source_id") ?? ""}
+            items={fundSourceItems}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select fund source" />

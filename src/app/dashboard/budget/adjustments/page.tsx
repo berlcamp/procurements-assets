@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { getActiveFiscalYear, getBudgetAdjustments } from "@/lib/actions/budget"
+import { getUserPermissions } from "@/lib/actions/roles"
 import { Button } from "@/components/ui/button"
 import { AmountDisplay } from "@/components/shared/amount-display"
 import { StatusBadge } from "@/components/shared/status-badge"
@@ -16,10 +17,13 @@ import { PlusIcon } from "lucide-react"
 import type { BudgetAdjustmentWithDetails, BudgetAllocationWithDetails } from "@/types/database"
 
 export default async function AdjustmentsPage() {
-  const [fiscalYear, adjustments] = await Promise.all([
+  const [fiscalYear, adjustments, permissions] = await Promise.all([
     getActiveFiscalYear(),
     getBudgetAdjustments(),
+    getUserPermissions(),
   ])
+
+  const canCreate = permissions.includes("budget_adjustments.create")
 
   return (
     <div className="space-y-6">
@@ -30,22 +34,26 @@ export default async function AdjustmentsPage() {
             Realignments, augmentations, reductions, and transfers
           </p>
         </div>
-        <Link href="/dashboard/budget/adjustments/new">
-          <Button>
-            <PlusIcon className="mr-1.5 h-4 w-4" />
-            New Adjustment
-          </Button>
-        </Link>
+        {canCreate && (
+          <Link href="/dashboard/budget/adjustments/new">
+            <Button>
+              <PlusIcon className="mr-1.5 h-4 w-4" />
+              New Adjustment
+            </Button>
+          </Link>
+        )}
       </div>
 
       {adjustments.length === 0 ? (
         <div className="rounded-lg border border-dashed p-12 text-center">
           <p className="text-muted-foreground text-sm">No adjustments yet.</p>
-          <Link href="/dashboard/budget/adjustments/new" className="mt-3 block">
-            <Button variant="outline" size="sm">
-              Submit an adjustment request
-            </Button>
-          </Link>
+          {canCreate && (
+            <Link href="/dashboard/budget/adjustments/new" className="mt-3 block">
+              <Button variant="outline" size="sm">
+                Submit an adjustment request
+              </Button>
+            </Link>
+          )}
         </div>
       ) : (
         <div className="rounded-md border">

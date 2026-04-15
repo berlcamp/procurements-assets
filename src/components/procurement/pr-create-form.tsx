@@ -24,7 +24,7 @@ type PpmpLotItemPick = Pick<PpmpLotItem, 'id' | 'item_number' | 'description' | 
 
 type AppItemWithLot = AppItem & {
   lot?: Pick<AppLot, "id" | "lot_name" | "lot_number"> | null
-  source_ppmp_lot?: { ppmp_lot_items: PpmpLotItemPick[] } | null
+  source_ppmp_lot?: { lot_number: number; lot_title: string | null; ppmp_lot_items: PpmpLotItemPick[] } | null
   ppmp_creator_name?: string | null
   has_active_pr?: boolean
   active_pr_number?: string | null
@@ -377,7 +377,12 @@ export function PrCreateForm({ fiscalYear, offices }: PrCreateFormProps) {
                               {isSelected && <Check className="h-3 w-3" />}
                             </div>
                             <div className="min-w-0">
-                              <p className="font-medium truncate">{item.general_description}</p>
+                              <p className="font-medium truncate">
+                                {item.general_description}
+                                {item.source_ppmp_lot?.lot_title && (
+                                  <span className="font-normal text-muted-foreground"> — {item.source_ppmp_lot.lot_title}</span>
+                                )}
+                              </p>
                               <p className="text-xs text-muted-foreground">{item.procurement_mode}</p>
                               {item.ppmp_creator_name && (
                                 <p className="text-xs text-muted-foreground/70">PPMP by {item.ppmp_creator_name}</p>

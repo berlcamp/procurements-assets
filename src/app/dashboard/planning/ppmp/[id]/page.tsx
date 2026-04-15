@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { getPpmpById, getCurrentPpmpVersion, getPpmpProjects, getPpmpUserPermissions, getPpmpRemarks } from "@/lib/actions/ppmp"
+import { getUserPermissions } from "@/lib/actions/roles"
 import { createClient } from "@/lib/supabase/server"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
@@ -24,12 +25,13 @@ interface Props {
 export default async function PpmpDetailPage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
-  const [ppmp, version, { data: { user: authUser } }, permissions, remarks] = await Promise.all([
+  const [ppmp, version, { data: { user: authUser } }, permissions, remarks, userPermissions] = await Promise.all([
     getPpmpById(id),
     getCurrentPpmpVersion(id),
     supabase.auth.getUser(),
     getPpmpUserPermissions(),
     getPpmpRemarks(id),
+    getUserPermissions(),
   ])
   if (!ppmp) notFound()
 
@@ -47,6 +49,7 @@ export default async function PpmpDetailPage({ params }: Props) {
     ? `${creatorProfile.first_name} ${creatorProfile.last_name}`.trim()
     : "—"
 
+  const canEdit = userPermissions.includes("ppmp.edit")
   const isDraft = ppmp.status === "draft" || ppmp.status === "revision_required"
   const canCancel = authUser?.id === ppmp.created_by && ppmp.status === "draft"
   const canAmend = authUser?.id === ppmp.created_by && (ppmp.status === "approved" || ppmp.status === "locked")
@@ -93,10 +96,12 @@ export default async function PpmpDetailPage({ params }: Props) {
                 ppmpId={ppmp.id}
                 disabled={projectCount === 0}
               />
-              <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/dashboard/planning/ppmp/${ppmp.id}/edit`} />}>
-                <EditIcon className="mr-1.5 h-3.5 w-3.5" />
-                Edit
-              </Button>
+              {canEdit && (
+                <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/dashboard/planning/ppmp/${ppmp.id}/edit`} />}>
+                  <EditIcon className="mr-1.5 h-3.5 w-3.5" />
+                  Edit
+                </Button>
+              )}
               {canCancel ? <PpmpCancelButton ppmpId={ppmp.id} /> : null}
             </>
           )}
