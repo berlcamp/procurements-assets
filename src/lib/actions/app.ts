@@ -210,6 +210,8 @@ export async function getAppItems(
       source_office:offices!app_items_source_office_id_fkey(id, name, code),
       lot:app_lots!fk_app_items_lot_id(id, lot_name, lot_number),
       source_ppmp_lot:ppmp_lots!app_items_source_ppmp_lot_id_fkey(
+        lot_number,
+        lot_title,
         ppmp_lot_items(id, item_number, description, quantity, unit, estimated_unit_cost, estimated_total_cost, specification)
       )
     `)

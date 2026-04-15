@@ -37,6 +37,16 @@ export default async function PpmpDetailPage({ params }: Props) {
   const office = ppmp.office as { name: string; code: string } | undefined
   const fy = ppmp.fiscal_year as { year: number } | undefined
 
+  const { data: creatorProfile } = ppmp.created_by
+    ? await supabase.schema("procurements").from("user_profiles")
+        .select("first_name, last_name")
+        .eq("id", ppmp.created_by)
+        .single()
+    : { data: null }
+  const creatorName = creatorProfile
+    ? `${creatorProfile.first_name} ${creatorProfile.last_name}`.trim()
+    : "—"
+
   const isDraft = ppmp.status === "draft" || ppmp.status === "revision_required"
   const canCancel = authUser?.id === ppmp.created_by && ppmp.status === "draft"
   const canAmend = authUser?.id === ppmp.created_by && (ppmp.status === "approved" || ppmp.status === "locked")
@@ -161,6 +171,10 @@ export default async function PpmpDetailPage({ params }: Props) {
               <h2 className="text-lg font-semibold">Summary</h2>
             </div>
             <div className="p-5 space-y-2 text-base">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Created By</span>
+                <span className="font-medium">{creatorName}</span>
+              </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Office</span>
                 <span className="font-medium">{office?.name ?? "—"}</span>

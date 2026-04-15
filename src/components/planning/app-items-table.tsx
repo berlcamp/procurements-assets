@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils"
 interface AppItemsTableProps {
   items: AppItemWithOffice[]
   showLotColumn?: boolean
+  creatorsByPpmpId?: Record<string, string>
 }
 
 function getProcurementModeLabel(value: string | null): string {
@@ -27,7 +28,7 @@ function getProcurementModeLabel(value: string | null): string {
   return mode?.label ?? value
 }
 
-export function AppItemsTable({ items, showLotColumn = true }: AppItemsTableProps) {
+export function AppItemsTable({ items, showLotColumn = true, creatorsByPpmpId = {} }: AppItemsTableProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
   if (items.length === 0) {
@@ -57,6 +58,7 @@ export function AppItemsTable({ items, showLotColumn = true }: AppItemsTableProp
             <TableHead className="w-[32px]" />
             <TableHead className="w-[50px]">#</TableHead>
             <TableHead>Description</TableHead>
+            <TableHead>Created By</TableHead>
             <TableHead>Source Office</TableHead>
             <TableHead>Procurement Mode</TableHead>
             <TableHead className="text-right">Est. Budget</TableHead>
@@ -100,6 +102,9 @@ export function AppItemsTable({ items, showLotColumn = true }: AppItemsTableProp
                     <div>
                       <div className="flex items-center gap-1.5">
                         <p className="font-medium text-sm">{item.general_description}</p>
+                        {item.source_ppmp_lot?.lot_title && (
+                          <span className="text-xs text-muted-foreground">— {item.source_ppmp_lot.lot_title}</span>
+                        )}
                         {item.is_cse && (
                           <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-blue-600">CSE</Badge>
                         )}
@@ -118,6 +123,9 @@ export function AppItemsTable({ items, showLotColumn = true }: AppItemsTableProp
                         </p>
                       )}
                     </div>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {item.source_ppmp_id ? (creatorsByPpmpId[item.source_ppmp_id] ?? "—") : "—"}
                   </TableCell>
                   <TableCell className="text-sm">
                     {office?.name ?? "—"}
@@ -191,7 +199,7 @@ export function AppItemsTable({ items, showLotColumn = true }: AppItemsTableProp
                 {/* Expanded line items sub-table */}
                 {isExpanded && lotItems.length > 0 && (
                   <TableRow className="bg-muted/30 hover:bg-muted/30">
-                    <TableCell colSpan={showLotColumn ? 9 : 8} className="p-0 pb-2">
+                    <TableCell colSpan={showLotColumn ? 10 : 9} className="p-0 pb-2">
                       <div className="mx-8 my-1 overflow-hidden rounded-lg border border-border/50">
                         <Table className="[&_td]:px-3 [&_td]:py-1.5 [&_th]:h-8 [&_th]:px-3 [&_th]:text-[10px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground">
                           <TableHeader className="border-b border-border/40 bg-muted/40 [&_tr]:hover:bg-transparent">

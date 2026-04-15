@@ -3,6 +3,7 @@ import Link from "next/link"
 import {
   getAppById, getCurrentAppVersion, getAppItems, getAppSummary, getAppUserPermissions,
 } from "@/lib/actions/app"
+import { createClient } from "@/lib/supabase/server"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -33,6 +34,26 @@ export default async function AppDetailPage({ params }: Props) {
   ])
 
   const fy = app.fiscal_year as { year: number } | undefined
+
+  // Build ppmpId → creator name map for the items table
+  const supabase = await createClient()
+  const ppmpIds = [...new Set(items.map(i => i.source_ppmp_id).filter((v): v is string => !!v))]
+  let creatorsByPpmpId: Record<string, string> = {}
+  if (ppmpIds.length > 0) {
+    const { data: ppmps } = await supabase.schema("procurements").from("ppmps")
+      .select("id, created_by")
+      .in("id", ppmpIds)
+    const creatorIds = [...new Set((ppmps ?? []).map(p => p.created_by).filter((v): v is string => !!v))]
+    if (creatorIds.length > 0) {
+      const { data: profiles } = await supabase.schema("procurements").from("user_profiles")
+        .select("id, first_name, last_name")
+        .in("id", creatorIds)
+      const profileMap = Object.fromEntries((profiles ?? []).map(p => [p.id, `${p.first_name} ${p.last_name}`.trim()]))
+      creatorsByPpmpId = Object.fromEntries(
+        (ppmps ?? []).map(p => [p.id, p.created_by ? (profileMap[p.created_by] ?? "—") : "—"])
+      )
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -86,7 +107,7 @@ export default async function AppDetailPage({ params }: Props) {
               </p>
             </div>
             <div className="p-0">
-              <AppItemsTable items={items} />
+              <AppItemsTable items={items} creatorsByPpmpId={creatorsByPpmpId} />
             </div>
           </div>
         </div>

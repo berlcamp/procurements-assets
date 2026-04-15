@@ -49,10 +49,11 @@ interface AppLotManagerProps {
   lots: AppLotWithItems[]
   canManageLots: boolean
   canFinalizeLot: boolean
+  creatorsByPpmpId?: Record<string, string>
 }
 
 export function AppLotManager({
-  appId, items, lots, canManageLots, canFinalizeLot,
+  appId, items, lots, canManageLots, canFinalizeLot, creatorsByPpmpId = {},
 }: AppLotManagerProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -355,8 +356,16 @@ export function AppLotManager({
                               <TableCell className="align-top">
                                 <p className="text-sm leading-snug whitespace-normal">
                                   {item.general_description}
+                                  {item.source_ppmp_lot?.lot_title && (
+                                    <span className="text-muted-foreground"> — {item.source_ppmp_lot.lot_title}</span>
+                                  )}
                                 </p>
                                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                  {item.source_ppmp_id && creatorsByPpmpId[item.source_ppmp_id] && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {creatorsByPpmpId[item.source_ppmp_id]}
+                                    </span>
+                                  )}
                                   {groupBy !== "office" && item.source_office && (
                                     <span className="text-xs text-muted-foreground">
                                       {item.source_office.code ?? item.source_office.name}
@@ -519,7 +528,18 @@ export function AppLotManager({
                                 {item.lot_item_number}
                               </TableCell>
                               <TableCell className="max-w-[min(100%,28rem)] whitespace-normal text-sm leading-snug align-top">
-                                <p>{item.general_description}</p>
+                                <p>
+                                  {item.general_description}
+                                  {(() => {
+                                    const lotTitle = lotItemsById.get(item.id)?.lot_title
+                                    return lotTitle ? <span className="text-muted-foreground"> — {lotTitle}</span> : null
+                                  })()}
+                                </p>
+                                {item.source_ppmp_id && creatorsByPpmpId[item.source_ppmp_id] && (
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    {creatorsByPpmpId[item.source_ppmp_id]}
+                                  </p>
+                                )}
                                 {(() => {
                                   const ppmpItems = lotItemsById.get(item.id)?.ppmp_lot_items ?? []
                                   return ppmpItems.length > 0 ? (
