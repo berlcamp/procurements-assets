@@ -310,8 +310,8 @@ export async function getAppUserPermissions(appId: string): Promise<{
 
   const { roleNames } = ctx
   const isHope = roleNames.includes("hope") || roleNames.includes("division_admin")
-  const isBac = roleNames.some(r => ["bac_chair", "bac_member", "bac_secretariat", "division_admin"].includes(r))
-  const canFinalizeLotRole = roleNames.some(r => ["bac_chair", "bac_secretariat", "division_admin"].includes(r))
+  const isBac = roleNames.some(r => ["bac_chair", "bac_vice_chair", "bac_member", "bac_secretariat", "division_admin"].includes(r))
+  const canFinalizeLotRole = roleNames.some(r => ["bac_chair", "bac_vice_chair", "bac_secretariat", "division_admin"].includes(r))
 
   // Lot editing is locked once the APP reaches final or beyond
   const lotsLocked = LOTS_LOCKED_STATUSES.includes(app?.status ?? "")
@@ -341,7 +341,7 @@ export async function getAppsRequiringMyAction(
 
   const isHope = roleNames.includes("hope") || roleNames.includes("division_admin")
   const isBac = roleNames.some(r =>
-    ["bac_chair", "bac_member", "bac_secretariat"].includes(r)
+    ["bac_chair", "bac_vice_chair", "bac_member", "bac_secretariat"].includes(r)
   )
 
   if (!isHope && !isBac) return []
@@ -489,7 +489,7 @@ export async function hopeReviewAppItem(
     if (divisionId) {
       const actionLabel = input.action === "approve" ? "approved" : "returned with remarks"
       notifyRoleInDivision(
-        ["bac_chair", "bac_secretariat"],
+        ["bac_chair", "bac_vice_chair", "bac_secretariat"],
         divisionId,
         {
           title: "APP Item Reviewed",
@@ -530,7 +530,7 @@ export async function hopeBatchReviewAppItems(
       if (divisionId) {
         const actionLabel = action === "approve" ? "approved" : "returned with remarks"
         notifyRoleInDivision(
-          ["bac_chair", "bac_secretariat"],
+          ["bac_chair", "bac_vice_chair", "bac_secretariat"],
           divisionId,
           {
             title: "APP Items Reviewed",
@@ -715,7 +715,7 @@ export async function approveApp(
   const divisionId = await getAppDivisionId(supabase, appId)
   if (divisionId) {
     notifyRoleInDivision(
-      ["supply_officer", "bac_chair", "bac_secretariat"],
+      ["supply_officer", "bac_chair", "bac_vice_chair", "bac_secretariat"],
       divisionId,
       {
         title: "APP Approved",

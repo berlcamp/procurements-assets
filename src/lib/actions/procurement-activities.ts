@@ -124,7 +124,7 @@ export async function getProcurementsRequiringMyAction(): Promise<ProcurementAct
   )
   // BAC Chair / Members: active procurements awaiting evaluation
   const isEvaluator = roleNames.some(r =>
-    ["bac_chair", "bac_member", "division_admin"].includes(r)
+    ["bac_chair", "bac_vice_chair", "bac_member", "division_admin"].includes(r)
   )
   // HOPE: active procurements awaiting award approval
   const isApprover = roleNames.some(r =>
@@ -192,7 +192,7 @@ export async function getProcurementUserPermissions(_procurementId: string): Pro
   )
   // BAC voting members — their only action is to Confirm the Secretariat's draft.
   const isConfirmer = roleNames.some(r =>
-    ["bac_chair", "bac_member"].includes(r)
+    ["bac_chair", "bac_vice_chair", "bac_member"].includes(r)
   ) || roleNames.includes("division_admin")
   const isApprover = roleNames.some(r =>
     ["hope", "division_chief", "division_admin"].includes(r)
@@ -366,7 +366,7 @@ export async function createProcurementActivity(
   const meta = await getProcMeta(procId)
   if (meta) {
     await notifyRoleInDivision(
-      ["bac_chair", "bac_member", "bac_secretariat"],
+      ["bac_chair", "bac_vice_chair", "bac_member", "bac_secretariat"],
       meta.division_id,
       {
         title: "New Procurement Activity",
@@ -418,7 +418,7 @@ export async function recordBid(
   const meta = await getProcMeta(input.procurement_id)
   if (meta) {
     await notifyRoleInDivision(
-      ["bac_chair"],
+      ["bac_chair", "bac_vice_chair"],
       meta.division_id,
       {
         title: "New Quotation Recorded",
@@ -498,7 +498,7 @@ export async function advanceProcurementStage(
   if (meta) {
     if (input.next_stage === "itb_published") {
       await notifyRoleInDivision(
-        ["bac_chair", "bac_member", "bac_secretariat"],
+        ["bac_chair", "bac_vice_chair", "bac_member", "bac_secretariat"],
         meta.division_id,
         {
           title: "ITB Published",
@@ -836,7 +836,7 @@ export async function uploadBacResolution(input: {
   const meta = await getProcMeta(input.procurement_id)
   if (meta) {
     await notifyRoleInDivision(
-      ["bac_chair", "bac_member", "hope"],
+      ["bac_chair", "bac_vice_chair", "bac_member", "hope"],
       meta.division_id,
       {
         title: "BAC Resolution uploaded",
@@ -889,7 +889,7 @@ export async function setProcurementDocumentPath(input: {
   const meta = await getProcMeta(input.procurement_id)
   if (meta) {
     await notifyRoleInDivision(
-      ["bac_chair", "bac_member", "hope"],
+      ["bac_chair", "bac_vice_chair", "bac_member", "hope"],
       meta.division_id,
       {
         title: `${DOC_TYPE_LABELS[input.doc_type]} uploaded`,
@@ -951,7 +951,7 @@ export async function recordPerformanceSecurity(input: {
   const meta = await getProcMeta(input.procurement_id)
   if (meta) {
     await notifyRoleInDivision(
-      ["bac_chair", "bac_member", "hope"],
+      ["bac_chair", "bac_vice_chair", "bac_member", "hope"],
       meta.division_id,
       {
         title: "Performance security recorded",

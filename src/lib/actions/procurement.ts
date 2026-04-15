@@ -463,7 +463,7 @@ export async function getApprovedAppItemsForOffice(
 
   const { roleNames } = ctx
   const canViewAll = roleNames.some(r =>
-    ["division_admin", "hope", "division_chief", "section_chief", "budget_officer", "supply_officer", "auditor", "bac_chair", "bac_secretariat"].includes(r)
+    ["division_admin", "hope", "division_chief", "section_chief", "budget_officer", "supply_officer", "auditor", "bac_chair", "bac_vice_chair", "bac_secretariat"].includes(r)
   )
 
   const { data: apps, error: appErr } = await supabase

@@ -87,7 +87,7 @@ export async function getSupplierDocPermissions(): Promise<{
     ["division_admin", "supply_officer", "bac_secretariat"].includes(r)
   )
   const canVerify = roleNames.some(r =>
-    ["division_admin", "bac_secretariat", "bac_chair"].includes(r)
+    ["division_admin", "bac_secretariat", "bac_chair", "bac_vice_chair"].includes(r)
   )
   return { canManage, canVerify }
 }
