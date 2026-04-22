@@ -42,10 +42,7 @@ export const itemCatalogSchema = z.object({
   }),
   unit: z.string().min(1, "Unit of measure is required"),
   account_code_id: z.string().uuid().nullable().optional(),
-  useful_life_years: z.preprocess(
-    (v) => (v === null || v === undefined || (typeof v === "number" && isNaN(v)) ? null : v),
-    z.number().int().min(0).nullable().optional()
-  ),
+  useful_life_years: z.number().int().min(0).nullable().optional(),
   is_active: z.boolean(),
 })
 

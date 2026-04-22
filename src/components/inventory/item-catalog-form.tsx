@@ -147,7 +147,9 @@ export function ItemCatalogForm({
             id="useful_life_years"
             type="number"
             min={0}
-            {...register("useful_life_years", { valueAsNumber: true })}
+            {...register("useful_life_years", {
+              setValueAs: (v) => v === "" || v === null || v === undefined ? null : Number(v),
+            })}
             placeholder="e.g. 5"
           />
           {errors.useful_life_years && (
