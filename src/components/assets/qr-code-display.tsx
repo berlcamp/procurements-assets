@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import QRCode from "qrcode"
 import { Button } from "@/components/ui/button"
 import {
@@ -30,18 +30,18 @@ export function QRCodeDisplay({
   description,
   size = 80,
 }: QRCodeDisplayProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
 
   useEffect(() => {
-    if (canvasRef.current) {
-      QRCode.toCanvas(canvasRef.current, propertyNumber, {
+    if (canvasEl) {
+      QRCode.toCanvas(canvasEl, propertyNumber, {
         width: size,
         margin: 1,
         color: { dark: "#000000", light: "#ffffff" },
       })
     }
-  }, [propertyNumber, size])
+  }, [canvasEl, propertyNumber, size])
 
   return (
     <>
@@ -51,7 +51,7 @@ export function QRCodeDisplay({
         className="inline-block rounded border p-1 hover:bg-muted transition-colors cursor-pointer"
         title="Click to enlarge QR code"
       >
-        <canvas ref={canvasRef} />
+        <canvas ref={setCanvasEl} />
       </button>
 
       <QRCodeDialog
@@ -80,21 +80,21 @@ export function QRCodeDialog({
   propertyNumber,
   description,
 }: QRCodeDialogProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null)
 
   useEffect(() => {
-    if (open && canvasRef.current) {
-      QRCode.toCanvas(canvasRef.current, propertyNumber, {
+    if (canvasEl) {
+      QRCode.toCanvas(canvasEl, propertyNumber, {
         width: 240,
         margin: 2,
         color: { dark: "#000000", light: "#ffffff" },
       })
     }
-  }, [open, propertyNumber])
+  }, [canvasEl, propertyNumber])
 
   function handleDownload() {
-    if (!canvasRef.current) return
-    const url = canvasRef.current.toDataURL("image/png")
+    if (!canvasEl) return
+    const url = canvasEl.toDataURL("image/png")
     const link = document.createElement("a")
     link.download = `QR-${propertyNumber}.png`
     link.href = url
@@ -102,8 +102,8 @@ export function QRCodeDialog({
   }
 
   function handlePrint() {
-    if (!canvasRef.current) return
-    const url = canvasRef.current.toDataURL("image/png")
+    if (!canvasEl) return
+    const url = canvasEl.toDataURL("image/png")
     const printWindow = window.open("", "_blank")
     if (!printWindow) return
     printWindow.document.write(`
@@ -156,7 +156,7 @@ export function QRCodeDialog({
         </DialogHeader>
 
         <div className="flex flex-col items-center gap-4 py-4">
-          <canvas ref={canvasRef} className="rounded" />
+          <canvas ref={setCanvasEl} className="rounded" />
           <p className="text-sm font-mono font-semibold">{propertyNumber}</p>
           {description && (
             <p className="text-xs text-muted-foreground text-center">{description}</p>

@@ -176,15 +176,17 @@ export default function ItemCatalogPage() {
             Manage the master catalog of items tracked across the division.
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setEditingItem(null)
-            setDialogOpen(true)
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Add Item
-        </Button>
+        {canAny("inventory.manage", "asset.manage") && (
+          <Button
+            onClick={() => {
+              setEditingItem(null)
+              setDialogOpen(true)
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Item
+          </Button>
+        )}
       </div>
 
       <Card>

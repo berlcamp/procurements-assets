@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import type {
   ItemCatalogWithDetails,
   InventoryWithDetails,
@@ -285,6 +286,21 @@ export async function getDeliveriesReadyForStockIn(): Promise<DeliveryWithItems[
 // Item Catalog mutations
 // ============================================================
 
+async function assertCatalogManagePermission(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userMetadata: Record<string, unknown> | undefined
+): Promise<string | null> {
+  if (userMetadata?.is_super_admin === true) return null
+  const { data: perms } = await supabase
+    .schema("procurements")
+    .rpc("get_user_permissions")
+  const permList = (perms as string[] | null) ?? []
+  if (permList.includes("inventory.manage") || permList.includes("asset.manage")) {
+    return null
+  }
+  return "You don't have permission to manage the item catalog"
+}
+
 export async function createItemCatalogEntry(
   input: ItemCatalogInput
 ): Promise<{ error: string | null; id?: string }> {
@@ -300,9 +316,13 @@ export async function createItemCatalogEntry(
     .eq("id", user.id)
     .single()
 
-  if (!profile) return { error: "User profile not found" }
+  if (!profile?.division_id) return { error: "User profile not found" }
 
-  const { data, error } = await supabase
+  const permError = await assertCatalogManagePermission(supabase, user.user_metadata)
+  if (permError) return { error: permError }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
     .schema("procurements")
     .from("item_catalog")
     .insert({
@@ -337,7 +357,23 @@ export async function updateItemCatalogEntry(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient()
 
-  const { error } = await supabase
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Not authenticated" }
+
+  const { data: profile } = await supabase
+    .schema("procurements")
+    .from("user_profiles")
+    .select("division_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!profile?.division_id) return { error: "User profile not found" }
+
+  const permError = await assertCatalogManagePermission(supabase, user.user_metadata)
+  if (permError) return { error: permError }
+
+  const admin = createAdminClient()
+  const { error } = await admin
     .schema("procurements")
     .from("item_catalog")
     .update({
@@ -351,6 +387,7 @@ export async function updateItemCatalogEntry(
       is_active: input.is_active,
     })
     .eq("id", id)
+    .eq("division_id", profile.division_id)
 
   if (error) {
     console.error("updateItemCatalogEntry error:", error)
@@ -368,11 +405,28 @@ export async function deleteItemCatalogEntry(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient()
 
-  const { error } = await supabase
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Not authenticated" }
+
+  const { data: profile } = await supabase
+    .schema("procurements")
+    .from("user_profiles")
+    .select("division_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!profile?.division_id) return { error: "User profile not found" }
+
+  const permError = await assertCatalogManagePermission(supabase, user.user_metadata)
+  if (permError) return { error: permError }
+
+  const admin = createAdminClient()
+  const { error } = await admin
     .schema("procurements")
     .from("item_catalog")
     .update({ deleted_at: new Date().toISOString() })
     .eq("id", id)
+    .eq("division_id", profile.division_id)
 
   if (error) {
     console.error("deleteItemCatalogEntry error:", error)
