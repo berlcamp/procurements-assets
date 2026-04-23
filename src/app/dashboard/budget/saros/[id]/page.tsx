@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -42,8 +42,10 @@ export default async function SaroDetailPage({
 
   if (!saro) notFound()
 
-  const canDelete =
+  const canManage =
     permissions.includes("budget.create") || permissions.includes("budget.certify")
+  const canDelete = canManage
+  const canEdit = canManage
 
   const totalAmount = parseFloat(saro.total_amount)
   const allocatedAmount = parseFloat(saro.allocated_amount)
@@ -71,9 +73,22 @@ export default async function SaroDetailPage({
             {saro.program ? ` · ${saro.program}` : ""}
           </p>
         </div>
-        {canDelete && (
-          <DeleteSaroButton id={saro.id} saroNumber={saro.saro_number} />
-        )}
+        <div className="flex items-center gap-2">
+          {canEdit && (
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<Link href={`/dashboard/budget/saros/${saro.id}/edit`} />}
+            >
+              <Pencil className="mr-1.5 h-4 w-4" />
+              Edit
+            </Button>
+          )}
+          {canDelete && (
+            <DeleteSaroButton id={saro.id} saroNumber={saro.saro_number} />
+          )}
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

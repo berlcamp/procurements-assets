@@ -6,7 +6,12 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { budgetAllocationSchema, type BudgetAllocationInput } from "@/lib/schemas/budget"
-import { createBudgetAllocation, getActiveSubAros, getActiveSaros } from "@/lib/actions/budget"
+import {
+  createBudgetAllocation,
+  updateBudgetAllocation,
+  getActiveSubAros,
+  getActiveSaros,
+} from "@/lib/actions/budget"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -19,10 +24,23 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { createClient } from "@/lib/supabase/client"
-import type { FiscalYear, Office, FundSource, AccountCode, SubAroWithDetails, SaroWithDetails } from "@/types/database"
+import type {
+  FiscalYear,
+  Office,
+  FundSource,
+  AccountCode,
+  SubAroWithDetails,
+  SaroWithDetails,
+  BudgetAllocationWithDetails,
+} from "@/types/database"
 
-export function AllocationForm() {
+interface AllocationFormProps {
+  allocation?: BudgetAllocationWithDetails
+}
+
+export function AllocationForm({ allocation }: AllocationFormProps = {}) {
   const router = useRouter()
+  const isEdit = Boolean(allocation)
   const [saving, setSaving] = useState(false)
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([])
   const [offices, setOffices] = useState<Office[]>([])
@@ -39,6 +57,18 @@ export function AllocationForm() {
     formState: { errors },
   } = useForm<BudgetAllocationInput>({
     resolver: zodResolver(budgetAllocationSchema),
+    defaultValues: allocation
+      ? {
+          fiscal_year_id: allocation.fiscal_year_id,
+          office_id: allocation.office_id,
+          fund_source_id: allocation.fund_source_id,
+          account_code_id: allocation.account_code_id,
+          sub_aro_id: allocation.sub_aro_id ?? null,
+          saro_id: allocation.saro_id ?? null,
+          original_amount: allocation.original_amount,
+          description: allocation.description ?? "",
+        }
+      : undefined,
   })
 
   const fiscalYearItems = useMemo(
@@ -99,6 +129,18 @@ export function AllocationForm() {
 
   async function onSubmit(values: BudgetAllocationInput) {
     setSaving(true)
+    if (isEdit && allocation) {
+      const result = await updateBudgetAllocation(allocation.id, values)
+      setSaving(false)
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success("Budget allocation updated.")
+      router.push(`/dashboard/budget/allocations/${allocation.id}`)
+      router.refresh()
+      return
+    }
     const result = await createBudgetAllocation(values)
     setSaving(false)
     if (result.error) {
@@ -325,12 +367,18 @@ export function AllocationForm() {
 
       <div className="flex gap-3 pt-1">
         <Button type="submit" disabled={saving}>
-          {saving ? "Saving…" : "Create Allocation"}
+          {saving ? "Saving…" : isEdit ? "Save Changes" : "Create Allocation"}
         </Button>
         <Button
           type="button"
           variant="outline"
-          onClick={() => router.push("/dashboard/budget/allocations")}
+          onClick={() =>
+            router.push(
+              isEdit && allocation
+                ? `/dashboard/budget/allocations/${allocation.id}`
+                : "/dashboard/budget/allocations"
+            )
+          }
         >
           Cancel
         </Button>

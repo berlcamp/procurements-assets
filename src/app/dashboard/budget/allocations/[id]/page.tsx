@@ -4,6 +4,7 @@ import {
   getBudgetAllocationById,
   getBudgetAdjustments,
 } from "@/lib/actions/budget"
+import { getUserPermissions } from "@/lib/actions/roles"
 import {
   Card,
   CardContent,
@@ -25,7 +26,7 @@ import {
 } from "@/components/ui/table"
 import { Separator } from "@/components/ui/separator"
 import { ADJUSTMENT_TYPE_LABELS } from "@/lib/schemas/budget"
-import { PlusIcon } from "lucide-react"
+import { Pencil, PlusIcon } from "lucide-react"
 import type { BudgetAdjustmentWithDetails } from "@/types/database"
 
 interface Props {
@@ -34,8 +35,13 @@ interface Props {
 
 export default async function AllocationDetailPage({ params }: Props) {
   const { id } = await params
-  const allocation = await getBudgetAllocationById(id)
+  const [allocation, permissions] = await Promise.all([
+    getBudgetAllocationById(id),
+    getUserPermissions(),
+  ])
   if (!allocation) notFound()
+
+  const canEdit = permissions.includes("budget.create")
 
   const adjustments = await getBudgetAdjustments(undefined, undefined)
   const relatedAdjustments = adjustments.filter(
@@ -62,9 +68,19 @@ export default async function AllocationDetailPage({ params }: Props) {
             {office?.name} — FY {fy?.year}
           </p>
         </div>
-        <Link href="/dashboard/budget/allocations">
-          <Button variant="outline" size="sm">Back to list</Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          {canEdit && (
+            <Link href={`/dashboard/budget/allocations/${id}/edit`}>
+              <Button variant="outline" size="sm">
+                <Pencil className="mr-1.5 h-4 w-4" />
+                Edit
+              </Button>
+            </Link>
+          )}
+          <Link href="/dashboard/budget/allocations">
+            <Button variant="outline" size="sm">Back to list</Button>
+          </Link>
+        </div>
       </div>
 
       {/* Detail card */}

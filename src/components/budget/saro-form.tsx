@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { saroSchema, type SaroInput } from "@/lib/schemas/budget"
-import { createSaro } from "@/lib/actions/budget"
+import { createSaro, updateSaro } from "@/lib/actions/budget"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -19,10 +19,15 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { createClient } from "@/lib/supabase/client"
-import type { FiscalYear, FundSource } from "@/types/database"
+import type { FiscalYear, FundSource, SaroWithDetails } from "@/types/database"
 
-export function SaroForm() {
+interface SaroFormProps {
+  saro?: SaroWithDetails
+}
+
+export function SaroForm({ saro }: SaroFormProps = {}) {
   const router = useRouter()
+  const isEdit = Boolean(saro)
   const [saving, setSaving] = useState(false)
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([])
   const [fundSources, setFundSources] = useState<FundSource[]>([])
@@ -35,9 +40,24 @@ export function SaroForm() {
     formState: { errors },
   } = useForm<SaroInput>({
     resolver: zodResolver(saroSchema),
-    defaultValues: {
-      allotment_class: "current",
-    },
+    defaultValues: saro
+      ? {
+          fiscal_year_id: saro.fiscal_year_id,
+          saro_number: saro.saro_number,
+          reference_number: saro.reference_number ?? "",
+          program: saro.program ?? "",
+          allotment_class: saro.allotment_class,
+          fund_source_id: saro.fund_source_id,
+          releasing_office: saro.releasing_office ?? "",
+          release_date: saro.release_date ?? "",
+          validity_date: saro.validity_date ?? "",
+          purpose: saro.purpose ?? "",
+          total_amount: saro.total_amount,
+          remarks: saro.remarks ?? "",
+        }
+      : {
+          allotment_class: "current",
+        },
   })
 
   const fiscalYearItems = useMemo(
@@ -63,6 +83,18 @@ export function SaroForm() {
 
   async function onSubmit(values: SaroInput) {
     setSaving(true)
+    if (isEdit && saro) {
+      const result = await updateSaro(saro.id, values)
+      setSaving(false)
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success("SARO updated successfully")
+      router.push(`/dashboard/budget/saros/${saro.id}`)
+      router.refresh()
+      return
+    }
     const result = await createSaro(values)
     setSaving(false)
     if (result.error) {
@@ -255,12 +287,18 @@ export function SaroForm() {
 
       <div className="flex gap-3 pt-1">
         <Button type="submit" disabled={saving}>
-          {saving ? "Saving..." : "Create SARO"}
+          {saving ? "Saving..." : isEdit ? "Save Changes" : "Create SARO"}
         </Button>
         <Button
           type="button"
           variant="outline"
-          onClick={() => router.push("/dashboard/budget/saros")}
+          onClick={() =>
+            router.push(
+              isEdit && saro
+                ? `/dashboard/budget/saros/${saro.id}`
+                : "/dashboard/budget/saros"
+            )
+          }
         >
           Cancel
         </Button>

@@ -307,6 +307,63 @@ export async function createBudgetAllocation(
   return { error: null }
 }
 
+export async function updateBudgetAllocation(
+  id: string,
+  input: Partial<BudgetAllocationInput>
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+
+  const updateData: Record<string, unknown> = {}
+  if (input.fiscal_year_id !== undefined) updateData.fiscal_year_id = input.fiscal_year_id
+  if (input.office_id !== undefined) updateData.office_id = input.office_id
+  if (input.fund_source_id !== undefined) updateData.fund_source_id = input.fund_source_id
+  if (input.account_code_id !== undefined) updateData.account_code_id = input.account_code_id
+  if (input.sub_aro_id !== undefined) updateData.sub_aro_id = input.sub_aro_id ?? null
+  if (input.saro_id !== undefined) updateData.saro_id = input.saro_id ?? null
+  if (input.description !== undefined) updateData.description = input.description ?? null
+
+  // original_amount edits sync adjusted_amount only if the allocation hasn't
+  // moved from its initial state (no obligations, no disbursements, no approved
+  // adjustments). Otherwise the budget_adjustments workflow is the source of
+  // truth for adjusted_amount and we leave it alone.
+  if (input.original_amount !== undefined) {
+    const newOriginal = parseFloat(input.original_amount)
+    updateData.original_amount = newOriginal
+
+    const { data: current } = await supabase
+      .schema("procurements")
+      .from("budget_allocations")
+      .select("original_amount, adjusted_amount, obligated_amount, disbursed_amount")
+      .eq("id", id)
+      .single()
+
+    if (
+      current &&
+      parseFloat(current.obligated_amount) === 0 &&
+      parseFloat(current.disbursed_amount) === 0 &&
+      parseFloat(current.original_amount) === parseFloat(current.adjusted_amount)
+    ) {
+      updateData.adjusted_amount = newOriginal
+    }
+  }
+
+  const { error } = await supabase
+    .schema("procurements")
+    .from("budget_allocations")
+    .update(updateData)
+    .eq("id", id)
+
+  if (error) {
+    console.error("updateBudgetAllocation error:", error)
+    return { error: error.message }
+  }
+
+  revalidatePath("/dashboard/budget")
+  revalidatePath("/dashboard/budget/allocations")
+  revalidatePath(`/dashboard/budget/allocations/${id}`)
+  return { error: null }
+}
+
 export async function softDeleteBudgetAllocation(
   id: string
 ): Promise<{ error: string | null }> {

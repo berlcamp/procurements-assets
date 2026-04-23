@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -42,8 +42,10 @@ export default async function SubAroDetailPage({
 
   if (!aro) notFound()
 
-  const canDelete =
+  const canManage =
     permissions.includes("budget.create") || permissions.includes("budget.certify")
+  const canDelete = canManage
+  const canEdit = canManage
 
   const totalAmount = parseFloat(aro.total_amount)
   const allocatedAmount = parseFloat(aro.allocated_amount)
@@ -70,9 +72,22 @@ export default async function SubAroDetailPage({
             {aro.fund_source?.name ?? "—"} &middot; {ALLOTMENT_CLASS_LABELS[aro.allotment_class]} Appropriation
           </p>
         </div>
-        {canDelete && (
-          <DeleteSubAroButton id={aro.id} subAroNumber={aro.sub_aro_number} />
-        )}
+        <div className="flex items-center gap-2">
+          {canEdit && (
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<Link href={`/dashboard/budget/sub-aros/${aro.id}/edit`} />}
+            >
+              <Pencil className="mr-1.5 h-4 w-4" />
+              Edit
+            </Button>
+          )}
+          {canDelete && (
+            <DeleteSubAroButton id={aro.id} subAroNumber={aro.sub_aro_number} />
+          )}
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

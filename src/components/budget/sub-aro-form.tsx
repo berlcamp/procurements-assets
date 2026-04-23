@@ -1,12 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { subAroSchema, type SubAroInput } from "@/lib/schemas/budget"
-import { createSubAro } from "@/lib/actions/budget"
+import { createSubAro, updateSubAro } from "@/lib/actions/budget"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -19,10 +19,15 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { createClient } from "@/lib/supabase/client"
-import type { FiscalYear, FundSource } from "@/types/database"
+import type { FiscalYear, FundSource, SubAroWithDetails } from "@/types/database"
 
-export function SubAroForm() {
+interface SubAroFormProps {
+  subAro?: SubAroWithDetails
+}
+
+export function SubAroForm({ subAro }: SubAroFormProps = {}) {
   const router = useRouter()
+  const isEdit = Boolean(subAro)
   const [saving, setSaving] = useState(false)
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([])
   const [fundSources, setFundSources] = useState<FundSource[]>([])
@@ -35,9 +40,23 @@ export function SubAroForm() {
     formState: { errors },
   } = useForm<SubAroInput>({
     resolver: zodResolver(subAroSchema),
-    defaultValues: {
-      allotment_class: "current",
-    },
+    defaultValues: subAro
+      ? {
+          fiscal_year_id: subAro.fiscal_year_id,
+          sub_aro_number: subAro.sub_aro_number,
+          aro_number: subAro.aro_number ?? "",
+          allotment_class: subAro.allotment_class,
+          fund_source_id: subAro.fund_source_id,
+          releasing_office: subAro.releasing_office ?? "",
+          release_date: subAro.release_date ?? "",
+          validity_date: subAro.validity_date ?? "",
+          purpose: subAro.purpose ?? "",
+          total_amount: subAro.total_amount,
+          remarks: subAro.remarks ?? "",
+        }
+      : {
+          allotment_class: "current",
+        },
   })
 
   useEffect(() => {
@@ -53,6 +72,18 @@ export function SubAroForm() {
 
   async function onSubmit(values: SubAroInput) {
     setSaving(true)
+    if (isEdit && subAro) {
+      const result = await updateSubAro(subAro.id, values)
+      setSaving(false)
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success("Sub-ARO updated successfully")
+      router.push(`/dashboard/budget/sub-aros/${subAro.id}`)
+      router.refresh()
+      return
+    }
     const result = await createSubAro(values)
     setSaving(false)
     if (result.error) {
@@ -233,12 +264,18 @@ export function SubAroForm() {
 
       <div className="flex gap-3 pt-1">
         <Button type="submit" disabled={saving}>
-          {saving ? "Saving..." : "Create Sub-ARO"}
+          {saving ? "Saving..." : isEdit ? "Save Changes" : "Create Sub-ARO"}
         </Button>
         <Button
           type="button"
           variant="outline"
-          onClick={() => router.push("/dashboard/budget/sub-aros")}
+          onClick={() =>
+            router.push(
+              isEdit && subAro
+                ? `/dashboard/budget/sub-aros/${subAro.id}`
+                : "/dashboard/budget/sub-aros"
+            )
+          }
         >
           Cancel
         </Button>
