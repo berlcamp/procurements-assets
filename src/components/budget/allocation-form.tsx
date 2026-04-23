@@ -122,7 +122,10 @@ export function AllocationForm() {
           <SelectTrigger>
             <SelectValue placeholder="Select fiscal year" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent
+            alignItemWithTrigger={false}
+            className="w-auto min-w-[var(--anchor-width)] max-w-[min(calc(100vw-2rem),48rem)]"
+          >
             {fiscalYears.map((fy) => (
               <SelectItem key={fy.id} value={fy.id}>
                 {fy.year} — {fy.status}{fy.is_active ? " (Active)" : ""}
@@ -146,7 +149,10 @@ export function AllocationForm() {
           <SelectTrigger>
             <SelectValue placeholder="Select office" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent
+            alignItemWithTrigger={false}
+            className="w-auto min-w-[var(--anchor-width)] max-w-[min(calc(100vw-2rem),48rem)]"
+          >
             {offices.map((o) => (
               <SelectItem key={o.id} value={o.id}>
                 {o.name} ({o.code})
@@ -170,7 +176,10 @@ export function AllocationForm() {
           <SelectTrigger>
             <SelectValue placeholder="Select fund source" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent
+            alignItemWithTrigger={false}
+            className="w-auto min-w-[var(--anchor-width)] max-w-[min(calc(100vw-2rem),48rem)]"
+          >
             {fundSources.map((fs) => (
               <SelectItem key={fs.id} value={fs.id}>
                 {fs.name} ({fs.code})
@@ -194,7 +203,10 @@ export function AllocationForm() {
           <SelectTrigger>
             <SelectValue placeholder="Select account code" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent
+            alignItemWithTrigger={false}
+            className="w-auto min-w-[var(--anchor-width)] max-w-[min(calc(100vw-2rem),48rem)]"
+          >
             {accountCodes.map((ac) => (
               <SelectItem key={ac.id} value={ac.id}>
                 {ac.code} — {ac.name} ({ac.expense_class})
@@ -233,7 +245,10 @@ export function AllocationForm() {
           <SelectTrigger>
             <SelectValue placeholder="Select funding authority (optional)" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent
+            alignItemWithTrigger={false}
+            className="w-auto min-w-[var(--anchor-width)] max-w-[min(calc(100vw-2rem),48rem)]"
+          >
             <SelectItem value="__none__">No Funding Authority</SelectItem>
             {subAros.length > 0 && (
               <>
