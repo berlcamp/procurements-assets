@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import type {
   BudgetAllocation,
   BudgetAllocationWithDetails,
@@ -763,6 +764,90 @@ export async function updateSubAro(
   return { error: null }
 }
 
+export async function softDeleteSubAro(
+  id: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Unauthorized" }
+
+  const isSuperAdmin = user.user_metadata?.is_super_admin === true
+
+  let hasBudgetPerm = isSuperAdmin
+  if (!isSuperAdmin) {
+    const { data: perm } = await supabase.rpc("has_permission", {
+      p_permission_code: "budget.create",
+    })
+    if (perm === true) {
+      hasBudgetPerm = true
+    } else {
+      const { data: certifyPerm } = await supabase.rpc("has_permission", {
+        p_permission_code: "budget.certify",
+      })
+      hasBudgetPerm = certifyPerm === true
+    }
+  }
+  if (!hasBudgetPerm) return { error: "Forbidden: missing budget permission" }
+
+  const admin = createAdminClient()
+
+  const { data: subAro, error: fetchError } = await admin
+    .schema("procurements")
+    .from("sub_allotment_release_orders")
+    .select("id, division_id, deleted_at")
+    .eq("id", id)
+    .single()
+
+  if (fetchError || !subAro) return { error: "Sub-ARO not found" }
+  if (subAro.deleted_at) return { error: "Sub-ARO already deleted" }
+
+  if (!isSuperAdmin) {
+    const { data: profile } = await supabase
+      .schema("procurements")
+      .from("user_profiles")
+      .select("division_id")
+      .eq("id", user.id)
+      .single()
+    if (!profile?.division_id || profile.division_id !== subAro.division_id) {
+      return { error: "Forbidden: Sub-ARO belongs to another division" }
+    }
+  }
+
+  const { count, error: countError } = await admin
+    .schema("procurements")
+    .from("budget_allocations")
+    .select("id", { count: "exact", head: true })
+    .eq("sub_aro_id", id)
+    .is("deleted_at", null)
+
+  if (countError) {
+    console.error("softDeleteSubAro count error:", countError)
+    return { error: countError.message }
+  }
+  if ((count ?? 0) > 0) {
+    return {
+      error: `Cannot delete: this Sub-ARO has ${count} linked allocation${count === 1 ? "" : "s"}. Remove or re-link them first.`,
+    }
+  }
+
+  const { error } = await admin
+    .schema("procurements")
+    .from("sub_allotment_release_orders")
+    .update({ deleted_at: new Date().toISOString(), status: "cancelled" })
+    .eq("id", id)
+    .is("deleted_at", null)
+
+  if (error) {
+    console.error("softDeleteSubAro error:", error)
+    return { error: error.message }
+  }
+
+  revalidatePath("/dashboard/budget")
+  revalidatePath("/dashboard/budget/sub-aros")
+  return { error: null }
+}
+
 // ============================================================
 // SARO CRUD
 // ============================================================
@@ -931,6 +1016,90 @@ export async function updateSaro(
     return { error: error.message }
   }
 
+  revalidatePath("/dashboard/budget/saros")
+  return { error: null }
+}
+
+export async function softDeleteSaro(
+  id: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Unauthorized" }
+
+  const isSuperAdmin = user.user_metadata?.is_super_admin === true
+
+  let hasBudgetPerm = isSuperAdmin
+  if (!isSuperAdmin) {
+    const { data: perm } = await supabase.rpc("has_permission", {
+      p_permission_code: "budget.create",
+    })
+    if (perm === true) {
+      hasBudgetPerm = true
+    } else {
+      const { data: certifyPerm } = await supabase.rpc("has_permission", {
+        p_permission_code: "budget.certify",
+      })
+      hasBudgetPerm = certifyPerm === true
+    }
+  }
+  if (!hasBudgetPerm) return { error: "Forbidden: missing budget permission" }
+
+  const admin = createAdminClient()
+
+  const { data: saro, error: fetchError } = await admin
+    .schema("procurements")
+    .from("special_allotment_release_orders")
+    .select("id, division_id, deleted_at")
+    .eq("id", id)
+    .single()
+
+  if (fetchError || !saro) return { error: "SARO not found" }
+  if (saro.deleted_at) return { error: "SARO already deleted" }
+
+  if (!isSuperAdmin) {
+    const { data: profile } = await supabase
+      .schema("procurements")
+      .from("user_profiles")
+      .select("division_id")
+      .eq("id", user.id)
+      .single()
+    if (!profile?.division_id || profile.division_id !== saro.division_id) {
+      return { error: "Forbidden: SARO belongs to another division" }
+    }
+  }
+
+  const { count, error: countError } = await admin
+    .schema("procurements")
+    .from("budget_allocations")
+    .select("id", { count: "exact", head: true })
+    .eq("saro_id", id)
+    .is("deleted_at", null)
+
+  if (countError) {
+    console.error("softDeleteSaro count error:", countError)
+    return { error: countError.message }
+  }
+  if ((count ?? 0) > 0) {
+    return {
+      error: `Cannot delete: this SARO has ${count} linked allocation${count === 1 ? "" : "s"}. Remove or re-link them first.`,
+    }
+  }
+
+  const { error } = await admin
+    .schema("procurements")
+    .from("special_allotment_release_orders")
+    .update({ deleted_at: new Date().toISOString(), status: "cancelled" })
+    .eq("id", id)
+    .is("deleted_at", null)
+
+  if (error) {
+    console.error("softDeleteSaro error:", error)
+    return { error: error.message }
+  }
+
+  revalidatePath("/dashboard/budget")
   revalidatePath("/dashboard/budget/saros")
   return { error: null }
 }

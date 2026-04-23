@@ -15,9 +15,11 @@ import {
 import { AmountDisplay, formatPeso } from "@/components/shared/amount-display"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { getSaroById } from "@/lib/actions/budget"
+import { getUserPermissions } from "@/lib/actions/roles"
 import { SARO_STATUS_LABELS, ALLOTMENT_CLASS_LABELS } from "@/lib/schemas/budget"
 import { format } from "date-fns"
 import type { BudgetAllocationWithDetails } from "@/types/database"
+import { DeleteSaroButton } from "./delete-saro-button"
 
 const statusVariants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   draft: "outline",
@@ -33,9 +35,15 @@ export default async function SaroDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const saro = await getSaroById(id)
+  const [saro, permissions] = await Promise.all([
+    getSaroById(id),
+    getUserPermissions(),
+  ])
 
   if (!saro) notFound()
+
+  const canDelete =
+    permissions.includes("budget.create") || permissions.includes("budget.certify")
 
   const totalAmount = parseFloat(saro.total_amount)
   const allocatedAmount = parseFloat(saro.allocated_amount)
@@ -63,6 +71,9 @@ export default async function SaroDetailPage({
             {saro.program ? ` · ${saro.program}` : ""}
           </p>
         </div>
+        {canDelete && (
+          <DeleteSaroButton id={saro.id} saroNumber={saro.saro_number} />
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

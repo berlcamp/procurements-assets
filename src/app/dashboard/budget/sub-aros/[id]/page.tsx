@@ -15,9 +15,11 @@ import {
 import { AmountDisplay, formatPeso } from "@/components/shared/amount-display"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { getSubAroById } from "@/lib/actions/budget"
+import { getUserPermissions } from "@/lib/actions/roles"
 import { SUB_ARO_STATUS_LABELS, ALLOTMENT_CLASS_LABELS } from "@/lib/schemas/budget"
 import { format } from "date-fns"
 import type { BudgetAllocationWithDetails } from "@/types/database"
+import { DeleteSubAroButton } from "./delete-sub-aro-button"
 
 const statusVariants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   draft: "outline",
@@ -33,9 +35,15 @@ export default async function SubAroDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const aro = await getSubAroById(id)
+  const [aro, permissions] = await Promise.all([
+    getSubAroById(id),
+    getUserPermissions(),
+  ])
 
   if (!aro) notFound()
+
+  const canDelete =
+    permissions.includes("budget.create") || permissions.includes("budget.certify")
 
   const totalAmount = parseFloat(aro.total_amount)
   const allocatedAmount = parseFloat(aro.allocated_amount)
@@ -62,6 +70,9 @@ export default async function SubAroDetailPage({
             {aro.fund_source?.name ?? "—"} &middot; {ALLOTMENT_CLASS_LABELS[aro.allotment_class]} Appropriation
           </p>
         </div>
+        {canDelete && (
+          <DeleteSubAroButton id={aro.id} subAroNumber={aro.sub_aro_number} />
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

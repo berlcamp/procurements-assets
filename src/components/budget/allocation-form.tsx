@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { budgetAllocationSchema, type BudgetAllocationInput } from "@/lib/schemas/budget"
-import { createBudgetAllocation } from "@/lib/actions/budget"
+import { createBudgetAllocation, getActiveSubAros, getActiveSaros } from "@/lib/actions/budget"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { createClient } from "@/lib/supabase/client"
-import type { FiscalYear, Office, FundSource, AccountCode, SubAllotmentReleaseOrder, SpecialAllotmentReleaseOrder } from "@/types/database"
+import type { FiscalYear, Office, FundSource, AccountCode, SubAroWithDetails, SaroWithDetails } from "@/types/database"
 
 export function AllocationForm() {
   const router = useRouter()
@@ -28,8 +28,8 @@ export function AllocationForm() {
   const [offices, setOffices] = useState<Office[]>([])
   const [fundSources, setFundSources] = useState<FundSource[]>([])
   const [accountCodes, setAccountCodes] = useState<AccountCode[]>([])
-  const [subAros, setSubAros] = useState<SubAllotmentReleaseOrder[]>([])
-  const [saros, setSaros] = useState<SpecialAllotmentReleaseOrder[]>([])
+  const [subAros, setSubAros] = useState<SubAroWithDetails[]>([])
+  const [saros, setSaros] = useState<SaroWithDetails[]>([])
 
   const {
     register,
@@ -61,6 +61,19 @@ export function AllocationForm() {
     [accountCodes]
   )
 
+  const fundingAuthorityItems = useMemo(() => {
+    const entries: Record<string, string> = { __none__: "No Funding Authority" }
+    for (const sa of subAros) {
+      const label = `[Sub-ARO] ${sa.sub_aro_number}${sa.aro_number ? ` (${sa.aro_number})` : ""}`
+      entries[`sub_aro:${sa.id}`] = label
+    }
+    for (const s of saros) {
+      const label = `[SARO] ${s.saro_number}${s.program ? ` — ${s.program}` : ""}`
+      entries[`saro:${s.id}`] = label
+    }
+    return entries
+  }, [subAros, saros])
+
   useEffect(() => {
     const supabase = createClient()
     Promise.all([
@@ -68,15 +81,19 @@ export function AllocationForm() {
       supabase.schema("procurements").from("offices").select("id, name, code").is("deleted_at", null).order("name"),
       supabase.schema("procurements").from("fund_sources").select("id, name, code").eq("is_active", true).order("name"),
       supabase.schema("procurements").from("account_codes").select("id, name, code, expense_class").eq("is_active", true).order("code"),
-      supabase.schema("procurements").from("sub_allotment_release_orders").select("id, sub_aro_number, aro_number, total_amount, allocated_amount, fund_source_id, status").in("status", ["active", "draft"]).is("deleted_at", null).order("sub_aro_number"),
-      supabase.schema("procurements").from("special_allotment_release_orders").select("id, saro_number, reference_number, program, total_amount, allocated_amount, fund_source_id, status").in("status", ["active", "draft"]).is("deleted_at", null).order("saro_number"),
+      getActiveSubAros(),
+      getActiveSaros(),
     ]).then(([fy, off, fs, ac, sa, saro]) => {
+      if (fy.error) console.error("AllocationForm fiscal_years error:", fy.error)
+      if (off.error) console.error("AllocationForm offices error:", off.error)
+      if (fs.error) console.error("AllocationForm fund_sources error:", fs.error)
+      if (ac.error) console.error("AllocationForm account_codes error:", ac.error)
       setFiscalYears((fy.data ?? []) as FiscalYear[])
       setOffices((off.data ?? []) as Office[])
       setFundSources((fs.data ?? []) as FundSource[])
       setAccountCodes((ac.data ?? []) as AccountCode[])
-      setSubAros((sa.data ?? []) as SubAllotmentReleaseOrder[])
-      setSaros((saro.data ?? []) as SpecialAllotmentReleaseOrder[])
+      setSubAros(sa)
+      setSaros(saro)
     })
   }, [])
 
@@ -211,6 +228,7 @@ export function AllocationForm() {
             watch("saro_id") ? `saro:${watch("saro_id")}` :
             "__none__"
           }
+          items={fundingAuthorityItems}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select funding authority (optional)" />
