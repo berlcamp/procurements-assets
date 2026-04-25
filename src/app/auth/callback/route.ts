@@ -57,7 +57,8 @@ export async function GET(request: NextRequest) {
 
       let destination: string
       if (isSuperAdmin) {
-        destination = "/platform"
+        // destination = "/platform"
+        destination = "/dashboard"
       } else if (redirectedFrom?.startsWith("/dashboard")) {
         destination = redirectedFrom
       } else {
