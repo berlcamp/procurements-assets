@@ -165,7 +165,7 @@ export async function inviteUser(
       middle_name: input.middle_name ?? null,
       last_name: input.last_name,
       suffix: input.suffix ?? null,
-      employee_id: input.employee_id ?? null,
+      employee_id: input.employee_id?.trim() || null,
       position: input.position ?? null,
       department: input.department ?? null,
       office_id: input.office_id,
@@ -174,7 +174,15 @@ export async function inviteUser(
     .select()
     .single()
 
-  if (error) return { data: null, error: error.message }
+  if (error) {
+    if (error.message.includes("employee_id")) {
+      return {
+        data: null,
+        error: "An active user with this Employee ID already exists in this division.",
+      }
+    }
+    return { data: null, error: error.message }
+  }
 
   const roleRes = await assignRole(
     { user_id: userId, role_id: input.role_id, office_id: input.office_id },

@@ -295,7 +295,7 @@ export async function invitePlatformUser(
       middle_name: input.middle_name ?? null,
       last_name: input.last_name,
       suffix: input.suffix ?? null,
-      employee_id: input.employee_id ?? null,
+      employee_id: input.employee_id?.trim() || null,
       position: input.position ?? null,
       department: input.department ?? null,
       office_id: input.office_id,
