@@ -20,11 +20,12 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { AppLotCard } from "./app-lot-card"
-import { PlusIcon, CheckCircle2, MoveRight } from "lucide-react"
+import { PlusIcon, CheckCircle2, MoveRight, X } from "lucide-react"
 import {
-  createAppLot, updateAppLot, assignItemsToLot, unassignItemsFromLot, finalizeLot, deleteAppLot,
+  createAppLot, updateAppLot, assignLotItemsToLot, unassignLotItems, finalizeLot, deleteAppLot,
 } from "@/lib/actions/app"
 import { PROCUREMENT_MODES } from "@/lib/schemas/ppmp"
+import { appItemLines, linesTotal, type AppItemLine } from "@/lib/utils/app-item-lines"
 import type { AppLotInput } from "@/lib/schemas/app"
 import type { AppItemWithOffice, AppLotWithItems } from "@/types/database"
 import { cn } from "@/lib/utils"
@@ -36,6 +37,37 @@ interface ItemGroup {
   label: string
   items: AppItemWithOffice[]
   total: number
+}
+
+/**
+ * Selection is per line item, not per APP item. An APP item with no PPMP line
+ * items is selected as a whole via a blank line id.
+ */
+const selKey = (itemId: string, lineId: string) => `${itemId}|${lineId}`
+
+/** Selection units of an APP item: one per line, or one for the item itself. */
+function selectionUnits(item: AppItemWithOffice): string[] {
+  const lines = appItemLines(item)
+  return lines.length > 0
+    ? lines.map((li) => selKey(item.id, li.id))
+    : [selKey(item.id, "")]
+}
+
+/**
+ * Budget the selected lines carry into a lot. Mirrors the server's
+ * apportionment: proportional to line cost, by line count when costs are zero,
+ * and the full budget when every line is selected.
+ */
+function selectedAmount(item: AppItemWithOffice, selectedLineIds: Set<string>): number {
+  const budget = Number(item.estimated_budget)
+  const lines = appItemLines(item)
+  if (lines.length === 0) return budget
+  const picked = lines.filter((li) => selectedLineIds.has(li.id))
+  if (picked.length === 0) return 0
+  if (picked.length === lines.length) return budget
+  const all = linesTotal(lines)
+  const share = all > 0 ? linesTotal(picked) / all : picked.length / lines.length
+  return Math.round(budget * share * 100) / 100
 }
 
 const lotTableShell =
@@ -68,8 +100,8 @@ export function AppLotManager({
   // Grouping
   const [groupBy, setGroupBy] = useState<GroupBy>("mode")
 
-  // Inline assignment state (replaces the old assign dialog)
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
+  // Inline assignment state — a set of `${appItemId}|${lineItemId}` keys
+  const [selectedLines, setSelectedLines] = useState<Set<string>>(new Set())
   const [targetLotId, setTargetLotId] = useState("")
 
   // Delete lot confirmation
@@ -88,10 +120,11 @@ export function AppLotManager({
 
   const draftLots = useMemo(() => lots.filter(l => l.status === "draft"), [lots])
 
-  // Map app_item.id → ppmp_lot_items for the right panel lookup
-  const lotItemsById = useMemo(() => {
-    const map = new Map<string, typeof items[number]["source_ppmp_lot"]>()
-    for (const item of items) map.set(item.id, item.source_ppmp_lot ?? null)
+  // Map app_item.id → full item, for the right panel lookup. Lotted rows in
+  // `lots` come without their PPMP lot join, so resolve lines from here.
+  const itemsById = useMemo(() => {
+    const map = new Map<string, AppItemWithOffice>()
+    for (const item of items) map.set(item.id, item)
     return map
   }, [items])
 
@@ -126,32 +159,57 @@ export function AppLotManager({
     return Array.from(map.values())
   }, [approvedUnlottedItems, groupBy, procurementModeLabel])
 
-  const allSelected =
-    approvedUnlottedItems.length > 0 &&
-    approvedUnlottedItems.every(i => selectedItems.has(i.id))
+  const allUnits = useMemo(
+    () => approvedUnlottedItems.flatMap(selectionUnits),
+    [approvedUnlottedItems]
+  )
+
+  const allSelected = allUnits.length > 0 && allUnits.every(k => selectedLines.has(k))
+
+  // Selected line ids per APP item, used for totals and the assign payload.
+  const selectionByItem = useMemo(() => {
+    const map = new Map<string, Set<string>>()
+    for (const item of approvedUnlottedItems) {
+      const picked = new Set<string>()
+      for (const li of appItemLines(item)) {
+        if (selectedLines.has(selKey(item.id, li.id))) picked.add(li.id)
+      }
+      const wholeItem = selectedLines.has(selKey(item.id, ""))
+      if (picked.size > 0 || wholeItem) map.set(item.id, picked)
+    }
+    return map
+  }, [approvedUnlottedItems, selectedLines])
+
+  const selectedCount = useMemo(
+    () => allUnits.filter(k => selectedLines.has(k)).length,
+    [allUnits, selectedLines]
+  )
 
   const selectedTotal = useMemo(() => {
-    return approvedUnlottedItems
-      .filter(i => selectedItems.has(i.id))
-      .reduce((sum, i) => sum + Number(i.estimated_budget), 0)
-  }, [approvedUnlottedItems, selectedItems])
+    let sum = 0
+    for (const item of approvedUnlottedItems) {
+      const picked = selectionByItem.get(item.id)
+      if (picked) sum += selectedAmount(item, picked)
+    }
+    return sum
+  }, [approvedUnlottedItems, selectionByItem])
 
-  const toggleItemSelect = useCallback((id: string) => {
-    setSelectedItems(prev => {
+  const toggleKeys = useCallback((keys: string[], select?: boolean) => {
+    setSelectedLines(prev => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      const turnOn = select ?? !keys.every(k => next.has(k))
+      for (const k of keys) {
+        if (turnOn) next.add(k)
+        else next.delete(k)
+      }
       return next
     })
   }, [])
 
   const toggleSelectAll = useCallback(() => {
-    if (allSelected) {
-      setSelectedItems(new Set())
-    } else {
-      setSelectedItems(new Set(approvedUnlottedItems.map(i => i.id)))
-    }
-  }, [allSelected, approvedUnlottedItems])
+    if (allSelected) setSelectedLines(new Set())
+    else setSelectedLines(new Set(allUnits))
+  }, [allSelected, allUnits])
 
   const handleCreateLot = () => {
     if (lotName.trim().length < 3) return
@@ -175,23 +233,28 @@ export function AppLotManager({
   }
 
   const handleAssignItems = useCallback((lotId: string) => {
-    if (!lotId || selectedItems.size === 0) return
+    if (!lotId || selectionByItem.size === 0) return
     setError(null)
+    const assignments = Array.from(selectionByItem, ([appItemId, lineIds]) => ({
+      appItemId,
+      ppmpLotItemIds: Array.from(lineIds),
+    }))
     startTransition(async () => {
-      const result = await assignItemsToLot(lotId, Array.from(selectedItems))
+      const result = await assignLotItemsToLot(lotId, assignments)
       if (result.error) setError(result.error)
       else {
-        setSelectedItems(new Set())
+        setSelectedLines(new Set())
         setTargetLotId("")
         router.refresh()
       }
     })
-  }, [selectedItems, router])
+  }, [selectionByItem, router])
 
-  const handleUnassign = (itemIds: string[]) => {
+  /** Remove a whole APP item, or just some of its lines, from its lot. */
+  const handleUnassign = (appItemId: string, lineIds: string[] = []) => {
     setError(null)
     startTransition(async () => {
-      const result = await unassignItemsFromLot(itemIds)
+      const result = await unassignLotItems(appItemId, lineIds)
       if (result.error) setError(result.error)
       else router.refresh()
     })
@@ -290,17 +353,10 @@ export function AppLotManager({
           ) : (
             <div className="max-h-[60vh] overflow-y-auto">
               {groupedItems.map((group, gi) => {
-                const groupIds = group.items.map(i => i.id)
-                const allGroupSelected = groupIds.length > 0 && groupIds.every(id => selectedItems.has(id))
-                const someGroupSelected = groupIds.some(id => selectedItems.has(id))
-                const toggleGroup = () => {
-                  setSelectedItems(prev => {
-                    const next = new Set(prev)
-                    if (allGroupSelected) groupIds.forEach(id => next.delete(id))
-                    else groupIds.forEach(id => next.add(id))
-                    return next
-                  })
-                }
+                const groupKeys = group.items.flatMap(selectionUnits)
+                const allGroupSelected = groupKeys.length > 0 && groupKeys.every(k => selectedLines.has(k))
+                const someGroupSelected = groupKeys.some(k => selectedLines.has(k))
+                const toggleGroup = () => toggleKeys(groupKeys, !allGroupSelected)
                 return (
                   <div key={group.key}>
                     {/* Group header — hidden in flat mode */}
@@ -332,24 +388,29 @@ export function AppLotManager({
                     <Table className="[&_td]:px-3 [&_td]:py-2.5 [&_th]:h-9 [&_th]:px-3">
                       <TableBody className="[&_tr]:border-border/40 [&_tr:last-child]:border-0">
                         {group.items.map((item) => {
-                          const isSelected = selectedItems.has(item.id)
+                          const lines = appItemLines(item)
+                          const itemKeys = selectionUnits(item)
+                          const allItemSelected = itemKeys.every(k => selectedLines.has(k))
+                          const someItemSelected = itemKeys.some(k => selectedLines.has(k))
                           return (
                             <TableRow
                               key={item.id}
                               className={cn(
-                                "cursor-pointer select-none transition-colors",
-                                isSelected
+                                "select-none transition-colors",
+                                canManageLots && "cursor-pointer",
+                                someItemSelected
                                   ? "bg-primary/5 hover:bg-primary/8 dark:bg-primary/10"
                                   : "bg-white hover:bg-muted/35 dark:bg-card dark:hover:bg-muted/25"
                               )}
-                              onClick={() => canManageLots && toggleItemSelect(item.id)}
+                              onClick={() => canManageLots && toggleKeys(itemKeys, !allItemSelected)}
                             >
                               {canManageLots && (
-                                <TableCell className="w-10 align-middle" onClick={(e) => e.stopPropagation()}>
+                                <TableCell className="w-10 align-top" onClick={(e) => e.stopPropagation()}>
                                   <Checkbox
-                                    checked={isSelected}
-                                    onCheckedChange={() => toggleItemSelect(item.id)}
-                                    aria-label={`Select item ${item.item_number}`}
+                                    checked={allItemSelected}
+                                    data-state={someItemSelected && !allItemSelected ? "indeterminate" : undefined}
+                                    onCheckedChange={() => toggleKeys(itemKeys, !allItemSelected)}
+                                    aria-label={`Select all lines of item ${item.item_number}`}
                                   />
                                 </TableCell>
                               )}
@@ -377,17 +438,46 @@ export function AppLotManager({
                                     </Badge>
                                   )}
                                 </div>
-                                {/* Compact line items list */}
-                                {(item.source_ppmp_lot?.ppmp_lot_items?.length ?? 0) > 0 && (
+                                {/* Individually selectable line items */}
+                                {lines.length > 0 && (
                                   <ul className="mt-1.5 space-y-0.5">
-                                    {item.source_ppmp_lot!.ppmp_lot_items.map((li) => (
-                                      <li key={li.id} className="flex items-baseline gap-1.5 text-[11px] text-muted-foreground">
-                                        <span className="tabular-nums shrink-0">
-                                          {Number(li.quantity).toLocaleString()} {li.unit}
-                                        </span>
-                                        <span className="truncate">{li.description}</span>
-                                      </li>
-                                    ))}
+                                    {lines.map((li) => {
+                                      const k = selKey(item.id, li.id)
+                                      const lineSelected = selectedLines.has(k)
+                                      return (
+                                        <li
+                                          key={li.id}
+                                          className={cn(
+                                            "flex items-baseline gap-1.5 rounded px-1 py-0.5 text-[11px]",
+                                            canManageLots && "cursor-pointer hover:bg-muted/50",
+                                            lineSelected ? "text-foreground" : "text-muted-foreground"
+                                          )}
+                                          onClick={(e) => {
+                                            if (!canManageLots) return
+                                            e.stopPropagation()
+                                            toggleKeys([k])
+                                          }}
+                                        >
+                                          {canManageLots && (
+                                            <Checkbox
+                                              checked={lineSelected}
+                                              onCheckedChange={() => toggleKeys([k])}
+                                              onClick={(e) => e.stopPropagation()}
+                                              aria-label={`Select line item ${li.description}`}
+                                              className="size-3.5 shrink-0 self-center"
+                                            />
+                                          )}
+                                          <span className="tabular-nums shrink-0">
+                                            {Number(li.quantity).toLocaleString()} {li.unit}
+                                          </span>
+                                          <span className="flex-1 truncate">{li.description}</span>
+                                          <AmountDisplay
+                                            amount={li.estimated_total_cost}
+                                            className="shrink-0 text-[11px] tabular-nums"
+                                          />
+                                        </li>
+                                      )
+                                    })}
                                   </ul>
                                 )}
                               </TableCell>
@@ -406,11 +496,12 @@ export function AppLotManager({
           )}
 
           {/* Inline assign footer — only shown when items selected */}
-          {canManageLots && selectedItems.size > 0 && (
+          {canManageLots && selectedCount > 0 && (
             <div className="border-t border-border/50 bg-muted/20 px-4 py-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs text-muted-foreground tabular-nums">
-                  <span className="font-semibold text-foreground">{selectedItems.size}</span> selected
+                  <span className="font-semibold text-foreground">{selectedCount}</span>
+                  {" "}line item{selectedCount !== 1 ? "s" : ""} selected
                   {" · "}
                   <AmountDisplay amount={selectedTotal.toString()} className="inline text-xs" />
                 </span>
@@ -501,7 +592,7 @@ export function AppLotManager({
                         ? () => handleAssignItems(lot.id)
                         : undefined
                     }
-                    hasSelectedItems={selectedItems.size > 0}
+                    hasSelectedItems={selectedCount > 0}
                   />
 
                   {/* Lot items table */}
@@ -519,61 +610,80 @@ export function AppLotManager({
                           </TableRow>
                         </TableHeader>
                         <TableBody className="bg-white dark:bg-card [&_tr]:border-border/40 [&_tr:last-child]:border-0">
-                          {lot.app_items.map((item) => (
-                            <TableRow
-                              key={item.id}
-                              className="bg-white hover:bg-muted/35 dark:bg-card dark:hover:bg-muted/25"
-                            >
-                              <TableCell className="font-mono text-xs text-muted-foreground tabular-nums">
-                                {item.lot_item_number}
-                              </TableCell>
-                              <TableCell className="max-w-[min(100%,28rem)] whitespace-normal text-sm leading-snug align-top">
-                                <p>
-                                  {item.general_description}
-                                  {(() => {
-                                    const lotTitle = lotItemsById.get(item.id)?.lot_title
-                                    return lotTitle ? <span className="text-muted-foreground"> — {lotTitle}</span> : null
-                                  })()}
-                                </p>
-                                {item.source_ppmp_id && creatorsByPpmpId[item.source_ppmp_id] && (
-                                  <p className="text-xs text-muted-foreground mt-0.5">
-                                    {creatorsByPpmpId[item.source_ppmp_id]}
+                          {lot.app_items.map((item) => {
+                            const source = itemsById.get(item.id)
+                            const lines: AppItemLine[] = source ? appItemLines(source) : []
+                            const editable = canManageLots && lot.status === "draft"
+                            return (
+                              <TableRow
+                                key={item.id}
+                                className="bg-white hover:bg-muted/35 dark:bg-card dark:hover:bg-muted/25"
+                              >
+                                <TableCell className="font-mono text-xs text-muted-foreground tabular-nums">
+                                  {item.lot_item_number}
+                                </TableCell>
+                                <TableCell className="max-w-[min(100%,28rem)] whitespace-normal text-sm leading-snug align-top">
+                                  <p>
+                                    {item.general_description}
+                                    {source?.source_ppmp_lot?.lot_title && (
+                                      <span className="text-muted-foreground"> — {source.source_ppmp_lot.lot_title}</span>
+                                    )}
                                   </p>
-                                )}
-                                {(() => {
-                                  const ppmpItems = lotItemsById.get(item.id)?.ppmp_lot_items ?? []
-                                  return ppmpItems.length > 0 ? (
+                                  {item.source_ppmp_id && creatorsByPpmpId[item.source_ppmp_id] && (
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      {creatorsByPpmpId[item.source_ppmp_id]}
+                                    </p>
+                                  )}
+                                  {lines.length > 0 && (
                                     <ul className="mt-1.5 space-y-0.5">
-                                      {ppmpItems.map((li) => (
-                                        <li key={li.id} className="flex items-baseline gap-1.5 text-[11px] text-muted-foreground">
+                                      {lines.map((li) => (
+                                        <li
+                                          key={li.id}
+                                          className="group/line flex items-baseline gap-1.5 text-[11px] text-muted-foreground"
+                                        >
                                           <span className="tabular-nums shrink-0">
                                             {Number(li.quantity).toLocaleString()} {li.unit}
                                           </span>
-                                          <span className="truncate">{li.description}</span>
+                                          <span className="flex-1 truncate">{li.description}</span>
+                                          <AmountDisplay
+                                            amount={li.estimated_total_cost}
+                                            className="shrink-0 text-[11px] tabular-nums"
+                                          />
+                                          {editable && lines.length > 1 && (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleUnassign(item.id, [li.id])}
+                                              disabled={isPending}
+                                              aria-label={`Remove ${li.description} from lot`}
+                                              className="shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover/line:opacity-100"
+                                            >
+                                              <X className="h-3 w-3" />
+                                            </button>
+                                          )}
                                         </li>
                                       ))}
                                     </ul>
-                                  ) : null
-                                })()}
-                              </TableCell>
-                              <TableCell className="text-right tabular-nums">
-                                <AmountDisplay amount={item.estimated_budget} className="text-sm" />
-                              </TableCell>
-                              {canManageLots && lot.status === "draft" && (
-                                <TableCell className="text-right">
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-8 text-xs text-muted-foreground hover:text-destructive"
-                                    onClick={() => handleUnassign([item.id])}
-                                    disabled={isPending}
-                                  >
-                                    Remove
-                                  </Button>
+                                  )}
                                 </TableCell>
-                              )}
-                            </TableRow>
-                          ))}
+                                <TableCell className="text-right tabular-nums">
+                                  <AmountDisplay amount={item.estimated_budget} className="text-sm" />
+                                </TableCell>
+                                {editable && (
+                                  <TableCell className="text-right">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-8 text-xs text-muted-foreground hover:text-destructive"
+                                      onClick={() => handleUnassign(item.id)}
+                                      disabled={isPending}
+                                    >
+                                      Remove
+                                    </Button>
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            )
+                          })}
                         </TableBody>
                       </Table>
                     </div>

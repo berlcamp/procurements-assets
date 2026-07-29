@@ -230,7 +230,7 @@ export function AppLotCard({
                 className="h-7 gap-1.5 text-xs"
                 onClick={onQuickAdd}
                 disabled={!hasSelectedItems || isPending}
-                title={hasSelectedItems ? "Add selected items to this lot" : "Select items from the left panel first"}
+                title={hasSelectedItems ? "Add selected line items to this lot" : "Select line items from the left panel first"}
               >
                 <PlusCircle className="h-3 w-3" />
                 Add selected

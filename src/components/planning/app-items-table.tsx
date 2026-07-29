@@ -14,6 +14,7 @@ import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip"
 import type { AppItemWithOffice } from "@/types/database"
+import { appItemLines } from "@/lib/utils/app-item-lines"
 import { cn } from "@/lib/utils"
 
 interface AppItemsTableProps {
@@ -71,7 +72,7 @@ export function AppItemsTable({ items, showLotColumn = true, creatorsByPpmpId = 
           {items.map((item) => {
             const office = item.source_office as { name: string; code: string } | null
             const lot = item.lot as { lot_name: string; lot_number: number } | null
-            const lotItems = item.source_ppmp_lot?.ppmp_lot_items ?? []
+            const lotItems = appItemLines(item)
             const isExpanded = expandedIds.has(item.id)
             const itemsTotal = lotItems.reduce((s, li) => s + Number(li.estimated_total_cost), 0)
             const declaredBudget = Number(item.estimated_budget)

@@ -700,6 +700,8 @@ export interface AppItem {
   source_ppmp_lot_id: string | null
   source_ppmp_id: string | null
   source_ppmp_project_description: string | null
+  /** Subset of the source PPMP lot's line items this row covers. null = all lines. */
+  source_ppmp_lot_item_ids: string[] | null
   item_number: number
   general_description: string
   project_type: string | null

@@ -59,7 +59,7 @@ export default async function AppLotsPage({ params }: Props) {
             <PpmpIndicativeFinalBadge value={app.indicative_final} />
           </div>
           <p className="text-base text-muted-foreground">
-            Create lots and assign HOPE-approved items for procurement grouping · <StatusBadge status={app.status} />
+            Create lots and assign individual HOPE-approved line items for procurement grouping · <StatusBadge status={app.status} />
           </p>
         </div>
         <Button size="sm" variant="ghost" nativeButton={false} render={<Link href={`/dashboard/planning/app/${app.id}`} />}>

@@ -19,6 +19,7 @@ import { hopeReviewAppItem, hopeBatchReviewAppItems } from "@/lib/actions/app"
 import { useRouter } from "next/navigation"
 import { format, parseISO } from "date-fns"
 import type { AppItemWithOffice } from "@/types/database"
+import { appItemLines } from "@/lib/utils/app-item-lines"
 
 interface AppHopeReviewProps {
   items: AppItemWithOffice[]
@@ -318,7 +319,7 @@ export function AppHopeReview({ items, appId }: AppHopeReviewProps) {
             )}
 
             {/* Line items from PPMP */}
-            {(previewItem?.source_ppmp_lot?.ppmp_lot_items?.length ?? 0) > 0 && (
+            {(previewItem ? appItemLines(previewItem).length : 0) > 0 && (
               <div className="py-3">
                 <p className="text-xs font-medium text-muted-foreground mb-2">Line Items to Procure</p>
                 <div className="overflow-hidden rounded-lg border border-border/50">
@@ -334,7 +335,7 @@ export function AppHopeReview({ items, appId }: AppHopeReviewProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {previewItem!.source_ppmp_lot!.ppmp_lot_items.map((li) => (
+                      {appItemLines(previewItem!).map((li) => (
                         <tr key={li.id} className="border-b border-border/30 last:border-0 bg-white dark:bg-card">
                           <td className="px-2 py-1.5 font-mono text-muted-foreground tabular-nums">{li.item_number}</td>
                           <td className="px-2 py-1.5 whitespace-normal">

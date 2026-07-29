@@ -18,6 +18,7 @@ import { PrItemsEdit } from "@/components/procurement/pr-items-table"
 import { createPrSchema, type CreatePrInput } from "@/lib/schemas/procurement"
 import { createPurchaseRequest, getApprovedAppItemsForOffice, checkSplitContract } from "@/lib/actions/procurement"
 import type { FiscalYear, Office, AppItem, AppLot, PpmpLotItem } from "@/types/database"
+import { appItemLines } from "@/lib/utils/app-item-lines"
 import { cn } from "@/lib/utils"
 
 type PpmpLotItemPick = Pick<PpmpLotItem, 'id' | 'item_number' | 'description' | 'quantity' | 'unit' | 'estimated_unit_cost' | 'estimated_total_cost' | 'specification'>
@@ -136,7 +137,7 @@ export function PrCreateForm({ fiscalYear, offices }: PrCreateFormProps) {
     const next: CreatePrInput["items"] = []
 
     for (const item of selectedItems) {
-      const lotItems = item.source_ppmp_lot?.ppmp_lot_items ?? []
+      const lotItems = appItemLines(item)
 
       if (lotItems.length > 0) {
         // Expand each PPMP lot item into its own PR line item
@@ -348,7 +349,7 @@ export function PrCreateForm({ fiscalYear, offices }: PrCreateFormProps) {
                         ? `Different mode (${MODE_LABELS[itemMode] ?? itemMode}) — start a separate PR`
                         : undefined
 
-                    const lotItems = item.source_ppmp_lot?.ppmp_lot_items ?? []
+                    const lotItems = appItemLines(item)
 
                     return (
                       <button

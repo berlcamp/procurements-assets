@@ -216,6 +216,7 @@ export async function getAppItems(
       )
     `)
     .eq("app_version_id", appVersionId)
+    .is("deleted_at", null)
     .order("item_number", { ascending: true })
 
   if (error) {
@@ -249,6 +250,7 @@ export async function getAppLots(
   for (const lot of lots) {
     if (lot.app_items) {
       lot.app_items = lot.app_items
+        .filter((i: AppItem) => i.deleted_at === null)
         .sort((a: AppItem, b: AppItem) => (a.lot_item_number ?? 0) - (b.lot_item_number ?? 0))
     }
   }
@@ -586,6 +588,59 @@ export async function assignItemsToLot(
     .rpc("assign_items_to_lot", {
       p_lot_id: lotId,
       p_app_item_ids: appItemIds,
+    })
+
+  if (error) return { count: null, error: error.message }
+
+  revalidatePath("/dashboard/planning/app")
+  return { count: data as number, error: null }
+}
+
+/**
+ * Assign individual PPMP line items to a BAC lot.
+ *
+ * Each assignment names an APP item plus the subset of its line items to move.
+ * An empty `ppmpLotItemIds` moves the whole APP item; a partial subset splits
+ * the APP item so only the chosen lines land in the lot.
+ */
+export async function assignLotItemsToLot(
+  lotId: string,
+  assignments: { appItemId: string; ppmpLotItemIds: string[] }[]
+): Promise<{ count: number | null; error: string | null }> {
+  const supabase = await createClient()
+  if (await isAppLotsLockedByLot(supabase, lotId)) return { count: null, error: "Lot editing is locked — APP is final or approved" }
+  const { data, error } = await supabase
+    .schema("procurements")
+    .rpc("assign_lot_items_to_lot", {
+      p_lot_id: lotId,
+      p_assignments: assignments.map((a) => ({
+        app_item_id: a.appItemId,
+        ppmp_lot_item_ids: a.ppmpLotItemIds,
+      })),
+    })
+
+  if (error) return { count: null, error: error.message }
+
+  revalidatePath("/dashboard/planning/app")
+  return { count: data as number, error: null }
+}
+
+/**
+ * Remove individual line items from their lot. An empty `ppmpLotItemIds`
+ * removes the whole APP item. Removed lines merge back into their unlotted
+ * sibling so the available pool returns to its unsplit shape.
+ */
+export async function unassignLotItems(
+  appItemId: string,
+  ppmpLotItemIds: string[] = []
+): Promise<{ count: number | null; error: string | null }> {
+  const supabase = await createClient()
+  if (await isAppLotsLockedByItem(supabase, appItemId)) return { count: null, error: "Lot editing is locked — APP is final or approved" }
+  const { data, error } = await supabase
+    .schema("procurements")
+    .rpc("unassign_lot_items", {
+      p_app_item_id: appItemId,
+      p_ppmp_lot_item_ids: ppmpLotItemIds.length > 0 ? ppmpLotItemIds : null,
     })
 
   if (error) return { count: null, error: error.message }
