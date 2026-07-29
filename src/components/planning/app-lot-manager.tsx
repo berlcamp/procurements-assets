@@ -70,8 +70,9 @@ function selectedAmount(item: AppItemWithOffice, selectedLineIds: Set<string>): 
   return Math.round(budget * share * 100) / 100
 }
 
+// Clipping comes from the wrapper's overflow-x-auto, so corners still round.
 const lotTableShell =
-  "overflow-hidden rounded-xl border border-border/60 bg-white shadow-sm dark:bg-card"
+  "rounded-xl border border-border/60 bg-white shadow-sm dark:bg-card"
 const lotTableHeader =
   "border-b border-border/50 bg-muted/35 [&_tr]:border-border/50 [&_tr]:hover:bg-transparent"
 
@@ -91,8 +92,9 @@ export function AppLotManager({
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
-  // Create lot dialog
+  // Create lot dialog — errors stay in the dialog, where the user can see them
   const [createOpen, setCreateOpen] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [lotName, setLotName] = useState("")
   const [lotDesc, setLotDesc] = useState("")
   const [lotMethod, setLotMethod] = useState("")
@@ -106,6 +108,7 @@ export function AppLotManager({
 
   // Delete lot confirmation
   const [deleteLotId, setDeleteLotId] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const deletingLot = lots.find(l => l.id === deleteLotId)
 
   const procurementModeLabel = useMemo(
@@ -211,17 +214,22 @@ export function AppLotManager({
     else setSelectedLines(new Set(allUnits))
   }, [allSelected, allUnits])
 
+  const openCreateDialog = () => {
+    setCreateError(null)
+    setCreateOpen(true)
+  }
+
   const handleCreateLot = () => {
-    if (lotName.trim().length < 3) return
-    if (!lotMethod) { setError("Procurement method is required"); return }
-    setError(null)
+    if (lotName.trim().length < 3) { setCreateError("Lot name must be at least 3 characters"); return }
+    if (!lotMethod) { setCreateError("Procurement method is required"); return }
+    setCreateError(null)
     startTransition(async () => {
       const result = await createAppLot(appId, {
         lot_name: lotName.trim(),
         description: lotDesc.trim() || null,
         procurement_method: lotMethod as "competitive_bidding",
       })
-      if (result.error) setError(result.error)
+      if (result.error) setCreateError(result.error)
       else {
         setCreateOpen(false)
         setLotName("")
@@ -279,10 +287,10 @@ export function AppLotManager({
 
   const handleDeleteLot = () => {
     if (!deleteLotId) return
-    setError(null)
+    setDeleteError(null)
     startTransition(async () => {
       const result = await deleteAppLot(deleteLotId)
-      if (result.error) setError(result.error)
+      if (result.error) setDeleteError(result.error)
       else {
         setDeleteLotId(null)
         router.refresh()
@@ -296,11 +304,12 @@ export function AppLotManager({
         <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</div>
       )}
 
-      {/* Two-panel grid */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_3fr]">
+      {/* Two-panel grid — equal halves. `min-w-0` keeps a panel's table content
+          from blowing past its track and squeezing the other side. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
 
         {/* ── Left panel: Available Items ── */}
-        <div className="flex flex-col gap-0 rounded-xl border border-border/60 shadow-sm overflow-hidden bg-white dark:bg-card">
+        <div className="flex min-w-0 flex-col gap-0 rounded-xl border border-border/60 shadow-sm overflow-hidden bg-white dark:bg-card">
           {/* Panel header */}
           <div className="flex items-center gap-2 border-b border-border/50 bg-muted/35 px-4 py-3">
             {canManageLots && approvedUnlottedItems.length > 0 && (
@@ -539,7 +548,7 @@ export function AppLotManager({
         </div>
 
         {/* ── Right panel: Procurement Lots ── */}
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           {/* Panel header */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -553,7 +562,7 @@ export function AppLotManager({
               )}
             </div>
             {canManageLots && (
-              <Button size="sm" onClick={() => setCreateOpen(true)} disabled={isPending}>
+              <Button size="sm" onClick={openCreateDialog} disabled={isPending}>
                 <PlusIcon className="mr-1.5 h-3.5 w-3.5" />
                 Create Lot
               </Button>
@@ -567,7 +576,7 @@ export function AppLotManager({
                 No lots yet. Create a lot to start grouping approved items for procurement.
               </p>
               {canManageLots && (
-                <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)} disabled={isPending}>
+                <Button size="sm" variant="outline" onClick={openCreateDialog} disabled={isPending}>
                   <PlusIcon className="mr-1.5 h-3.5 w-3.5" />
                   Create your first lot
                 </Button>
@@ -595,9 +604,10 @@ export function AppLotManager({
                     hasSelectedItems={selectedCount > 0}
                   />
 
-                  {/* Lot items table */}
+                  {/* Lot items table — scrolls within the panel instead of
+                      stretching it and squeezing the available-items side. */}
                   {lot.app_items && lot.app_items.length > 0 && (
-                    <div className={cn("ml-4", lotTableShell)}>
+                    <div className={cn("ml-4 min-w-0 overflow-x-auto", lotTableShell)}>
                       <Table className="[&_td]:px-3 [&_td]:py-2.5 [&_th]:h-11 [&_th]:px-3 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground">
                         <TableHeader className={lotTableHeader}>
                           <TableRow className="border-0 hover:bg-transparent">
@@ -696,7 +706,7 @@ export function AppLotManager({
       </div>
 
       {/* Create Lot Dialog */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) setCreateError(null) }}>
         <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-lg">
           <div className="border-b border-border/60 bg-muted/20 px-6 py-5">
             <DialogHeader className="gap-1.5">
@@ -707,9 +717,14 @@ export function AppLotManager({
             </DialogHeader>
           </div>
           <div className="space-y-4 px-6 py-5">
+            {createError && (
+              <div className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400">
+                {createError}
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="lot-name" className="text-foreground">
-                Lot name
+                Lot name *
               </Label>
               <Input
                 id="lot-name"
@@ -732,7 +747,7 @@ export function AppLotManager({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="lot-method">Procurement method (optional)</Label>
+              <Label htmlFor="lot-method">Procurement method *</Label>
               <Select value={lotMethod} onValueChange={(v) => setLotMethod(v ?? "")} items={procurementModeLabel}>
                 <SelectTrigger className="h-10 w-full">
                   <SelectValue placeholder="Select method…" />
@@ -751,7 +766,7 @@ export function AppLotManager({
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCreateLot} disabled={lotName.trim().length < 3 || isPending}>
+            <Button onClick={handleCreateLot} disabled={lotName.trim().length < 3 || !lotMethod || isPending}>
               Create lot
             </Button>
           </DialogFooter>
@@ -759,7 +774,7 @@ export function AppLotManager({
       </Dialog>
 
       {/* Delete Lot Confirmation Dialog */}
-      <Dialog open={!!deleteLotId} onOpenChange={(open) => { if (!open) setDeleteLotId(null) }}>
+      <Dialog open={!!deleteLotId} onOpenChange={(open) => { if (!open) { setDeleteLotId(null); setDeleteError(null) } }}>
         <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md">
           <div className="border-b border-border/60 bg-muted/20 px-6 py-5">
             <DialogHeader className="gap-1.5">
@@ -771,6 +786,13 @@ export function AppLotManager({
               </DialogDescription>
             </DialogHeader>
           </div>
+          {deleteError && (
+            <div className="px-6 py-4">
+              <div className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400">
+                {deleteError}
+              </div>
+            </div>
+          )}
           <DialogFooter className="mx-0 mb-0 gap-2 rounded-b-xl border-t border-border/60 bg-muted/25 sm:gap-3">
             <Button variant="outline" onClick={() => setDeleteLotId(null)} disabled={isPending}>
               Cancel
