@@ -1,10 +1,11 @@
 -- =============================================================================
 -- RESET TRANSACTIONAL DATA FOR RE-TESTING
 -- =============================================================================
--- Wipes all user-created procurement data (planning, budget, PR, procurement
--- activities, POs, inventory, assets, requests, notifications, audit trail)
--- while preserving: divisions, users, roles, permissions, offices, fiscal
--- years, fund sources, account codes, system settings, announcements.
+-- Wipes all user-created procurement data (planning, budget/SARO, PR,
+-- procurement activities, POs, inventory, assets, requests, fuel,
+-- notifications, audit trail) while preserving: divisions, users, roles,
+-- permissions, offices, fiscal years, fund sources, account codes, system
+-- settings, announcements.
 --
 -- USAGE:
 --   1. Review the list below and comment out any domain you want to keep.
@@ -99,12 +100,27 @@ TRUNCATE TABLE
 RESTART IDENTITY CASCADE;
 
 -- -----------------------------------------------------------------------------
--- 8. Budget (adjustments first, then allocations, then Sub-ARO)
+-- 8. Budget (adjustments first, then allocations, then Sub-ARO, then SARO)
 -- -----------------------------------------------------------------------------
+-- NOTE: budget_allocations.saro_id references special_allotment_release_orders,
+-- so the SARO truncate must come with (or after) allocations.
 TRUNCATE TABLE
     procurements.budget_adjustments,
     procurements.budget_allocations,
-    procurements.sub_allotment_release_orders
+    procurements.sub_allotment_release_orders,
+    procurements.special_allotment_release_orders
+RESTART IDENTITY CASCADE;
+
+-- -----------------------------------------------------------------------------
+-- 8b. Fuel (independent of procurement — comment out to keep fuel data)
+-- -----------------------------------------------------------------------------
+-- fuel_types is per-division setup data; drop it from the list to keep the
+-- configured fuel types and only wipe the ledger/requests.
+TRUNCATE TABLE
+    procurements.fuel_requests,
+    procurements.fuel_stock_movements,
+    procurements.fuel_inventory,
+    procurements.fuel_types
 RESTART IDENTITY CASCADE;
 
 -- -----------------------------------------------------------------------------
@@ -138,13 +154,39 @@ TRUNCATE TABLE audit.audit_logs RESTART IDENTITY;
 COMMIT;
 
 -- =============================================================================
+-- STORAGE (run separately — file objects are NOT removed by the TRUNCATEs above)
+-- =============================================================================
+-- Uploaded PPMP / procurement attachments live in Supabase Storage. The rows in
+-- procurements.documents are gone, so these objects are orphaned. Delete them
+-- from the Storage UI, or run as service role:
+--
+--   DELETE FROM storage.objects WHERE bucket_id = 'ppmp-documents';
+--   DELETE FROM storage.objects WHERE bucket_id = 'procurement-documents';
+--
+-- (This removes the metadata rows; run Storage's own cleanup or delete via the
+-- dashboard if you also need the underlying files purged from the bucket.)
+
+-- =============================================================================
 -- NOT TOUCHED (preserved for continued testing):
+--   auth.users (Supabase Auth)                         <- accounts stay intact
 --   procurements.user_profiles, procurements.user_roles
 --   procurements.roles, procurements.permissions, procurements.role_permissions
 --   procurements.offices, procurements.fiscal_years
 --   procurements.fund_sources, procurements.account_codes
---   procurements.system_settings, procurements.announcements
+--   procurements.procurement_method_ceilings
+--   procurements.supplier_document_types
+--   procurements.system_settings
 --   procurements.division_join_requests
---   platform.divisions, platform.announcements
---   auth.users (Supabase Auth)
+--   platform.divisions, platform.announcements, platform.platform_audit_logs
+-- =============================================================================
+--
+-- CASCADE WARNING — you cannot keep these while wiping procurement:
+--   * assets / asset_assignments / depreciation_records reference
+--     purchase_orders + deliveries + delivery_items, so section 2 cascades
+--     into them even if section 1 is commented out.
+--   * requests.linked_pr_id references purchase_requests, so section 5
+--     cascades into requests/request_items.
+--   * inventory + assets + request_items reference item_catalog, so leaving
+--     item_catalog in section 1 wipes inventory even though inventory itself
+--     has no procurement FK.
 -- =============================================================================
