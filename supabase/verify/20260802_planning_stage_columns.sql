@@ -43,6 +43,18 @@ BEGIN
     RAISE EXCEPTION 'ASSERTION FAILED: procurements.ceiling_id_as_of missing';
   END IF;
 
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger t
+      JOIN pg_class c ON c.oid = t.tgrelid
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = 'procurements'
+       AND c.relname = 'ppmp_versions'
+       AND t.tgname  = 'trg_prevent_approved_ppmp_version_update'
+       AND t.tgenabled <> 'D'
+  ) THEN
+    RAISE EXCEPTION 'ASSERTION FAILED: trg_prevent_approved_ppmp_version_update is disabled — the backfill left the approved-version guard off';
+  END IF;
+
   -- Backfill must leave no NULLs. These checks pass vacuously on empty tables
   -- (no versions yet), which is acceptable but should be noted.
   IF EXISTS (SELECT 1 FROM procurements.ppmp_versions WHERE planning_stage IS NULL) THEN

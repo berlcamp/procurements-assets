@@ -159,6 +159,20 @@ GRANT EXECUTE ON FUNCTION procurements.ceiling_id_as_of(UUID, TIMESTAMPTZ) TO au
 -- budget the plan was actually prepared against.
 -- ============================================================
 
+-- The pre-existing trg_prevent_approved_ppmp_version_update
+-- (20240504_ppmp_triggers.sql:19-22) raises on ANY update to a version whose
+-- status is 'approved'. That guard exists to protect approved plan CONTENT.
+-- This backfill writes only derived metadata — planning_stage and
+-- budget_ceiling_id, both introduced by this migration — and no plan content,
+-- so the guard is suspended for exactly this one statement.
+--
+-- ALTER TABLE ... DISABLE TRIGGER is transactional: if this migration fails
+-- after this point, the rollback restores the guard. Do not widen the scope
+-- and do not use SET session_replication_role, which would silently disable
+-- the audit triggers too — the backfill SHOULD be audit-logged.
+ALTER TABLE procurements.ppmp_versions
+  DISABLE TRIGGER trg_prevent_approved_ppmp_version_update;
+
 UPDATE procurements.ppmp_versions pv
    SET budget_ceiling_id = procurements.ceiling_id_as_of(p.fiscal_year_id, pv.created_at),
        planning_stage    = COALESCE(
@@ -170,6 +184,9 @@ UPDATE procurements.ppmp_versions pv
   FROM procurements.ppmps p
  WHERE p.id = pv.ppmp_id
    AND pv.planning_stage IS NULL;
+
+ALTER TABLE procurements.ppmp_versions
+  ENABLE TRIGGER trg_prevent_approved_ppmp_version_update;
 
 UPDATE procurements.app_versions av
    SET budget_ceiling_id = procurements.ceiling_id_as_of(a.fiscal_year_id, av.created_at),
