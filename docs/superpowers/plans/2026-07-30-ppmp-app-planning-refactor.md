@@ -763,28 +763,91 @@ CREATE TRIGGER trg_app_version_planning_stage
   FOR EACH ROW EXECUTE FUNCTION procurements.set_version_planning_stage();
 
 -- ============================================================
+-- AMENDED 2026-07-30 (review finding, human-adjudicated).
+--
+-- The original backfill below used fiscal_year_planning_stage(), which
+-- returns the fiscal year's PRESENT-DAY ceiling stage and applied it to
+-- every historical version. That retroactively stamped indicative-era
+-- drafts 'final' in any FY that had since recorded a GAA ceiling — the
+-- exact mislabeling this task exists to eliminate. The "honest default"
+-- comment that justified it was wrong.
+--
+-- Replaced with a date-aware backfill: each version is stamped with the
+-- ceiling in force when the version was created.
+-- ============================================================
+
+-- The authoritative ceiling in force at a given moment. Used only by the
+-- one-time backfill. Ceilings with no issued_date are excluded — they
+-- cannot be placed in time, and assuming they applied retroactively is
+-- what produced the mislabeling this migration removes.
+CREATE OR REPLACE FUNCTION procurements.ceiling_id_as_of(
+  p_fiscal_year_id UUID,
+  p_as_of          TIMESTAMPTZ
+)
+RETURNS UUID
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = procurements, platform, auth, public
+AS $$
+  SELECT id
+    FROM procurements.budget_ceilings
+   WHERE fiscal_year_id   = p_fiscal_year_id
+     AND is_authoritative = true
+     AND deleted_at       IS NULL
+     AND stage IN ('indicative','nep','gaa','final')
+     AND issued_date IS NOT NULL
+     AND issued_date <= p_as_of::DATE
+   ORDER BY CASE stage
+              WHEN 'final'      THEN 4
+              WHEN 'gaa'        THEN 3
+              WHEN 'nep'        THEN 2
+              WHEN 'indicative' THEN 1
+            END DESC
+   LIMIT 1;
+$$;
+
+GRANT EXECUTE ON FUNCTION procurements.ceiling_id_as_of(UUID, TIMESTAMPTZ) TO authenticated;
+
+-- ============================================================
 -- Backfill existing rows.
 --
--- Existing data cannot be reconstructed accurately: indicative_final
--- was written from approval status, so it carries no reliable signal.
--- The honest default is 'indicative' for everything except versions
--- whose FY already has a gaa/final ceiling recorded.
+-- Each version is stamped with the ceiling in force when it was created.
+-- Versions predating any dated ceiling — and versions in fiscal years
+-- with no dated ceiling at all — fall back to 'indicative', the correct
+-- conservative answer: no appropriation can be proven to have existed.
+--
+-- indicative_final is deliberately ignored. It was written from approval
+-- status, so it carries no signal about which budget the plan was
+-- actually prepared against.
 -- ============================================================
 
 UPDATE procurements.ppmp_versions pv
-   SET planning_stage    = procurements.fiscal_year_planning_stage(p.fiscal_year_id),
-       budget_ceiling_id = procurements.authoritative_ceiling_id(p.fiscal_year_id)
+   SET budget_ceiling_id = procurements.ceiling_id_as_of(p.fiscal_year_id, pv.created_at),
+       planning_stage    = COALESCE(
+         (SELECT procurements.ceiling_stage_to_planning_stage(bc.stage)
+            FROM procurements.budget_ceilings bc
+           WHERE bc.id = procurements.ceiling_id_as_of(p.fiscal_year_id, pv.created_at)),
+         'indicative'
+       )
   FROM procurements.ppmps p
  WHERE p.id = pv.ppmp_id
    AND pv.planning_stage IS NULL;
 
 UPDATE procurements.app_versions av
-   SET planning_stage    = procurements.fiscal_year_planning_stage(a.fiscal_year_id),
-       budget_ceiling_id = procurements.authoritative_ceiling_id(a.fiscal_year_id)
+   SET budget_ceiling_id = procurements.ceiling_id_as_of(a.fiscal_year_id, av.created_at),
+       planning_stage    = COALESCE(
+         (SELECT procurements.ceiling_stage_to_planning_stage(bc.stage)
+            FROM procurements.budget_ceilings bc
+           WHERE bc.id = procurements.ceiling_id_as_of(a.fiscal_year_id, av.created_at)),
+         'indicative'
+       )
   FROM procurements.apps a
  WHERE a.id = av.app_id
    AND av.planning_stage IS NULL;
 ```
+
+Also amended for idempotency: the four `CREATE INDEX` statements above take `IF NOT EXISTS`, and each `CREATE TRIGGER` is preceded by `DROP TRIGGER IF EXISTS <name> ON <table>;`, so a half-applied migration can be retried. The unused `v_ceiling_id` declaration in `set_version_planning_stage()` is removed.
 
 - [ ] **Step 4: Ask the user to apply and re-run the assertion script**
 
@@ -943,13 +1006,19 @@ BEGIN
          updated_at     = NOW()
    WHERE id = p_ppmp_id;
 
-  INSERT INTO procurements.approval_logs (
-    reference_type, reference_id, step_name, step_order,
-    action, acted_by, remarks, office_id
-  ) VALUES (
-    'ppmp', p_ppmp_id, 'HOPE Approval', 4,
-    'approved', auth.uid(), p_notes, v_ppmp.office_id
-  );
+  -- AMENDED 2026-07-30: an approval_logs INSERT was originally specified here
+  -- and has been REMOVED. It was scope creep — this task's mandate is to stop
+  -- writing the planning stage, not to add audit logging. approve_ppmp has
+  -- never written approval_logs, and adding it here would introduce an
+  -- unreviewed behaviour change to an approval path mid-refactor.
+  --
+  -- The underlying gap is real and larger than this task: NOTHING writes
+  -- approval_logs for PPMP or APP approvals today (only 'noted' remarks, via
+  -- src/lib/actions/ppmp.ts:1282 and 20260405_ppmp_add_remark.sql). That is a
+  -- COA traceability gap covering every approval step, and it needs one
+  -- consistent design across chief_review / certify_budget / approve /
+  -- return / finalize / approve_app — not a single insert smuggled in here.
+  -- Tracked as a separate task; do not add it in Task 4.
 END;
 $$;
 
@@ -1081,19 +1150,35 @@ Continue the same migration with `create_ppmp_amendment` and `create_app_amendme
 
 ```sql
 -- 4. create_ppmp_amendment: remove indicative_final from the INSERT.
---    Full body is identical to 20240503_ppmp_rpc.sql:407-538 except:
+--    SOURCE (CORRECTED 2026-07-30): copy from
+--      supabase/migrations/20240505_ppmp_restructure.sql:389-517
+--    NOT from 20240503_ppmp_rpc.sql, which this plan originally cited.
+--    20240505 redefines the function and runs later, so it is the live
+--    definition. (The two bodies differ only in three comment lines, so the
+--    practical risk here was low — but use the live source on principle.)
+--    Edits:
 --      - INSERT column list drops `indicative_final`
 --      - VALUES drops `'indicative'`
---    (Copy the existing body verbatim, apply only those two edits.)
 
--- 5. create_app_amendment: same treatment against
---    20260405_ppmp_app_amendment_logic.sql:215-342, plus change
---      UPDATE procurements.apps SET status = 'indicative'
---    to
---      UPDATE procurements.apps SET status = 'under_review'
+-- 5. create_app_amendment: same treatment.
+--    SOURCE (CORRECTED 2026-07-30): copy from
+--      supabase/migrations/20260516_app_cse_schedule_columns.sql:263 onward
+--    NOT from 20260405_ppmp_app_amendment_logic.sql, which this plan
+--    originally cited. This one matters: 20260516 redefines the function to
+--    propagate is_cse, schedule_quarter, advertisement/bid/award/contract
+--    dates, and source_ppmp_project_description through the amendment clone.
+--    Copying the 20260405 body would silently DROP those columns from every
+--    future APP amendment — a data-loss regression.
+--    Edits:
+--      - INSERT column list drops `indicative_final`
+--      - VALUES drops `'indicative'`
+--      - UPDATE procurements.apps SET status = 'indicative'
+--          becomes  SET status = 'under_review'
 ```
 
 > **Implementer note:** for items 4 and 5, open the cited source files, copy the complete current function body into this migration, then make only the listed edits. Do not retype from memory — these functions contain clone loops whose column lists must stay exact.
+>
+> **Verify the source before copying.** Several of these routines have been redefined more than once, and migrations apply in filename order, so the *last* file defining a function wins. Confirm with `grep -l "FUNCTION procurements.<name>(" supabase/migrations/*.sql | sort | tail -1` and copy from that file. The two corrections above were found exactly this way.
 
 - [ ] **Step 4: Ask the user to apply and re-run the assertion script**
 
@@ -1883,7 +1968,7 @@ COMMENT ON FUNCTION procurements.remap_app_amendment_lots(UUID, UUID) IS
   'Re-assigns cloned APP items to cloned lots by PPMP provenance. Never joins on item_number, which is a display value.';
 ```
 
-Then, in the same migration, `CREATE OR REPLACE` `create_app_amendment` by copying its current body from `20260405_ppmp_app_amendment_logic.sql:215-342` and making exactly three edits:
+Then, in the same migration, `CREATE OR REPLACE` `create_app_amendment` by copying its current body from **`20260516_app_cse_schedule_columns.sql:263` onward** (CORRECTED 2026-07-30 — *not* `20260405_ppmp_app_amendment_logic.sql`, which this plan originally cited; 20260516 redefines the function later and propagates the CSE and schedule columns, so copying the older body would drop them) and making exactly three edits:
 
 1. add `source_ppmp_version_id` to both the INSERT column list and the SELECT list of the item-clone statement;
 2. replace the whole `UPDATE procurements.app_items new_ai ... old_ai.lot_id IS NOT NULL;` block (lines 320-331) with:
@@ -2269,7 +2354,7 @@ ON CONFLICT DO NOTHING;
 DROP FUNCTION IF EXISTS procurements.create_ppmp_amendment(UUID, TEXT);
 ```
 
-Then in the same migration create the 3-argument `create_ppmp_amendment`. Copy the body from `20240503_ppmp_rpc.sql:407-538`, apply the Task 4 `indicative_final` removal, and insert this block immediately after the existing "amendment already in progress" check at `:447-454`:
+Then in the same migration create the 3-argument `create_ppmp_amendment`. Copy the body from **whatever Task 4 last left in place** (by this point Task 4 has already rewritten it; do not go back to an original migration). If Task 4's version is unavailable for any reason, the pre-refactor live source is `20240505_ppmp_restructure.sql:389-517` — *not* `20240503_ppmp_rpc.sql`, which this plan originally cited. Apply the Task 4 `indicative_final` removal if not already present, and insert this block immediately after the existing "amendment already in progress" check:
 
 ```sql
   IF EXISTS (SELECT 1 FROM procurements.ppmp_has_inflight_procurement(p_ppmp_id)) THEN
