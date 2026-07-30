@@ -1225,9 +1225,25 @@ export async function returnPpmp(
 // PPMP amendment
 // ============================================================
 
+/**
+ * Create a draft amendment version of an approved/locked PPMP.
+ *
+ * `create_ppmp_amendment` refuses when the APP items this PPMP produced are
+ * already in procurement — sitting in a finalized or in-procurement APP lot, or
+ * referenced by a live purchase request. Approving the amendment soft-deletes
+ * those APP items, and because the delete is soft the foreign keys still
+ * resolve, so the PR would silently proceed against a line the APP no longer
+ * contains.
+ *
+ * `force` maps to the RPC's `p_force`, which requires the `ppmp.amend_override`
+ * permission and records an approval_logs entry. Never default it to true: the
+ * RPC's refusal message names the offending items and the exact query to review
+ * them, and it is returned to the caller verbatim so the user can act on it.
+ */
 export async function createPpmpAmendment(
   ppmpId: string,
   input: PpmpAmendmentInput,
+  force = false,
 ): Promise<{ versionId: string | null; error: string | null }> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -1235,8 +1251,10 @@ export async function createPpmpAmendment(
     .rpc("create_ppmp_amendment", {
       p_ppmp_id: ppmpId,
       p_justification: input.justification,
+      p_force: force,
     });
 
+  // Surfaced unchanged — this is the guard's remediation guidance.
   if (error) return { versionId: null, error: error.message };
 
   revalidatePath("/dashboard/planning/ppmp");
