@@ -1,6 +1,7 @@
 DO $$
 DECLARE
   v_dupes INTEGER;
+  v_amend_def TEXT;
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
@@ -49,6 +50,35 @@ BEGIN
        AND t.tgenabled <> 'D'
   ) THEN
     RAISE EXCEPTION 'ASSERTION FAILED: trg_app_items_immutable_when_locked is disabled — the backfill left the immutability guard off';
+  END IF;
+
+  -- create_app_amendment must clone every app_items column, including ones
+  -- added by later migrations. 20260729 (source_ppmp_lot_item_ids) and
+  -- 20260519 (indicative_budget, budget_adjusted_by, budget_adjusted_at)
+  -- both added columns without updating this function, so amendments
+  -- silently dropped them. Guard against the same omission recurring.
+  SELECT pg_get_functiondef(p.oid) INTO v_amend_def
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname = 'procurements' AND p.proname = 'create_app_amendment';
+
+  IF v_amend_def IS NULL THEN
+    RAISE EXCEPTION 'ASSERTION FAILED: create_app_amendment() missing';
+  END IF;
+
+  IF v_amend_def NOT LIKE '%source_ppmp_lot_item_ids%' THEN
+    RAISE EXCEPTION 'ASSERTION FAILED: create_app_amendment() does not clone source_ppmp_lot_item_ids';
+  END IF;
+
+  IF v_amend_def NOT LIKE '%indicative_budget%' THEN
+    RAISE EXCEPTION 'ASSERTION FAILED: create_app_amendment() does not clone indicative_budget';
+  END IF;
+
+  IF v_amend_def NOT LIKE '%budget_adjusted_by%' THEN
+    RAISE EXCEPTION 'ASSERTION FAILED: create_app_amendment() does not clone budget_adjusted_by';
+  END IF;
+
+  IF v_amend_def NOT LIKE '%budget_adjusted_at%' THEN
+    RAISE EXCEPTION 'ASSERTION FAILED: create_app_amendment() does not clone budget_adjusted_at';
   END IF;
 END $$;
 

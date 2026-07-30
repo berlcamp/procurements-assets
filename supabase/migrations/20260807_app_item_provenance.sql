@@ -213,6 +213,19 @@ BEGIN
   RETURNING id INTO v_new_version_id;
 
   -- Clone items (carry forward all fields including new ones)
+  --
+  -- IMPORTANT: this INSERT/SELECT column list is a manual enumeration, not
+  -- SELECT *. 20260729_app_item_line_level_lotting.sql added
+  -- source_ppmp_lot_item_ids and 20260519_indicative_final_budget_tracking.sql
+  -- (indicative_budget, budget_adjusted_by, budget_adjusted_at) both added
+  -- columns to app_items without updating this function, so every APP
+  -- amendment silently dropped those four columns from the cloned item.
+  -- remap_app_amendment_lots() matches on source_ppmp_lot_item_ids, so
+  -- without it the remap cannot work for split-lot rows, and dropping
+  -- indicative_budget/budget_adjusted_by/budget_adjusted_at defeats the
+  -- indicative-vs-final budget comparison and its audit trail. ANY future
+  -- column added to app_items MUST also be added here, in both the INSERT
+  -- column list and the SELECT list, in the same position.
   INSERT INTO procurements.app_items (
     app_version_id, app_id,
     source_ppmp_project_id, source_ppmp_lot_id, source_ppmp_id,
@@ -226,7 +239,10 @@ BEGIN
     -- New fields
     source_ppmp_project_description, is_cse,
     schedule_quarter, advertisement_date, bid_opening_date,
-    award_date, contract_signing_date
+    award_date, contract_signing_date,
+    -- Previously dropped by this clone (see comment above); restored here.
+    source_ppmp_lot_item_ids,
+    indicative_budget, budget_adjusted_by, budget_adjusted_at
   )
   SELECT
     v_new_version_id, app_id,
@@ -241,7 +257,10 @@ BEGIN
     -- New fields
     source_ppmp_project_description, is_cse,
     schedule_quarter, advertisement_date, bid_opening_date,
-    award_date, contract_signing_date
+    award_date, contract_signing_date,
+    -- Previously dropped by this clone (see comment above); restored here.
+    source_ppmp_lot_item_ids,
+    indicative_budget, budget_adjusted_by, budget_adjusted_at
   FROM procurements.app_items
   WHERE app_version_id = v_approved_ver.id
     AND deleted_at IS NULL;
