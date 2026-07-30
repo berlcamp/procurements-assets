@@ -150,14 +150,40 @@ BEGIN
   --     never touch -- and cannot be unblocked, because a lot in a closed
   --     version cannot be un-finalized. Two anchors: the join, and the
   --     predicate. app_versions has no deleted_at, so none is asserted.
+  --
+  --     The predicate is pinned to the EXACT three-value set, closed on both
+  --     sides, because BOTH directions of drift are bugs and each has a
+  --     plausible author:
+  --       widening to ('approved','superseded') re-blocks 'final' versions,
+  --         which the trigger never edits in place -- it opens a supplemental
+  --         version -- so PPMP amendment would again be gated on HOPE's APP
+  --         approval queue for no orphaning risk;
+  --       narrowing to ('superseded') alone restores the original bug, since
+  --         approve_app supersedes only versions NOT IN ('approved',
+  --         'superseded') (20240603_app_rpc.sql:531-536) and previously
+  --         approved versions therefore accumulate at 'approved' forever.
+  --     This set must equal the trigger's editable-version lookup at
+  --     20260808_consolidation_visibility.sql:417. If that lookup ever changes,
+  --     this assertion is the thing that will fail and force the two back into
+  --     sync -- which is its whole purpose. Update both together, never one.
+  --
+  --     The regex is ORDER-SENSITIVE by choice: it pins the literal spelling
+  --     ('final','approved','superseded'), the order the trigger writes it in.
+  --     A semantically identical reorder therefore fails this assertion. That
+  --     is a deliberate trade -- a cosmetic reorder costs one obvious, clearly
+  --     worded failure, whereas an order-insensitive matcher would be far more
+  --     regex to get right and would loosen the "mirrors the trigger exactly"
+  --     contract this assertion exists to enforce. If you hit it after a
+  --     harmless reorder, restore the trigger's spelling rather than relaxing
+  --     the pattern.
   IF v_src !~ 'JOIN\s+procurements\.app_versions\s+av\s+ON\s+av\.id\s*=\s*ai\.app_version_id' THEN
     RAISE EXCEPTION
-      'ASSERTION FAILED: ppmp_has_inflight_procurement no longer joins app_versions -- the lot arm is unscoped again and will block PPMP amendments on superseded/approved APP versions the trigger never edits';
+      'ASSERTION FAILED: ppmp_has_inflight_procurement no longer joins app_versions -- the lot arm is unscoped again and will block PPMP amendments on final/approved/superseded APP versions the trigger never edits in place';
   END IF;
 
-  IF v_src !~ 'av\.status\s+NOT\s+IN\s*\(\s*''approved''\s*,\s*''superseded''\s*\)' THEN
+  IF v_src !~ 'av\.status\s+NOT\s+IN\s*\(\s*''final''\s*,\s*''approved''\s*,\s*''superseded''\s*\)' THEN
     RAISE EXCEPTION
-      'ASSERTION FAILED: ppmp_has_inflight_procurement no longer excludes approved/superseded APP versions from the lot arm -- note BOTH are required: approve_app leaves a previously-approved version at ''approved'' forever, so an APP routinely has several';
+      'ASSERTION FAILED: the lot arm of ppmp_has_inflight_procurement no longer excludes exactly (''final'',''approved'',''superseded'') -- this set must mirror the trigger''s editable-version lookup (20260808_consolidation_visibility.sql:417). Widening it re-blocks amendments that were never at risk (a ''final'' version is not edited in place; the trigger opens a supplemental one); narrowing it blinds the guard to real orphaning, since approve_app leaves previously-approved versions at ''approved'' forever';
   END IF;
 
   -- 1e. And arm (b) is NOT so scoped -- the asymmetry is deliberate. A

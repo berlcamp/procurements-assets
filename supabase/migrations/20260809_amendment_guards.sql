@@ -122,15 +122,16 @@ BEGIN;
 --      AND p.deleted_at  IS NULL
 --      AND p.division_id = :division_id
 --      AND (
---            (al.id IS NOT NULL AND av.status NOT IN ('approved','superseded'))
+--            (al.id IS NOT NULL AND av.status NOT IN ('final','approved','superseded'))
 --         OR pr.id IS NOT NULL
 --          )
 --    GROUP BY p.id, p.office_id, p.fiscal_year_id
 --    ORDER BY inflight_items DESC;
 --
 -- The two arms of the OR mirror the two arms of the function below, including
--- the asymmetry: the lot arm is scoped to non-superseded APP versions, the PR
--- arm is not. See the comments on each arm for why.
+-- the asymmetry: the lot arm is scoped to the APP versions the trigger would
+-- actually edit, the PR arm is not scoped at all. See the comments on each arm
+-- for why -- and keep this query's predicate in step with the function's.
 
 CREATE OR REPLACE FUNCTION procurements.ppmp_has_inflight_procurement(
   p_ppmp_id UUID
@@ -174,23 +175,37 @@ AS $$
   --
   --     Predicate: app_versions.status CHECK admits
   --     ('draft','under_review','bac_finalization','final','approved',
-  --     'superseded') (20240601_app_tables.sql:45-46). Excluding
-  --     ('approved','superseded') is the vocabulary finalize_app uses to pick
-  --     the active version (20260803:148). Note that BOTH must be excluded:
+  --     'superseded') (20240601_app_tables.sql:45-46).
+  --
+  --     THIS PREDICATE MIRRORS THE TRIGGER'S EDITABLE-VERSION LOOKUP EXACTLY.
+  --     auto_populate_app_from_ppmp resolves the version it will edit with
+  --     `AND status NOT IN ('final', 'approved', 'superseded')`
+  --     (20260808_consolidation_visibility.sql:414-419, predicate at :417) and
+  --     then soft-deletes only within that version. The set below is the same
+  --     set, and THE TWO MUST STAY IN SYNC: this arm exists solely to answer
+  --     "will that soft-delete touch these items?", so any future task that
+  --     changes the trigger's set MUST change this one in the same commit.
+  --     Widen this and the guard blocks amendments that were never at risk;
+  --     narrow it and the guard goes blind to real orphaning.
+  --
+  --     Why 'final' is excluded rather than blocked on: when no editable
+  --     version exists the trigger does not edit the 'final' one in place --
+  --     it opens a supplemental version and edits that. Items in a 'final'
+  --     version are therefore never soft-deleted and a PR pointing at one
+  --     keeps resolving, so blocking there would be a pure false positive
+  --     that couples PPMP amendment to HOPE's APP approval queue: an office
+  --     could not amend a PPMP for however long the APP sits with HOPE, with
+  --     no orphaning risk to justify the wait.
+  --
+  --     Why 'approved' must be excluded too, and not just 'superseded':
   --     approve_app supersedes only versions whose status is
   --     NOT IN ('approved','superseded') (20240603_app_rpc.sql:531-536), so a
-  --     previously-approved version stays 'approved' forever and an APP
-  --     routinely has several. app_versions has no deleted_at column, so there
-  --     is deliberately no soft-delete filter on av.
+  --     previously-approved version keeps status = 'approved' forever and an
+  --     APP routinely has several. Excluding only 'superseded' would leave the
+  --     original bug in place for the common case.
   --
-  --     This is one status BROADER than the trigger's own editable-version
-  --     lookup, which is NOT IN ('final','approved','superseded')
-  --     (20260808_consolidation_visibility.sql). A 'final' version is not
-  --     edited in place either -- the trigger opens a supplemental version
-  --     instead -- but a 'final' version with a finalized lot is the live plan
-  --     sitting with HOPE, and blocking there is intended, not a false
-  --     positive. It also has an exit that a superseded version does not:
-  --     approve the APP and the amendment proceeds as a supplemental version.
+  --     app_versions has no deleted_at column, so there is deliberately no
+  --     soft-delete filter on av.
   SELECT ai.id,
          ai.item_number,
          ai.general_description,
@@ -206,7 +221,7 @@ AS $$
      AND a.deleted_at  IS NULL
      AND p.deleted_at  IS NULL
      AND p.division_id = procurements.get_user_division_id()
-     AND av.status NOT IN ('approved','superseded')
+     AND av.status NOT IN ('final','approved','superseded')
      AND al.status IN ('finalized','in_procurement')
 
   UNION ALL
