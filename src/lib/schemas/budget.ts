@@ -48,6 +48,55 @@ export const budgetCeilingSchema = z.object({
 
 export type BudgetCeilingInput = z.infer<typeof budgetCeilingSchema>
 
+// Vocabulary comes verbatim from the CHECK constraint and COMMENT ON COLUMN in
+// supabase/migrations/20260801_budget_ceilings.sql. Do not invent new stages —
+// procurements.ceiling_stage_to_planning_stage() only maps these five.
+export const CEILING_STAGE_LABELS: Record<string, string> = {
+  indicative:   "Indicative",
+  nep:          "NEP",
+  gaa:          "GAA",
+  final:        "Final Release",
+  supplemental: "Supplemental",
+}
+
+// The DBM → DepEd CO → RO → SDO chain, in escalating order of legal force.
+// `supplemental` sits outside the chain: it never changes the FY's base stage.
+export const CEILING_STAGE_ORDER = [
+  "indicative",
+  "nep",
+  "gaa",
+  "final",
+] as const
+
+export const CEILING_STAGE_DESCRIPTIONS: Record<string, string> = {
+  indicative:   "Regional Office indicative ceiling — no appropriation yet.",
+  nep:          "National Expenditure Program submitted to Congress — no appropriation yet.",
+  gaa:          "General Appropriations Act enacted — appropriation exists.",
+  final:        "Comprehensive release / Sub-ARO — appropriation exists and is released.",
+  supplemental: "SARO or additional release for a special purpose.",
+}
+
+// Legal basis, per the COMMENT ON COLUMN budget_ceilings.stage.
+export const CEILING_STAGE_LEGAL_BASIS: Record<string, string> = {
+  indicative:   "No appropriation yet",
+  nep:          "No appropriation yet",
+  gaa:          "Enacted",
+  final:        "Enacted",
+  supplemental: "Additional release",
+}
+
+// DBM two-tier budgeting.
+export const CEILING_TIER_LABELS: Record<string, string> = {
+  tier_1: "Tier 1 — Ongoing programs",
+  tier_2: "Tier 2 — New / expanded programs",
+}
+
+export const PLANNING_STAGE_LABELS: Record<string, string> = {
+  indicative:   "Indicative",
+  final:        "Final",
+  supplemental: "Supplemental",
+}
+
 // ============================================================
 // Budget Adjustment
 // ============================================================

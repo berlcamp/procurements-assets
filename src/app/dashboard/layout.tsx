@@ -29,6 +29,7 @@ import {
   Globe,
   Fuel,
   Droplets,
+  Landmark,
 } from "lucide-react"
 import type { NavGroup } from "@/components/layout/sidebar"
 
@@ -95,6 +96,15 @@ const navGroups: NavGroup[] = [
           "budget.certify",
           "budget.approve_adj",
           "budget.view_all",
+        ],
+      },
+      {
+        label: "Ceilings",
+        href: "/dashboard/budget/ceilings",
+        icon: <Landmark className="h-4 w-4" />,
+        permissions: [
+          "budget.ceilings_view",
+          "budget.ceilings_manage",
         ],
       },
       {

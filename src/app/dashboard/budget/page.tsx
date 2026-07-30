@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button"
 import { AmountDisplay } from "@/components/shared/amount-display"
 import { BudgetUtilizationChart } from "@/components/budget/budget-utilization-chart"
 import { StatusBadge } from "@/components/shared/status-badge"
-import { PlusIcon, LayoutListIcon, ArrowRightLeftIcon, FileBarChartIcon } from "lucide-react"
+import { PlusIcon, LayoutListIcon, ArrowRightLeftIcon, FileBarChartIcon, LandmarkIcon } from "lucide-react"
 
 export default async function BudgetDashboardPage() {
   const fiscalYear = await getActiveFiscalYear()
@@ -172,6 +172,10 @@ export default async function BudgetDashboardPage() {
               <Link href="/dashboard/budget/allocations" className="flex items-center gap-2 text-sm hover:underline">
                 <LayoutListIcon className="h-4 w-4 text-muted-foreground" />
                 All Allocations ({allocations.length})
+              </Link>
+              <Link href="/dashboard/budget/ceilings" className="flex items-center gap-2 text-sm hover:underline">
+                <LandmarkIcon className="h-4 w-4 text-muted-foreground" />
+                Budget Ceilings
               </Link>
               <Link href="/dashboard/budget/adjustments" className="flex items-center gap-2 text-sm hover:underline">
                 <ArrowRightLeftIcon className="h-4 w-4 text-muted-foreground" />
