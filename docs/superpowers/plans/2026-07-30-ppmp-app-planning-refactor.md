@@ -2471,7 +2471,15 @@ AS $$
    WHERE ai.source_ppmp_id = p_ppmp_id
      AND ai.deleted_at IS NULL
      AND al.deleted_at IS NULL
-     AND al.status NOT IN ('draft','composed')
+     -- CORRECTED 2026-07-30 (pre-dispatch audit). This read
+     -- `NOT IN ('draft','composed')`. There is NO 'composed' status:
+     -- app_lots.status CHECK is ('draft','finalized','in_procurement')
+     -- (20240601_app_tables.sql:114-115). The old form happened to produce the
+     -- right rows — 'composed' matching nothing made it equivalent to
+     -- <> 'draft' — but it named a status that does not exist, so anyone
+     -- reading or extending it would be misled, and adding a real 'composed'
+     -- status later would silently change the guard's meaning.
+     AND al.status IN ('finalized','in_procurement')
 
   UNION ALL
 
