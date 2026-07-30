@@ -1236,15 +1236,25 @@ export async function returnPpmp(
  * contains.
  *
  * `force` maps to the RPC's `p_force`, which requires the `ppmp.amend_override`
- * permission and records an approval_logs entry. Never default it to true: the
- * RPC's refusal message names the offending items and the exact query to review
- * them, and it is returned to the caller verbatim so the user can act on it.
+ * permission and records an approval_logs entry. Never default it to true.
+ *
+ * The RPC's refusal message is written for an administrator: ~300 characters
+ * containing a literal `SELECT * FROM procurements.ppmp_has_inflight_procurement
+ * ('…');` and a `p_force := true` instruction. The person who hits this guard is
+ * normally the end_user who owns the PPMP, who has neither SQL access nor the
+ * override permission, and it renders in a toast. So the raw text is logged
+ * server-side and returned in `details` for callers that can use it, while
+ * `error` carries a sentence a planning officer can act on.
  */
 export async function createPpmpAmendment(
   ppmpId: string,
   input: PpmpAmendmentInput,
   force = false,
-): Promise<{ versionId: string | null; error: string | null }> {
+): Promise<{
+  versionId: string | null;
+  error: string | null;
+  details?: string;
+}> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .schema("procurements")
@@ -1254,8 +1264,33 @@ export async function createPpmpAmendment(
       p_force: force,
     });
 
-  // Surfaced unchanged — this is the guard's remediation guidance.
-  if (error) return { versionId: null, error: error.message };
+  if (error) {
+    // Matches the RAISE in 20260809_amendment_guards.sql. Anchored on the
+    // phrase plus the captured count; if the wording ever drifts the match
+    // fails closed and the user sees the raw message again, which is the
+    // pre-existing behaviour rather than a silently swallowed error.
+    const inflight = /:\s*(\d+)\s+of its APP items are already in procurement/.exec(
+      error.message,
+    );
+
+    if (inflight) {
+      console.error("createPpmpAmendment blocked by in-flight procurement:", error.message);
+      const n = Number(inflight[1]);
+      return {
+        versionId: null,
+        error:
+          `This PPMP cannot be amended: ${n} of its item${n === 1 ? " is" : "s are"} ` +
+          `already in procurement — grouped into a finalized APP lot or requested on a live ` +
+          `purchase request. Amending now would remove ${n === 1 ? "that line" : "those lines"} ` +
+          `from the APP while procurement continues against ${n === 1 ? "it" : "them"}. ` +
+          `Ask the BAC to cancel or complete the affected activities first, or ask a division ` +
+          `administrator or BAC chair — who hold the override permission — to proceed.`,
+        details: error.message,
+      };
+    }
+
+    return { versionId: null, error: error.message, details: error.message };
+  }
 
   revalidatePath("/dashboard/planning/ppmp");
   revalidatePath(`/dashboard/planning/ppmp/${ppmpId}`);

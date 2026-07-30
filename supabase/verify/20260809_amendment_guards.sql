@@ -32,6 +32,8 @@ DECLARE
   v_secdef    BOOLEAN;
   v_ndefaults INTEGER;
   v_n         INTEGER;
+  v_table_cols INTEGER;
+  v_arm_b     TEXT;
   v_ins       TEXT[];
   v_cols      TEXT[];
   v_vals      TEXT[];
@@ -60,13 +62,18 @@ BEGIN
       'ASSERTION FAILED: procurements.ppmp_has_inflight_procurement(UUID) missing';
   END IF;
 
-  -- SECURITY DEFINER is load-bearing. app_items, app_lots, pr_items and
-  -- purchase_requests are all under RLS, and the typical caller is the
-  -- end_user who owns the PPMP -- who often cannot SELECT the BAC's lots or
-  -- another office's PRs. Under SECURITY INVOKER those rows go invisible, the
-  -- count returns 0, and create_ppmp_amendment waves through exactly the
-  -- amendment this migration exists to stop. A guard that under-reports is
-  -- worse than no guard, and it fails OPEN and SILENTLY.
+  -- SECURITY DEFINER, asserted as defence in depth -- NOT because INVOKER
+  -- fails open today. Every SELECT policy over the four tables the helper reads
+  -- is DIVISION-scoped, not office-scoped (20240602_app_rls.sql:158 and :189,
+  -- 20260407_procurement_rls.sql:161 and :200), and 20240404_schema_grants
+  -- .sql:13 grants SELECT on every procurements table to `authenticated`, so an
+  -- end_user amending their own PPMP can already see all of it. Nor is RLS
+  -- enforced on the nested call: create_ppmp_amendment is itself SECURITY
+  -- DEFINER over owner-owned tables and nothing in this repo sets FORCE ROW
+  -- LEVEL SECURITY. The assertion stands anyway, because if any of those four
+  -- policies is ever narrowed to office scope an INVOKER helper goes quietly
+  -- blind, the count returns 0, and create_ppmp_amendment waves through exactly
+  -- the amendment this migration exists to stop -- failing OPEN and SILENTLY.
   SELECT p.prosecdef INTO v_secdef
     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
    WHERE n.nspname  = 'procurements'
@@ -75,7 +82,7 @@ BEGIN
 
   IF v_secdef IS NOT TRUE THEN
     RAISE EXCEPTION
-      'ASSERTION FAILED: ppmp_has_inflight_procurement is not SECURITY DEFINER -- under RLS it will silently return 0 rows for callers who cannot see BAC lots or other offices'' PRs, and the amendment guard will fail open';
+      'ASSERTION FAILED: ppmp_has_inflight_procurement is not SECURITY DEFINER -- harmless while every app_items/app_lots/purchase_requests/pr_items SELECT policy is division-scoped, but it removes the only thing standing between an office-scoped policy and a guard that silently returns 0 rows and fails open';
   END IF;
 
   SELECT pg_get_functiondef(p.oid) INTO v_def
@@ -91,9 +98,15 @@ BEGIN
   --     item descriptions, lot names and PR numbers over PostgREST. Anchored
   --     to the comparison: a bare '%get_user_division_id%' would still pass
   --     if the call were left in a dead SELECT list or a comment.
-  IF v_src !~ 'division_id\s*=\s*procurements\.get_user_division_id\(\)' THEN
+  --
+  --     COUNTED, not merely present. The function has two UNION ALL arms and
+  --     each carries its own copy of this predicate; a single `!~` test is
+  --     satisfied by either one, so dropping it from the lot arm alone -- the
+  --     arm that returns lot names -- passed a bare existence check. Verified
+  --     by mutation: removing it from arm (a) only.
+  IF (SELECT count(*) FROM regexp_matches(v_src, 'division_id\s*=\s*procurements\.get_user_division_id\(\)', 'g')) <> 2 THEN
     RAISE EXCEPTION
-      'ASSERTION FAILED: ppmp_has_inflight_procurement is no longer scoped to the caller''s division -- as a SECURITY DEFINER function on PostgREST it now leaks APP items and PR numbers across divisions';
+      'ASSERTION FAILED: ppmp_has_inflight_procurement is no longer scoped to the caller''s division on BOTH UNION arms -- as a SECURITY DEFINER function on PostgREST it now leaks APP items, lot names or PR numbers across divisions';
   END IF;
 
   -- 1b. The lot predicate names only statuses that EXIST. app_lots.status
@@ -126,6 +139,57 @@ BEGIN
   IF v_src !~ 'pr\.status\s*<>\s*''cancelled''' THEN
     RAISE EXCEPTION
       'ASSERTION FAILED: ppmp_has_inflight_procurement no longer filters PRs with pr.status <> ''cancelled'' exactly';
+  END IF;
+
+  -- 1d. Arm (a) is scoped to an APP VERSION the amendment would actually edit.
+  --     Without this, the arm matches every version's copy of the item.
+  --     create_app_amendment clones items into a new version WITHOUT
+  --     soft-deleting the originals and the old version's lots stay
+  --     'finalized', so after the first APP amendment of a fiscal year every
+  --     PPMP that fed the old version is blocked on a row the trigger will
+  --     never touch -- and cannot be unblocked, because a lot in a closed
+  --     version cannot be un-finalized. Two anchors: the join, and the
+  --     predicate. app_versions has no deleted_at, so none is asserted.
+  IF v_src !~ 'JOIN\s+procurements\.app_versions\s+av\s+ON\s+av\.id\s*=\s*ai\.app_version_id' THEN
+    RAISE EXCEPTION
+      'ASSERTION FAILED: ppmp_has_inflight_procurement no longer joins app_versions -- the lot arm is unscoped again and will block PPMP amendments on superseded/approved APP versions the trigger never edits';
+  END IF;
+
+  IF v_src !~ 'av\.status\s+NOT\s+IN\s*\(\s*''approved''\s*,\s*''superseded''\s*\)' THEN
+    RAISE EXCEPTION
+      'ASSERTION FAILED: ppmp_has_inflight_procurement no longer excludes approved/superseded APP versions from the lot arm -- note BOTH are required: approve_app leaves a previously-approved version at ''approved'' forever, so an APP routinely has several';
+  END IF;
+
+  -- 1e. And arm (b) is NOT so scoped -- the asymmetry is deliberate. A
+  --     pr_items row holds an FK to one specific app_items.id, live whichever
+  --     version that item sits in, so version-scoping this arm would blind the
+  --     guard to exactly the case it was written for. Someone WILL try to
+  --     "tidy" this; catch them here.
+  v_arm_b := split_part(v_src, 'UNION ALL', 2);
+
+  IF v_arm_b = '' THEN
+    RAISE EXCEPTION
+      'ASSERTION FAILED: ppmp_has_inflight_procurement no longer has a UNION ALL -- one of the two detection arms has been deleted';
+  END IF;
+
+  IF v_arm_b ~ 'app_versions' THEN
+    RAISE EXCEPTION
+      'ASSERTION FAILED: the pr_items arm of ppmp_has_inflight_procurement has been version-scoped to match the lot arm -- a PR references a specific app_item.id and that reference is live regardless of version, so this blinds the guard to live PRs on non-current APP versions';
+  END IF;
+
+  -- 1f. Both arms check the PARENT APP's soft delete. division_read_app_items
+  --     (20240602_app_rls.sql:158) requires apps.deleted_at IS NULL; a helper
+  --     standing in for that policy under SECURITY DEFINER must too, or it
+  --     over-blocks on items of a soft-deleted APP and, on the direct PostgREST
+  --     path, hands back item descriptions and lot names RLS would have hidden.
+  IF (SELECT count(*) FROM regexp_matches(v_src, 'JOIN\s+procurements\.apps\s+a\s+ON\s+a\.id\s*=\s*ai\.app_id', 'g')) <> 2 THEN
+    RAISE EXCEPTION
+      'ASSERTION FAILED: ppmp_has_inflight_procurement does not join procurements.apps on BOTH arms -- items of a soft-deleted APP are counted, and their descriptions are readable over PostgREST despite division_read_app_items hiding them';
+  END IF;
+
+  IF (SELECT count(*) FROM regexp_matches(v_src, 'a\.deleted_at\s+IS\s+NULL', 'g')) <> 2 THEN
+    RAISE EXCEPTION
+      'ASSERTION FAILED: ppmp_has_inflight_procurement joins procurements.apps but does not filter a.deleted_at IS NULL on both arms';
   END IF;
 
   -- ----------------------------------------------------------------
@@ -214,6 +278,16 @@ BEGIN
       'ASSERTION FAILED: create_ppmp_amendment does not call ppmp_has_inflight_procurement(p_ppmp_id)';
   END IF;
 
+  -- 4a-bis. It counts DISTINCT items, not rows. The helper is UNION ALL, so an
+  --     item in a finalized lot that is also on two live PRs returns three
+  --     rows. COUNT(*) would tell the user three of their items are in
+  --     procurement when one is, and write that inflated figure into the
+  --     approval_logs override remark -- a COA-facing audit record.
+  IF v_src !~ 'COUNT\s*\(\s*DISTINCT\s+app_item_id\s*\)' THEN
+    RAISE EXCEPTION
+      'ASSERTION FAILED: create_ppmp_amendment counts rows rather than COUNT(DISTINCT app_item_id) -- the helper UNION ALLs one row per REASON, so the number shown to the user and written to approval_logs overstates the affected items';
+  END IF;
+
   -- 4b. The block is a GUARD, not a log line: without p_force it must raise.
   IF v_src !~ 'IF\s+NOT\s+p_force\s+THEN' THEN
     RAISE EXCEPTION
@@ -247,11 +321,13 @@ BEGIN
   -- ----------------------------------------------------------------
   -- 5. ppmp_lots clone fidelity (bug P-1).
   --
-  --    procurements.ppmp_lots has 22 columns: 16 from 20240505:82-113 plus 6
-  --    from 20260516:25,34. The clone must carry 19 of them -- all but id,
+  --    procurements.ppmp_lots has 22 columns today: 16 from 20240501:109-136
+  --    (NOT 20240505:82-109, whose byte-identical CREATE TABLE IF NOT EXISTS
+  --    no-ops) plus 6 from 20260516:25,34. The clone must carry all but id,
   --    created_at and updated_at, with ppmp_project_id rebound to the cloned
-  --    parent. 20260516 added its six and did NOT update this list, so every
-  --    amendment reset is_cse to its NOT NULL DEFAULT false and blanked
+  --    parent -- 19 today, but the count below is read from pg_attribute, not
+  --    written down. 20260516 added its six and did NOT update this list, so
+  --    every amendment reset is_cse to its NOT NULL DEFAULT false and blanked
   --    schedule_quarter and the four GPPB dates.
   --
   --    This section does what a substring check cannot: it extracts both
@@ -279,10 +355,20 @@ BEGIN
   v_cols := string_to_array(regexp_replace(v_ins[1], '\s', '', 'g'), ',');
   v_vals := string_to_array(regexp_replace(v_ins[2], '\s', '', 'g'), ',');
 
-  IF array_length(v_cols, 1) <> 19 THEN
+  -- Derived from the catalog, NOT hardcoded to 19. Bug P-1 happened precisely
+  -- because 20260516 added columns to ppmp_lots and nobody updated a
+  -- hand-maintained list; a literal 19 here would let a 23rd column added
+  -- tomorrow leave the clone at 19 with this assertion still green -- the guard
+  -- failing in exactly the way the thing it guards failed.
+  SELECT count(*) INTO v_table_cols
+    FROM pg_attribute
+   WHERE attrelid = 'procurements.ppmp_lots'::regclass
+     AND attnum > 0 AND NOT attisdropped;
+
+  IF array_length(v_cols, 1) <> v_table_cols - 3 THEN
     RAISE EXCEPTION
-      'ASSERTION FAILED: ppmp_lots clone lists % columns, expected 19 (22 table columns less id, created_at, updated_at)',
-      array_length(v_cols, 1);
+      'ASSERTION FAILED: ppmp_lots clone lists % columns; table has % (expected % -- all but id/created_at/updated_at)',
+      array_length(v_cols, 1), v_table_cols, v_table_cols - 3;
   END IF;
 
   IF array_length(v_vals, 1) <> array_length(v_cols, 1) THEN
@@ -300,7 +386,7 @@ BEGIN
       v_cols[1], v_vals[1];
   END IF;
 
-  -- Positions 2..19 must be a straight v_lot_rec.<same column> copy. This is
+  -- Positions 2..N must be a straight v_lot_rec.<same column> copy. This is
   -- the transposition check.
   FOR i IN 2 .. array_length(v_cols, 1) LOOP
     IF v_vals[i] <> 'v_lot_rec.' || v_cols[i] THEN

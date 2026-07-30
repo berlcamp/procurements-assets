@@ -5,13 +5,18 @@
 -- procurement.
 --
 -- Approving a PPMP amendment fires auto_populate_app_from_ppmp, which
--- soft-deletes every app_item whose source_ppmp_id is the amended PPMP
+-- soft-deletes every app_item whose source_ppmp_id is the amended PPMP AND
+-- whose app_version_id is the version the trigger is editing
 -- (20260405_ppmp_app_amendment_logic.sql:166-172). A SOFT delete leaves every
--- foreign key resolvable, so purchase_requests.app_item_id, pr_items.app_item_id
--- and app_lots that have already been finalised or released for bidding all
--- keep pointing at an APP line that has vanished from the plan. Nothing
--- downstream raises, and the PR proceeds against a line the APP no longer
--- contains.
+-- foreign key resolvable, so pr_items.app_item_id and app_lots that have
+-- already been finalised or released for bidding all keep pointing at an APP
+-- line that has vanished from the plan. Nothing downstream raises, and the PR
+-- proceeds against a line the APP no longer contains.
+--
+-- (purchase_requests.app_item_id is NOT part of this: that column was dropped
+-- by 20260413_pr_bundling_step3_drop_legacy.sql:369, along with ppmp_item_id
+-- and lot_id. pr_items.app_item_id is the only remaining link from a PR to an
+-- APP line.)
 --
 -- This migration:
 --   1. adds procurements.ppmp_has_inflight_procurement(UUID), which lists the
@@ -25,19 +30,42 @@
 --      the five schedule columns 20260516 added.
 --
 -- Idempotent: CREATE OR REPLACE / ON CONFLICT DO NOTHING / DROP ... IF EXISTS.
+--
+-- Wrapped in an explicit transaction. Under `supabase db push` each file is
+-- already applied in one, but this file is also the sort that gets pasted into
+-- the Supabase SQL editor, which autocommits per statement -- and between the
+-- DROP FUNCTION at section 3 and the CREATE that follows it,
+-- create_ppmp_amendment does not exist and every in-flight amendment fails.
+-- Precedent: 20260520_clear_test_data.sql, 20260521_fix_fiscal_years_rls.sql.
 -- ============================================================
+
+BEGIN;
 
 -- ============================================================
 -- 1. ppmp_has_inflight_procurement
 -- ============================================================
 --
--- SECURITY DEFINER is required, not incidental. The tables it reads --
--- app_items, app_lots, pr_items, purchase_requests -- are all under RLS, and
--- the caller is typically the end_user who owns the PPMP, who may well not be
--- able to SELECT the BAC's lots or another office's PRs. Under SECURITY INVOKER
--- those rows would simply be invisible, the count would come back 0, and the
--- guard in create_ppmp_amendment would wave through exactly the amendment it
--- exists to stop. A guard that under-reports is worse than no guard.
+-- SECURITY DEFINER is retained as defence in depth, NOT because SECURITY
+-- INVOKER would fail open today. Every SELECT policy over the four tables this
+-- reads is DIVISION-scoped, not office-scoped --
+--   app_items        division_read_app_items   20240602_app_rls.sql:158
+--   app_lots         division_read_app_lots    20240602_app_rls.sql:189
+--   purchase_requests division_read_prs        20260407_procurement_rls.sql:161
+--   pr_items         division_read_pr_items    20260407_procurement_rls.sql:200
+-- -- and 20240404_schema_grants.sql:13 grants SELECT on every procurements
+-- table to `authenticated`. An end_user amending their own PPMP is in-division
+-- for every row this helper reads, including the BAC's lots and other offices'
+-- PRs, so it can already see all of it. Separately, on the path that actually
+-- matters the caller create_ppmp_amendment is itself SECURITY DEFINER over
+-- owner-owned tables and there is no FORCE ROW LEVEL SECURITY anywhere in this
+-- repo, so RLS is not enforced on the nested call regardless of what this
+-- function declares.
+--
+-- Keep it SECURITY DEFINER anyway: should any of those four policies ever be
+-- narrowed to office scope, an INVOKER version would go quietly blind to the
+-- rows it exists to find, the count would come back 0, and the guard in
+-- create_ppmp_amendment would wave through exactly the amendment it exists to
+-- stop. A guard that under-reports is worse than no guard.
 --
 -- BUT it takes a bare p_ppmp_id and the procurements schema is exposed over
 -- PostgREST, so as a definer-rights function with no scoping it would let any
@@ -49,16 +77,60 @@
 -- -- not even whether the id exists.
 --
 -- No REVOKE EXECUTE FROM PUBLIC here, unlike the internal helper at
--- 20260807:269. This one is deliberately user-facing: the guard's own error
--- message instructs the user to call it. No extra permission check either -- a
+-- 20260807:269 -- instead an explicit GRANT to `authenticated` below. This one
+-- is deliberately user-facing: the guard's own error message instructs the user
+-- to call it, and an admin reviewing a blocked amendment runs it directly over
+-- PostgREST. No extra permission check either -- a
 -- caller who can see the PPMP can already see this data through the UI, and
 -- requiring ppmp.amend would make the remediation advice unusable by the
 -- people who receive it.
 --
 -- CONSEQUENCE, READ BEFORE USING IT FOR REPORTING: run as a superuser or the
 -- service role, auth.uid() is NULL, get_user_division_id() returns NULL, and
--- this returns NO ROWS for every PPMP. A division-wide damage report must
--- query the underlying tables directly rather than through this function.
+-- this returns NO ROWS for every PPMP -- the silence that reads as "no problem
+-- found". A division-wide damage report must query the underlying tables
+-- directly. Use the query below, which has no get_user_division_id()
+-- dependency and so works in the SQL editor and from the service role. It is
+-- COMMENTED OUT DELIBERATELY: it is documentation, not part of the migration.
+--
+--   -- Damage assessment: every PPMP in :division_id whose APP items are
+--   -- already in procurement. Set :division_id, or drop both division
+--   -- predicates to sweep the whole platform.
+--   -- (procurements.ppmps has no ppmp_number column; it is keyed by
+--   -- office_id + fiscal_year_id, which is also its UNIQUE constraint.)
+--   SELECT p.id             AS ppmp_id,
+--          p.office_id,
+--          p.fiscal_year_id,
+--          COUNT(DISTINCT ai.id) AS inflight_items
+--     FROM procurements.app_items ai
+--     JOIN procurements.app_versions av ON av.id = ai.app_version_id
+--     JOIN procurements.apps        a  ON a.id  = ai.app_id
+--     JOIN procurements.ppmps       p  ON p.id  = ai.source_ppmp_id
+--     LEFT JOIN procurements.app_lots al
+--            ON al.id = ai.lot_id
+--           AND al.deleted_at IS NULL
+--           AND al.status IN ('finalized','in_procurement')
+--     LEFT JOIN procurements.pr_items pi
+--            ON pi.app_item_id = ai.id
+--           AND pi.deleted_at IS NULL
+--     LEFT JOIN procurements.purchase_requests pr
+--            ON pr.id = pi.purchase_request_id
+--           AND pr.deleted_at IS NULL
+--           AND pr.status <> 'cancelled'
+--    WHERE ai.deleted_at IS NULL
+--      AND a.deleted_at  IS NULL
+--      AND p.deleted_at  IS NULL
+--      AND p.division_id = :division_id
+--      AND (
+--            (al.id IS NOT NULL AND av.status NOT IN ('approved','superseded'))
+--         OR pr.id IS NOT NULL
+--          )
+--    GROUP BY p.id, p.office_id, p.fiscal_year_id
+--    ORDER BY inflight_items DESC;
+--
+-- The two arms of the OR mirror the two arms of the function below, including
+-- the asymmetry: the lot arm is scoped to non-superseded APP versions, the PR
+-- arm is not. See the comments on each arm for why.
 
 CREATE OR REPLACE FUNCTION procurements.ppmp_has_inflight_procurement(
   p_ppmp_id UUID
@@ -74,26 +146,67 @@ STABLE
 SECURITY DEFINER
 SET search_path = procurements, platform, auth, public
 AS $$
-  -- (a) Items sitting in a lot that has moved past composition.
+  -- (a) Items sitting in a lot that has moved past composition, IN AN APP
+  --     VERSION THE AMENDMENT WOULD ACTUALLY EDIT.
   --
   --     app_lots.status CHECK is ('draft','finalized','in_procurement')
-  --     (20240601_app_tables.sql:114-115). The plan originally spelled this
+  --     (20240601_app_tables.sql:116-117). The plan originally spelled this
   --     NOT IN ('draft','composed'); there is no 'composed' status, so that
   --     form was accidentally equivalent to <> 'draft' while naming a value
   --     that does not exist -- and would have changed meaning the moment a
   --     real 'composed' status was introduced. Stated positively instead.
+  --
+  --     VERSION SCOPING, load-bearing. The soft-delete this arm predicts is
+  --     version-scoped: auto_populate_app_from_ppmp deletes only
+  --     `WHERE app_version_id = v_app_version_id AND source_ppmp_id = NEW.id`
+  --     (20260405_ppmp_app_amendment_logic.sql:166-172). Without the
+  --     app_versions join this arm matched EVERY version's copy of the item.
+  --     That matters because create_app_amendment
+  --     (20260803_stop_stage_writes_from_workflow.sql:430-473) clones items
+  --     into a new version WITHOUT soft-deleting the originals, and the old
+  --     version's lots keep status = 'finalized'. So after the first APP
+  --     amendment of a fiscal year, every PPMP that fed the old version tripped
+  --     this arm on a row the trigger will never touch -- and the remedy the
+  --     error message offers ("cancel those activities") is impossible, because
+  --     a lot in a closed version cannot be un-finalized. It failed CLOSED, so
+  --     it was not a safety hole, but it silently made ordinary PPMP amendment
+  --     an override-only operation.
+  --
+  --     Predicate: app_versions.status CHECK admits
+  --     ('draft','under_review','bac_finalization','final','approved',
+  --     'superseded') (20240601_app_tables.sql:45-46). Excluding
+  --     ('approved','superseded') is the vocabulary finalize_app uses to pick
+  --     the active version (20260803:148). Note that BOTH must be excluded:
+  --     approve_app supersedes only versions whose status is
+  --     NOT IN ('approved','superseded') (20240603_app_rpc.sql:531-536), so a
+  --     previously-approved version stays 'approved' forever and an APP
+  --     routinely has several. app_versions has no deleted_at column, so there
+  --     is deliberately no soft-delete filter on av.
+  --
+  --     This is one status BROADER than the trigger's own editable-version
+  --     lookup, which is NOT IN ('final','approved','superseded')
+  --     (20260808_consolidation_visibility.sql). A 'final' version is not
+  --     edited in place either -- the trigger opens a supplemental version
+  --     instead -- but a 'final' version with a finalized lot is the live plan
+  --     sitting with HOPE, and blocking there is intended, not a false
+  --     positive. It also has an exit that a superseded version does not:
+  --     approve the APP and the amendment proceeds as a supplemental version.
   SELECT ai.id,
          ai.item_number,
          ai.general_description,
          'In lot "' || al.lot_name || '" with status ' || al.status
     FROM procurements.app_items ai
-    JOIN procurements.app_lots al ON al.id = ai.lot_id
-    JOIN procurements.ppmps    p  ON p.id  = ai.source_ppmp_id
+    JOIN procurements.app_lots     al ON al.id = ai.lot_id
+    JOIN procurements.app_versions av ON av.id = ai.app_version_id
+    JOIN procurements.apps         a  ON a.id  = ai.app_id
+    JOIN procurements.ppmps        p  ON p.id  = ai.source_ppmp_id
    WHERE ai.source_ppmp_id = p_ppmp_id
      AND ai.deleted_at IS NULL
      AND al.deleted_at IS NULL
+     AND a.deleted_at  IS NULL
      AND p.deleted_at  IS NULL
      AND p.division_id = procurements.get_user_division_id()
+     AND av.status NOT IN ('approved','superseded')
      AND al.status IN ('finalized','in_procurement')
 
   UNION ALL
@@ -104,6 +217,15 @@ AS $$
   --     'cancelled' is a real value and excluding it is meaningful. Everything
   --     else, including 'completed', still pins the APP line: a completed PR
   --     is an obligation already incurred against it.
+  --
+  --     DELIBERATELY NOT VERSION-SCOPED -- DO NOT "FIX" THE ASYMMETRY WITH (a).
+  --     A pr_items row holds a foreign key to one specific app_items.id. That
+  --     reference is live no matter which APP version that item happens to sit
+  --     in, so a superseded or approved version is exactly as damaging here as
+  --     the current one: soft-delete the row and the PR still resolves it,
+  --     against a line the plan no longer contains. Adding the app_versions
+  --     join from arm (a) to this arm would blind the guard to precisely the
+  --     case it was written for.
   SELECT ai.id,
          ai.item_number,
          ai.general_description,
@@ -111,18 +233,29 @@ AS $$
     FROM procurements.app_items ai
     JOIN procurements.pr_items pi           ON pi.app_item_id = ai.id
     JOIN procurements.purchase_requests pr  ON pr.id = pi.purchase_request_id
+    JOIN procurements.apps a                ON a.id  = ai.app_id
     JOIN procurements.ppmps p               ON p.id  = ai.source_ppmp_id
    WHERE ai.source_ppmp_id = p_ppmp_id
      AND ai.deleted_at IS NULL
      AND pi.deleted_at IS NULL
      AND pr.deleted_at IS NULL
+     AND a.deleted_at  IS NULL
      AND p.deleted_at  IS NULL
      AND p.division_id = procurements.get_user_division_id()
      AND pr.status <> 'cancelled';
 $$;
 
 COMMENT ON FUNCTION procurements.ppmp_has_inflight_procurement(UUID) IS
-  'Rows returned are APP items derived from this PPMP that an amendment would orphan. Scoped to the calling user''s division.';
+  'Rows returned are REASONS, one per blocking condition, not distinct APP items: the two UNION ALL arms are independent, so an item both sitting in a finalized lot and referenced by two live PRs yields three rows. Callers reporting a COUNT to a user or to approval_logs must use COUNT(DISTINCT app_item_id). Each row names an APP item derived from this PPMP that an amendment would orphan. Scoped to the calling user''s division, so it returns NO ROWS when auth.uid() is NULL (superuser / service role).';
+
+-- Declare the intended audience explicitly rather than relying on the implicit
+-- PUBLIC default that leaves pg_proc.proacl NULL. This changes nothing today --
+-- an anon caller gets NULL auth.uid() -> NULL division -> zero rows -- but ~30
+-- other user-facing RPCs in this repo grant explicitly (20260406_app_delete_lot
+-- .sql:57, 20260412_pr_bundling_step2_rpc.sql:379-381,
+-- 20260417_procurement_lots.sql:193) and a reader should not have to infer the
+-- audience from an absent ACL.
+GRANT EXECUTE ON FUNCTION procurements.ppmp_has_inflight_procurement(UUID) TO authenticated;
 
 -- ============================================================
 -- 2. ppmp.amend_override permission
@@ -230,18 +363,28 @@ BEGIN
   -- IN-FLIGHT PROCUREMENT GUARD (new in 20260809).
   --
   -- Approving this amendment fires auto_populate_app_from_ppmp, which
-  -- soft-deletes every app_item with source_ppmp_id = this PPMP
-  -- (20260405_ppmp_app_amendment_logic.sql:166-172). Because that is a SOFT
-  -- delete the foreign keys still resolve, so purchase_requests.app_item_id
-  -- and pr_items.app_item_id keep pointing at a row the APP no longer shows,
-  -- and a lot already released to bidding keeps a line whose ABC the
-  -- amendment may have changed. Nothing downstream notices.
+  -- soft-deletes every app_item with source_ppmp_id = this PPMP, in the
+  -- version it is editing (20260405_ppmp_app_amendment_logic.sql:166-172).
+  -- Because that is a SOFT delete the foreign keys still resolve, so
+  -- pr_items.app_item_id keeps pointing at a row the APP no longer shows, and
+  -- a lot already released to bidding keeps a line whose ABC the amendment may
+  -- have changed. Nothing downstream notices.
+  -- (purchase_requests.app_item_id is not in play; that column was dropped by
+  -- 20260413_pr_bundling_step3_drop_legacy.sql:369.)
   --
   -- Counted once into a variable rather than calling the helper for both the
   -- EXISTS test and the message: the plan's form evaluated the set-returning
   -- function three times per blocked call.
+  --
+  -- COUNT(DISTINCT app_item_id), not COUNT(*). The helper's two arms are
+  -- UNION ALL, so one APP item both sitting in a finalized lot and referenced
+  -- by two live PRs returns three rows. COUNT(*) would tell the user "3 of its
+  -- APP items are already in procurement" when there is one, and would write
+  -- that inflated number into the approval_logs remark below -- a COA-facing
+  -- audit record. One row per reason is the right RETURN shape for the helper;
+  -- it is the wrong number to show a human.
   -- ----------------------------------------------------------------------
-  SELECT COUNT(*)
+  SELECT COUNT(DISTINCT app_item_id)
     INTO v_inflight_count
     FROM procurements.ppmp_has_inflight_procurement(p_ppmp_id);
 
@@ -349,8 +492,11 @@ BEGIN
       -- MANUAL COLUMN ENUMERATION -- BUG P-1, FIXED HERE.
       --
       -- procurements.ppmp_lots has 22 columns: 16 from
-      -- 20240505_ppmp_restructure.sql:82-113 plus 6 from
+      -- 20240501_ppmps.sql:109-136 plus 6 from
       -- 20260516_app_cse_schedule_columns.sql:25,34.
+      -- (Not 20240505_ppmp_restructure.sql:82-109, which carries a
+      -- byte-identical CREATE TABLE IF NOT EXISTS that no-ops: 20240501 has
+      -- already created the table by then. Verified identical line for line.)
       -- (20260517_unify_procurement_modes.sql:59 adds a CHECK constraint,
       -- not a column. The table has NO deleted_at, which is why the FOR loop
       -- above correctly has no `deleted_at IS NULL` filter.)
@@ -361,7 +507,11 @@ BEGIN
       -- Common-Use Supplies lot as non-CSE -- and blanked schedule_quarter
       -- and all four GPPB schedule dates. It then propagated: the amended
       -- PPMP re-populates the APP through auto_populate_app_from_ppmp, which
-      -- reads pl.is_cse and pl.schedule_quarter.
+      -- reads ALL SIX of them off ppmp_lots -- pl.is_cse, pl.schedule_quarter,
+      -- pl.advertisement_date, pl.bid_opening_date, pl.award_date and
+      -- pl.contract_signing_date (20260516_app_cse_schedule_columns.sql:
+      -- 246-248) -- straight into the corresponding app_items columns. The
+      -- blast radius was every one of the six, not just the first two.
       --
       -- Not cloned, and why: id (identity, generated); created_at/updated_at
       -- (new row's own timestamps, DEFAULT NOW()); ppmp_project_id (rebound
@@ -421,4 +571,6 @@ BEGIN
   RETURN v_new_version_id;
 END;
 $$;
+
+COMMIT;
 
