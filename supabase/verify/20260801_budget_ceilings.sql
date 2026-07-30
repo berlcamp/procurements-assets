@@ -36,6 +36,25 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'ASSERTION FAILED: authoritative-ceiling unique index missing';
   END IF;
+
+  -- Behavioral: manage_ceilings policy WITH CHECK must include is_super_admin
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+     WHERE tablename = 'budget_ceilings'
+       AND policyname = 'manage_ceilings'
+       AND with_check LIKE '%is_super_admin%'
+  ) THEN
+    RAISE EXCEPTION 'ASSERTION FAILED: manage_ceilings WITH CHECK missing is_super_admin bypass';
+  END IF;
+
+  -- Behavioral: stage mapping functions work correctly
+  IF procurements.ceiling_stage_to_planning_stage('gaa') != 'final' THEN
+    RAISE EXCEPTION 'ASSERTION FAILED: ceiling_stage_to_planning_stage(gaa) should return final';
+  END IF;
+
+  IF procurements.ceiling_stage_to_planning_stage('indicative') != 'indicative' THEN
+    RAISE EXCEPTION 'ASSERTION FAILED: ceiling_stage_to_planning_stage(indicative) should return indicative';
+  END IF;
 END $$;
 
 SELECT 'PASS: 20260801_budget_ceilings' AS result;

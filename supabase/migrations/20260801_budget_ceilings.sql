@@ -133,6 +133,10 @@ AS $$
   );
 $$;
 
+GRANT EXECUTE ON FUNCTION procurements.authoritative_ceiling_id(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION procurements.ceiling_stage_to_planning_stage(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION procurements.fiscal_year_planning_stage(UUID) TO authenticated;
+
 -- ============================================================
 -- Permissions
 -- ============================================================
@@ -182,14 +186,17 @@ CREATE POLICY "division_read_ceilings" ON procurements.budget_ceilings
 CREATE POLICY "manage_ceilings" ON procurements.budget_ceilings
   FOR ALL TO authenticated
   USING (
-    division_id = procurements.get_user_division_id()
-    AND (
-      procurements.has_permission('budget.ceilings_manage')
-      OR platform.is_super_admin()
+    platform.is_super_admin()
+    OR (
+      division_id = procurements.get_user_division_id()
+      AND procurements.has_permission('budget.ceilings_manage')
     )
   )
   WITH CHECK (
-    division_id = procurements.get_user_division_id()
-    AND procurements.has_permission('budget.ceilings_manage')
-    AND procurements.is_division_active()
+    platform.is_super_admin()
+    OR (
+      division_id = procurements.get_user_division_id()
+      AND procurements.has_permission('budget.ceilings_manage')
+      AND procurements.is_division_active()
+    )
   );
