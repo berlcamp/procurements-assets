@@ -52,7 +52,7 @@ Identical to the companion plan. Repeated here because each task is executed by 
   END $$;
   ```
   Silent run = pass. Any `RAISE EXCEPTION` = fail.
-- **TypeScript gates:** `npm run build` (strict) and `npm run lint` must both pass before any commit touching `src/`.
+- **TypeScript gates (CORRECTED 2026-07-30):** `npm run build` (strict) must pass clean. `npm run lint` **cannot** be required to pass — `main` already carries 33 pre-existing lint errors and 106 warnings, so "lint must pass" was unachievable as originally written. The real gate is: **your changed files introduce no new lint errors or warnings.** Do not fix unrelated pre-existing lint noise. Never use `git stash` to establish a lint baseline — there is uncommitted user work in the tree.
 - **`src/types/database.ts` is hand-maintained** — no codegen. Update it in the same task as the schema change.
 - **Permission seed idiom** (copy exactly, from `20240502_ppmp_rls.sql:23-29`):
   ```sql
