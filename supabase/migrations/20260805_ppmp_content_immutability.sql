@@ -140,34 +140,46 @@ BEGIN
        WHERE pl.id = NEW.ppmp_lot_id;
     END IF;
 
-    -- Check the OLD version (the one being moved FROM).
+    -- Check both versions can be resolved.
     IF v_version_id_old IS NULL THEN
       RAISE EXCEPTION 'Cannot update %: owning PPMP version (old) could not be resolved', TG_TABLE_NAME;
+    END IF;
+
+    IF v_version_id_new IS NULL THEN
+      RAISE EXCEPTION 'Cannot update %: owning PPMP version (new) could not be resolved', TG_TABLE_NAME;
     END IF;
 
     SELECT status INTO v_status_old
       FROM procurements.ppmp_versions
      WHERE id = v_version_id_old;
 
-    IF v_status_old IS DISTINCT FROM 'draft' THEN
-      RAISE EXCEPTION
-        'Cannot move % out of a PPMP version with status "%". Create an amendment instead.',
-        TG_TABLE_NAME, v_status_old;
-    END IF;
-
-    -- Check the NEW version (the one being moved TO).
-    IF v_version_id_new IS NULL THEN
-      RAISE EXCEPTION 'Cannot update %: owning PPMP version (new) could not be resolved', TG_TABLE_NAME;
-    END IF;
-
     SELECT status INTO v_status_new
       FROM procurements.ppmp_versions
      WHERE id = v_version_id_new;
 
-    IF v_status_new IS DISTINCT FROM 'draft' THEN
-      RAISE EXCEPTION
-        'Cannot move % into a PPMP version with status "%". Create an amendment instead.',
-        TG_TABLE_NAME, v_status_new;
+    -- Distinguish between field edits on a locked version and reparenting moves.
+    IF v_version_id_old = v_version_id_new THEN
+      -- Same version: this is a field edit, not a move.
+      IF v_status_old IS DISTINCT FROM 'draft' THEN
+        RAISE EXCEPTION
+          'Cannot modify % on a PPMP version with status "%". Create an amendment instead.',
+          TG_TABLE_NAME, v_status_old;
+      END IF;
+    ELSE
+      -- Different versions: this is a reparenting move.
+      -- Check the version being left.
+      IF v_status_old IS DISTINCT FROM 'draft' THEN
+        RAISE EXCEPTION
+          'Cannot move % out of a PPMP version with status "%". Create an amendment instead.',
+          TG_TABLE_NAME, v_status_old;
+      END IF;
+
+      -- Check the version being entered.
+      IF v_status_new IS DISTINCT FROM 'draft' THEN
+        RAISE EXCEPTION
+          'Cannot move % into a PPMP version with status "%". Create an amendment instead.',
+          TG_TABLE_NAME, v_status_new;
+      END IF;
     END IF;
 
     RETURN NEW;
@@ -185,8 +197,11 @@ COMMENT ON FUNCTION procurements.prevent_locked_ppmp_content_change() IS
   'For DELETE: requires source version to be in draft. '
   'This check is enforced regardless of RLS to close a potential security hole.';
 
--- Guard UPDATE and DELETE. INSERT is allowed only into draft versions,
--- which the same check covers via NEW.
+-- Triggers that enforce content immutability once the owning PPMP version leaves draft.
+-- The function branches on TG_OP to handle each operation distinctly:
+-- INSERT checks the destination version; DELETE checks the source version.
+-- UPDATE validates both source and destination versions, distinguishing field edits
+-- on a locked version from reparenting moves that would launder approved content.
 DROP TRIGGER IF EXISTS trg_ppmp_projects_immutable_when_locked ON procurements.ppmp_projects;
 
 CREATE TRIGGER trg_ppmp_projects_immutable_when_locked
