@@ -371,6 +371,28 @@ export interface FiscalYear {
   updated_at: string
 }
 
+export interface BudgetCeiling {
+  id: string
+  division_id: string
+  fiscal_year_id: string
+  stage: "indicative" | "nep" | "gaa" | "final" | "supplemental"
+  tier: "tier_1" | "tier_2" | null
+  issuing_authority: string
+  reference_number: string | null
+  amount: string
+  issued_date: string | null
+  effective_date: string | null
+  is_authoritative: boolean
+  document_url: string | null
+  remarks: string | null
+  created_by: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type PlanningStage = "indicative" | "final" | "supplemental"
+
 export interface BudgetAllocation {
   id: string
   division_id: string

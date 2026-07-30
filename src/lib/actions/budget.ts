@@ -12,12 +12,16 @@ import type {
   BudgetUtilizationByOffice,
   BudgetUtilizationByFundSource,
   FiscalYear,
+  BudgetCeiling,
+  PlanningStage,
 } from "@/types/database"
 import type { ObligationRequestWithDetails } from "@/types/database"
 import type {
   BudgetAllocationInput,
   BudgetAdjustmentInput,
+  BudgetCeilingInput,
 } from "@/lib/schemas/budget"
+import { budgetCeilingSchema } from "@/lib/schemas/budget"
 import { notifyRoleInDivision, notifyUser } from "@/lib/actions/helpers"
 
 // ============================================================
@@ -43,6 +47,97 @@ export async function getFiscalYears(): Promise<FiscalYear[]> {
     .select("*")
     .order("year", { ascending: false })
   return (data ?? []) as FiscalYear[]
+}
+
+// ============================================================
+// Budget Ceilings
+// ============================================================
+
+export async function createBudgetCeiling(input: BudgetCeilingInput) {
+  const parsed = budgetCeilingSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message }
+  }
+
+  const supabase = await createClient()
+  const { data: divisionId, error: divErr } = await supabase.rpc(
+    "get_user_division_id"
+  )
+  if (divErr || !divisionId) {
+    return { error: "Could not resolve your division." }
+  }
+
+  const { data, error } = await supabase
+    .schema("procurements")
+    .from("budget_ceilings")
+    .insert({ ...parsed.data, division_id: divisionId })
+    .select()
+    .single()
+
+  if (error) {
+    // Unique violation on the authoritative index
+    if (error.code === "23505") {
+      return {
+        error:
+          "An authoritative ceiling already exists for this fiscal year and stage. Mark the existing one non-authoritative first.",
+      }
+    }
+    return { error: error.message }
+  }
+
+  revalidatePath("/dashboard/budget/ceilings")
+  return { error: null, data: data as BudgetCeiling }
+}
+
+export async function updateBudgetCeiling(
+  id: string,
+  input: Partial<BudgetCeilingInput>
+) {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .schema("procurements")
+    .from("budget_ceilings")
+    .update(input)
+    .eq("id", id)
+    .select()
+    .single()
+
+  if (error) {
+    if (error.code === "23505") {
+      return {
+        error:
+          "An authoritative ceiling already exists for this fiscal year and stage. Mark the existing one non-authoritative first.",
+      }
+    }
+    return { error: error.message }
+  }
+
+  revalidatePath("/dashboard/budget/ceilings")
+  return { error: null, data: data as BudgetCeiling }
+}
+
+export async function listBudgetCeilings(fiscalYearId: string) {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .schema("procurements")
+    .from("budget_ceilings")
+    .select("*")
+    .eq("fiscal_year_id", fiscalYearId)
+    .is("deleted_at", null)
+    .order("issued_date", { ascending: true })
+
+  if (error) return { error: error.message }
+  return { error: null, data: data as BudgetCeiling[] }
+}
+
+export async function getFiscalYearPlanningStage(fiscalYearId: string) {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc("fiscal_year_planning_stage", {
+    p_fiscal_year_id: fiscalYearId,
+  })
+  if (error) return { error: error.message }
+  return { error: null, data: data as PlanningStage }
 }
 
 // ============================================================

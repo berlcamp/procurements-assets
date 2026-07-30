@@ -24,6 +24,26 @@ export const budgetAllocationSchema = z.object({
 export type BudgetAllocationInput = z.infer<typeof budgetAllocationSchema>
 
 // ============================================================
+// Budget Ceiling
+// ============================================================
+
+export const budgetCeilingSchema = z.object({
+  fiscal_year_id: z.string().uuid("Select a fiscal year"),
+  stage: z.enum(["indicative", "nep", "gaa", "final", "supplemental"]),
+  tier: z.enum(["tier_1", "tier_2"]).nullable().optional(),
+  issuing_authority: z.string().min(2, "Issuing authority is required"),
+  reference_number: z.string().trim().min(1).nullable().optional(),
+  amount: z.coerce.number().nonnegative("Amount cannot be negative"),
+  issued_date: z.string().nullable().optional(),
+  effective_date: z.string().nullable().optional(),
+  is_authoritative: z.boolean().default(true),
+  document_url: z.string().nullable().optional(),
+  remarks: z.string().nullable().optional(),
+})
+
+export type BudgetCeilingInput = z.infer<typeof budgetCeilingSchema>
+
+// ============================================================
 // Budget Adjustment
 // ============================================================
 
