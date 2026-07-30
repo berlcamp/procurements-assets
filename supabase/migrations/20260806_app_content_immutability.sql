@@ -179,7 +179,34 @@ CREATE TRIGGER trg_prevent_approved_app_version_update
 
 -- ============================================================
 -- Tighten the manage policy with the editable-window predicate.
--- Preserves the soft-delete visibility fix from 20260729.
+--
+-- Fix round 1: the original draft of this policy (a) dropped the
+-- platform.is_super_admin() bypass that 20260729 had, (b) added
+-- app.bac_manage_lots — broader than the original three permissions,
+-- and unnecessary since the BAC lotting RPCs are all SECURITY DEFINER
+-- and bypass RLS anyway, and (c) supplied an explicit WITH CHECK that
+-- omitted the permission block entirely. Because the 20260729 policy
+-- had no WITH CHECK at all, Postgres had reused USING (including its
+-- permission block) to check INSERTs; replacing that with a weaker
+-- explicit WITH CHECK silently removed the permission requirement from
+-- INSERT, a privilege escalation. All three are fixed below:
+--   * platform.is_super_admin() restored as a top-level bypass in BOTH
+--     clauses (this plan's standing pattern for super-admin access).
+--   * permission set restored to exactly the original three.
+--   * WITH CHECK now mirrors USING's permission block and editable-
+--     window predicate, so INSERT is no weaker than UPDATE.
+--
+-- Two deliberate asymmetries between USING and WITH CHECK:
+--   * deleted_at IS NULL stays in USING only. That preserves the
+--     20260729 soft-delete visibility fix (a merged-away row must not
+--     appear as a phantom in the available-items pool) while still
+--     allowing a soft delete to be WRITTEN — a soft delete is an
+--     UPDATE that SETs deleted_at, and WITH CHECK evaluates the new
+--     row, which by definition now has deleted_at set.
+--   * procurements.is_division_active() appears in WITH CHECK only.
+--     This was NOT in the 20260729 policy at all; it is a new addition
+--     because every other write policy in this plan carries it, and a
+--     suspended division should not be able to create new rows.
 -- ============================================================
 
 DROP POLICY IF EXISTS "division_admin_manage_app_items" ON procurements.app_items;
@@ -187,25 +214,36 @@ DROP POLICY IF EXISTS "division_admin_manage_app_items" ON procurements.app_item
 CREATE POLICY "division_admin_manage_app_items" ON procurements.app_items
   FOR ALL TO authenticated
   USING (
-    deleted_at IS NULL
-    AND app_id IN (
-      SELECT id FROM procurements.apps
-      WHERE division_id = procurements.get_user_division_id()
-        AND deleted_at IS NULL
+    platform.is_super_admin()
+    OR (
+      deleted_at IS NULL
+      AND app_id IN (
+        SELECT id FROM procurements.apps
+         WHERE division_id = procurements.get_user_division_id()
+           AND deleted_at IS NULL
+      )
+      AND (
+        procurements.has_permission('app.manage')
+        OR procurements.has_permission('app.hope_review')
+        OR procurements.has_permission('app.approve')
+      )
+      AND procurements.app_version_is_editable(app_version_id)
     )
-    AND (
-      procurements.has_permission('app.manage')
-      OR procurements.has_permission('app.hope_review')
-      OR procurements.has_permission('app.approve')
-      OR procurements.has_permission('app.bac_manage_lots')
-    )
-    AND procurements.app_version_is_editable(app_version_id)
   )
   WITH CHECK (
-    app_id IN (
-      SELECT id FROM procurements.apps
-      WHERE division_id = procurements.get_user_division_id()
-        AND deleted_at IS NULL
+    platform.is_super_admin()
+    OR (
+      app_id IN (
+        SELECT id FROM procurements.apps
+         WHERE division_id = procurements.get_user_division_id()
+           AND deleted_at IS NULL
+      )
+      AND (
+        procurements.has_permission('app.manage')
+        OR procurements.has_permission('app.hope_review')
+        OR procurements.has_permission('app.approve')
+      )
+      AND procurements.app_version_is_editable(app_version_id)
+      AND procurements.is_division_active()
     )
-    AND procurements.app_version_is_editable(app_version_id)
   );
