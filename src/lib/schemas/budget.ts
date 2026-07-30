@@ -33,7 +33,12 @@ export const budgetCeilingSchema = z.object({
   tier: z.enum(["tier_1", "tier_2"]).nullable().optional(),
   issuing_authority: z.string().min(2, "Issuing authority is required"),
   reference_number: z.string().trim().min(1).nullable().optional(),
-  amount: z.coerce.number().nonnegative("Amount cannot be negative"),
+  amount: z
+    .string()
+    .min(1, "Amount is required")
+    .refine((v) => !isNaN(parseFloat(v)) && parseFloat(v) >= 0, {
+      message: "Amount must be a non-negative number",
+    }),
   issued_date: z.string().nullable().optional(),
   effective_date: z.string().nullable().optional(),
   is_authoritative: z.boolean().default(true),

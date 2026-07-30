@@ -60,6 +60,12 @@ export async function createBudgetCeiling(input: BudgetCeilingInput) {
   }
 
   const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: "Unauthorized" }
+
   const { data: divisionId, error: divErr } = await supabase.rpc(
     "get_user_division_id"
   )
@@ -70,7 +76,7 @@ export async function createBudgetCeiling(input: BudgetCeilingInput) {
   const { data, error } = await supabase
     .schema("procurements")
     .from("budget_ceilings")
-    .insert({ ...parsed.data, division_id: divisionId })
+    .insert({ ...parsed.data, division_id: divisionId, created_by: user.id })
     .select()
     .single()
 
@@ -93,12 +99,46 @@ export async function updateBudgetCeiling(
   id: string,
   input: Partial<BudgetCeilingInput>
 ) {
+  if (!input || Object.keys(input).length === 0) {
+    return { error: "No changes provided." }
+  }
+
+  const parsed = budgetCeilingSchema.partial().safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message }
+  }
+
+  const updateData: Record<string, unknown> = {}
+  if (parsed.data.fiscal_year_id !== undefined)
+    updateData.fiscal_year_id = parsed.data.fiscal_year_id
+  if (parsed.data.stage !== undefined) updateData.stage = parsed.data.stage
+  if (parsed.data.tier !== undefined) updateData.tier = parsed.data.tier ?? null
+  if (parsed.data.issuing_authority !== undefined)
+    updateData.issuing_authority = parsed.data.issuing_authority
+  if (parsed.data.reference_number !== undefined)
+    updateData.reference_number = parsed.data.reference_number ?? null
+  if (parsed.data.amount !== undefined) updateData.amount = parsed.data.amount
+  if (parsed.data.issued_date !== undefined)
+    updateData.issued_date = parsed.data.issued_date ?? null
+  if (parsed.data.effective_date !== undefined)
+    updateData.effective_date = parsed.data.effective_date ?? null
+  if (parsed.data.is_authoritative !== undefined)
+    updateData.is_authoritative = parsed.data.is_authoritative
+  if (parsed.data.document_url !== undefined)
+    updateData.document_url = parsed.data.document_url ?? null
+  if (parsed.data.remarks !== undefined)
+    updateData.remarks = parsed.data.remarks ?? null
+
+  if (Object.keys(updateData).length === 0) {
+    return { error: "No changes provided." }
+  }
+
   const supabase = await createClient()
 
   const { data, error } = await supabase
     .schema("procurements")
     .from("budget_ceilings")
-    .update(input)
+    .update(updateData)
     .eq("id", id)
     .select()
     .single()
