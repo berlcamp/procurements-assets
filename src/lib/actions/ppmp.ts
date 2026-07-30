@@ -113,11 +113,34 @@ async function getPpmpMeta(
 // PPMP queries
 // ============================================================
 
+// ppmp_versions is embedded because planning_stage lives on the VERSION, not on
+// the parent ppmps row (20260802_planning_stage_columns.sql). The parent's
+// indicative_final is deprecated and no longer written by the workflow, so a
+// list that reads it shows a constant. Embedding keeps the read under RLS —
+// PostgREST applies the embedded table's own policies (division_read_ppmp_versions,
+// 20240502_ppmp_rls.sql:128) — which a plain SQL view would not.
 const PPMP_SELECT = `
   *,
   office:offices(id, name, code, office_type),
-  fiscal_year:fiscal_years(id, year, status)
+  fiscal_year:fiscal_years(id, year, status),
+  ppmp_versions(version_number, planning_stage)
 ` as const;
+
+/**
+ * Resolves each PPMP's current planning stage from the embedded version rows.
+ *
+ * null is a real, meaningful outcome: planning_stage is nullable and the
+ * backfill deliberately left it NULL wherever no budget ceiling qualified. It
+ * must surface as "unknown" in the UI, never be coerced to "indicative".
+ */
+function withCurrentPlanningStage(ppmps: PpmpWithDetails[]): PpmpWithDetails[] {
+  return ppmps.map((ppmp) => ({
+    ...ppmp,
+    current_planning_stage:
+      ppmp.ppmp_versions?.find((v) => v.version_number === ppmp.current_version)
+        ?.planning_stage ?? null,
+  }));
+}
 
 function officeNameFromJoin(
   office: { name: string } | { name: string }[] | null | undefined,
@@ -289,7 +312,7 @@ export async function getAllDivisionPpmps(
     console.error("getAllDivisionPpmps error:", error);
     return [];
   }
-  const rows = (data ?? []) as PpmpWithDetails[];
+  const rows = withCurrentPlanningStage((data ?? []) as PpmpWithDetails[]);
   return enrichPpmpsWithCreators(supabase, rows);
 }
 
@@ -321,7 +344,7 @@ export async function getMyPpmps(
     console.error("getMyPpmps error:", error);
     return [];
   }
-  const rows = (data ?? []) as PpmpWithDetails[];
+  const rows = withCurrentPlanningStage((data ?? []) as PpmpWithDetails[]);
   return enrichPpmpsWithCreators(supabase, rows);
 }
 
@@ -411,7 +434,7 @@ export async function getPpmpsRequiringMyAction(
     (a, b) =>
       new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
   );
-  return merged;
+  return withCurrentPlanningStage(merged);
 }
 
 export async function getPpmpById(id: string): Promise<PpmpWithDetails | null> {

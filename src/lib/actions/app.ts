@@ -138,10 +138,33 @@ async function isAppLotsLockedByItem(
 // APP queries
 // ============================================================
 
+// app_versions is embedded because planning_stage lives on the VERSION, not on
+// the parent apps row (20260802_planning_stage_columns.sql). The parent's
+// indicative_final is deprecated and no longer written by the workflow, so a
+// list that reads it shows a constant. Embedding keeps the read under RLS —
+// PostgREST applies the embedded table's own policies (division_read_app_versions,
+// 20240602_app_rls.sql:129) — which a plain SQL view would not.
 const APP_SELECT = `
   *,
-  fiscal_year:fiscal_years(id, year, status)
+  fiscal_year:fiscal_years(id, year, status),
+  app_versions(version_number, planning_stage)
 ` as const
+
+/**
+ * Resolves each APP's current planning stage from the embedded version rows.
+ *
+ * null is a real, meaningful outcome: planning_stage is nullable and the
+ * backfill deliberately left it NULL wherever no budget ceiling qualified. It
+ * must surface as "unknown" in the UI, never be coerced to "indicative".
+ */
+function withCurrentPlanningStage(apps: AppWithDetails[]): AppWithDetails[] {
+  return apps.map(app => ({
+    ...app,
+    current_planning_stage:
+      app.app_versions?.find(v => v.version_number === app.current_version)
+        ?.planning_stage ?? null,
+  }))
+}
 
 export async function getApps(
   fiscalYearId?: string
@@ -163,7 +186,7 @@ export async function getApps(
     console.error("getApps error:", error)
     return []
   }
-  return (data ?? []) as AppWithDetails[]
+  return withCurrentPlanningStage((data ?? []) as AppWithDetails[])
 }
 
 export async function getAppById(
@@ -430,7 +453,7 @@ export async function getAppsRequiringMyAction(
     }
   }
 
-  return results
+  return withCurrentPlanningStage(results)
 }
 
 // ============================================================

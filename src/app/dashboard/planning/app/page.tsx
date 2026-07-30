@@ -2,7 +2,7 @@ import Link from "next/link"
 import { getApps, getAppsRequiringMyAction } from "@/lib/actions/app"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
-import { Badge } from "@/components/ui/badge"
+import { PlanningStageBadge } from "@/components/planning/ppmp-indicative-final-badge"
 import { AmountDisplay } from "@/components/shared/amount-display"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -27,7 +27,7 @@ function AppTable({ apps }: { apps: AppWithDetails[] }) {
           <TableHead>Fiscal Year</TableHead>
           <TableHead>Version</TableHead>
           <TableHead>Status</TableHead>
-          <TableHead>INDICATIVE / FINAL</TableHead>
+          <TableHead>PLANNING STAGE</TableHead>
           <TableHead>Created</TableHead>
           <TableHead className="w-[60px]" />
         </TableRow>
@@ -43,9 +43,13 @@ function AppTable({ apps }: { apps: AppWithDetails[] }) {
               </TableCell>
               <TableCell><StatusBadge status={app.status} /></TableCell>
               <TableCell>
-                <Badge variant={app.indicative_final === "final" ? "default" : "outline"}>
-                  {app.indicative_final.toUpperCase()}
-                </Badge>
+                {/* Stage of the current version. null = unknown (no qualifying
+                    budget ceiling), shown as a dash rather than a guess. */}
+                {app.current_planning_stage ? (
+                  <PlanningStageBadge value={app.current_planning_stage} />
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {new Date(app.created_at).toLocaleDateString("en-PH")}

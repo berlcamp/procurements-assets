@@ -513,6 +513,23 @@ export type PpmpProjectType = 'goods' | 'infrastructure' | 'consulting_services'
 
 export type IndicativeFinal = 'indicative' | 'final'
 
+/** procurements.ppmps.consolidation_status — NOT NULL, defaults to 'pending'. */
+export type ConsolidationStatus =
+  | 'pending'
+  | 'consolidated'
+  | 'failed'
+  | 'not_applicable'
+
+/**
+ * Minimal version row embedded by the PPMP/APP list queries so a list can show
+ * the planning stage of the parent's `current_version`. The parent tables carry
+ * only the deprecated `indicative_final`; `planning_stage` lives on the version.
+ */
+export interface VersionPlanningStageRow {
+  version_number: number
+  planning_stage: PlanningStage | null
+}
+
 export interface Ppmp {
   id: string
   division_id: string
@@ -532,6 +549,14 @@ export interface Ppmp {
   approved_by: string | null
   approved_at: string | null
   approval_notes: string | null
+  /**
+   * Whether this PPMP's approved items reached the APP.
+   * Added by supabase/migrations/20260808_consolidation_visibility.sql, which is
+   * written but NOT yet applied — do not read this field at runtime until it is.
+   */
+  consolidation_status: ConsolidationStatus
+  consolidation_error: string | null
+  consolidated_at: string | null
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -625,6 +650,14 @@ export interface PpmpWithDetails extends Ppmp {
   fiscal_year?: Pick<FiscalYear, 'id' | 'year' | 'status'>
   /** Set when list queries enrich with user_profiles (e.g. getMyPpmps) */
   creator?: PpmpCreatorSummary
+  /** Embedded by the list queries; one row per version of this PPMP. */
+  ppmp_versions?: VersionPlanningStageRow[]
+  /**
+   * Planning stage of the version matching `current_version`, resolved from
+   * `ppmp_versions` by the list actions. null = unknown (no ceiling qualified,
+   * or no matching version row); render it as a dash, never as "indicative".
+   */
+  current_planning_stage?: PlanningStage | null
 }
 
 export interface PpmpLotWithItems extends PpmpLot {
@@ -727,6 +760,12 @@ export interface AppItem {
   source_ppmp_project_id: string | null
   source_ppmp_lot_id: string | null
   source_ppmp_id: string | null
+  /**
+   * Immutable provenance: the approved PPMP version this item was consolidated
+   * from. Nullable — null means the source version could not be determined.
+   * (supabase/migrations/20260807_app_item_provenance.sql)
+   */
+  source_ppmp_version_id: string | null
   source_ppmp_project_description: string | null
   /** Subset of the source PPMP lot's line items this row covers. null = all lines. */
   source_ppmp_lot_item_ids: string[] | null
@@ -785,6 +824,14 @@ export interface AppLot {
 // Joined types for UI
 export interface AppWithDetails extends App {
   fiscal_year?: Pick<FiscalYear, 'id' | 'year' | 'status'>
+  /** Embedded by the list queries; one row per version of this APP. */
+  app_versions?: VersionPlanningStageRow[]
+  /**
+   * Planning stage of the version matching `current_version`, resolved from
+   * `app_versions` by the list actions. null = unknown (no ceiling qualified,
+   * or no matching version row); render it as a dash, never as "indicative".
+   */
+  current_planning_stage?: PlanningStage | null
 }
 
 export interface AppItemWithOffice extends AppItem {

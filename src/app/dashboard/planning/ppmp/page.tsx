@@ -3,7 +3,7 @@ import { getMyPpmps, getPpmpsRequiringMyAction, getAllDivisionPpmps } from "@/li
 import { getUserPermissions } from "@/lib/actions/roles"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
-import { Badge } from "@/components/ui/badge"
+import { PlanningStageBadge } from "@/components/planning/ppmp-indicative-final-badge"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
@@ -34,7 +34,7 @@ function PpmpTable({
             <TableHead>Fiscal Year</TableHead>
             <TableHead>Version</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead>INDICATIVE / FINAL</TableHead>
+            <TableHead>PLANNING STAGE</TableHead>
             <TableHead>Created</TableHead>
             <TableHead className="w-[60px]" />
           </TableRow>
@@ -52,9 +52,13 @@ function PpmpTable({
                 </TableCell>
                 <TableCell><StatusBadge status={ppmp.status} /></TableCell>
                 <TableCell>
-                  <Badge variant={ppmp.indicative_final === "final" ? "default" : "outline"}>
-                    {ppmp.indicative_final.toUpperCase()}
-                  </Badge>
+                  {/* Stage of the current version. null = unknown (no qualifying
+                      budget ceiling), shown as a dash rather than a guess. */}
+                  {ppmp.current_planning_stage ? (
+                    <PlanningStageBadge value={ppmp.current_planning_stage} />
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   <div className="space-y-1">
