@@ -327,6 +327,13 @@ REVOKE EXECUTE ON FUNCTION procurements.record_consolidation_failure(UUID, TEXT)
 --        projects twice at full budget. Now scoped to
 --        version_number = NEW.current_version. See the long comment at the
 --        WHERE clause for the two-part root cause.
+--    (6) Carry-forward source version: the supplemental clone looked up its
+--        source with `status = 'approved'`, which both missed the 'final'
+--        window entirely (empty supplemental) and, once any version had been
+--        approved, preferred that older 'approved' row over a newer 'final' one
+--        (stale clone / silent data loss). Now IN ('final','approved') — the
+--        exact complement of the editable-version lookup minus 'superseded'.
+--        See the long comment at that SELECT.
 --
 --    Everything else — including the status guard, the APP auto-create, the
 --    supplemental-version creation, the lot clone, the APP status reset, the
@@ -350,7 +357,7 @@ DECLARE
   v_app_version_id   UUID;
   v_app_status       TEXT;
   v_is_amendment      BOOLEAN;
-  v_approved_ver_id  UUID;
+  v_source_ver_id    UUID;
   v_next_ver_num     INTEGER;
   v_inserted_count   INTEGER;
 BEGIN
@@ -437,15 +444,67 @@ BEGIN
     )
     RETURNING id INTO v_app_version_id;
 
-    -- Clone all existing approved items from the last approved version
-    SELECT id INTO v_approved_ver_id
+    -- Carry the rest of the plan forward: find the version that IS the current
+    -- locked plan and clone its items into the new supplemental version.
+    --
+    -- THIS STATUS SET MUST STAY IN SYNC WITH THE EDITABLE-VERSION LOOKUP ABOVE.
+    -- app_versions.status is one of ('draft','under_review','bac_finalization',
+    -- 'final','approved','superseded') (20240601_app_tables.sql:45-46). The
+    -- editable lookup takes NOT IN ('final','approved','superseded'); the
+    -- versions that represent the current locked plan are its EXACT COMPLEMENT
+    -- MINUS 'superseded', i.e. IN ('final','approved'). Change one predicate and
+    -- you must change the other.
+    --
+    -- THIS READ `status = 'approved'` AND WAS WRONG IN TWO SEPARATE WAYS.
+    --
+    --   (1) EMPTY SUPPLEMENTAL. In a division's first APP year version 1 goes
+    --       draft -> ... -> final -> approved. Throughout the 'final' window
+    --       there is no 'approved' version at all, so this returned NULL and the
+    --       clone below was skipped ENTIRELY. The supplemental then held ONLY
+    --       the amending PPMP's items — every other office's lines absent from
+    --       the new current version — while the UPDATE below simultaneously
+    --       knocked apps.status from 'final' back to 'indicative'.
+    --
+    --   (2) STALE SOURCE — worse, because it is silent data loss rather than
+    --       visible emptiness. approve_app supersedes only versions
+    --       NOT IN ('approved','superseded') (20240603_app_rpc.sql:531-536), so
+    --       a PREVIOUSLY approved version keeps status = 'approved' FOREVER.
+    --       With v1 'approved' and v2 'final', ORDER BY version_number DESC over
+    --       status = 'approved' picks v1 — the supplemental cloned the OLDER
+    --       version and silently dropped everything added in v2. Same family as
+    --       the ppmp_versions scoping fix at the bottom of this function: status
+    --       ALONE DOES NOT IDENTIFY ONE VERSION on either side of this trigger.
+    --
+    -- Neither case orphans anything — pr_items still resolve to the old rows —
+    -- which is why the 20260809 APP-amendment guard does not and cannot catch
+    -- it. Its predicate is deliberately aligned with the EDITABLE lookup above,
+    -- which this fix does not touch.
+    SELECT id INTO v_source_ver_id
       FROM procurements.app_versions
      WHERE app_id = v_app_id
-       AND status = 'approved'
+       AND status IN ('final', 'approved')
      ORDER BY version_number DESC
      LIMIT 1;
 
-    IF v_approved_ver_id IS NOT NULL THEN
+    -- UNREACHABLE AFTER THE FIX ABOVE. KEPT AS DEFENCE IN DEPTH, NOT DROPPED.
+    -- To be here at all, no version of this APP is editable, so every version is
+    -- in ('final','approved','superseded'). The set is never empty: every
+    -- APP-creation path inserts version 1 as 'draft' (this function, above, and
+    -- create_app 20240603_app_rpc.sql:649-653). And "all superseded" cannot
+    -- occur: the ONLY writer of 'superseded' is approve_app:532-536, which in
+    -- the same breath sets exactly one version to 'approved' and excludes it
+    -- from the supersede set (id <> v_version_id), and nothing anywhere moves a
+    -- version back off 'approved'. So IN ('final','approved') always matches at
+    -- least one row and this branch always runs.
+    --
+    -- record_consolidation_failure() is deliberately NOT used on the ELSE. It
+    -- marks NEW.id as failed, but NEW.id is the one PPMP that DOES land
+    -- correctly on this path — the missing items belong to the OTHER offices —
+    -- and the success marker at the end of this function would overwrite the
+    -- mark a few statements later anyway. RAISE WARNING is the honest
+    -- breadcrumb here and, unlike RAISE EXCEPTION, can never roll back the HOPE
+    -- approval this migration exists to protect.
+    IF v_source_ver_id IS NOT NULL THEN
       -- Clone items (excluding old items from this same PPMP)
       --
       -- MANUAL ENUMERATION, NOT SELECT *. This list must name every column of
@@ -547,7 +606,7 @@ BEGIN
         budget_adjusted_by,               -- 35 budget_adjusted_by
         budget_adjusted_at                -- 36 budget_adjusted_at
       FROM procurements.app_items
-      WHERE app_version_id = v_approved_ver_id
+      WHERE app_version_id = v_source_ver_id
         AND deleted_at IS NULL
         AND source_ppmp_id <> NEW.id;
 
@@ -562,8 +621,11 @@ BEGIN
         procurement_method, 0, 'draft',
         division_id, created_by
       FROM procurements.app_lots
-      WHERE app_version_id = v_approved_ver_id
+      WHERE app_version_id = v_source_ver_id
         AND deleted_at IS NULL;
+    ELSE
+      RAISE WARNING 'auto_populate_app_from_ppmp: APP % has no final/approved version to carry forward; supplemental version % was created holding only PPMP %',
+        v_app_id, v_app_version_id, NEW.id;
     END IF;
 
     -- Reset APP status

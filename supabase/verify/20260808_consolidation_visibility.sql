@@ -296,7 +296,68 @@ BEGIN
       'ASSERTION FAILED: auto_populate_app_from_ppmp no longer scopes the fresh-populate INSERT to pv.version_number = NEW.current_version — every amendment approval will re-consolidate previously approved PPMP versions, duplicating each project at full budget';
   END IF;
 
-  -- 3d. Clone fidelity. The supplemental carry-forward clone dropped four
+  -- 3d. CARRY-FORWARD SOURCE VERSION on the supplemental clone.
+  --
+  --     app_versions.status is one of ('draft','under_review',
+  --     'bac_finalization','final','approved','superseded')
+  --     (20240601_app_tables.sql:45-46). The editable-version lookup takes
+  --     NOT IN ('final','approved','superseded'); the versions that ARE the
+  --     current locked plan are its exact complement minus 'superseded', i.e.
+  --     IN ('final','approved'). This asserted set must admit BOTH values.
+  --
+  --     It read `status = 'approved'`, which broke in two separate ways:
+  --       (1) during the 'final' window of a division's first APP year there is
+  --           no 'approved' version at all, so the lookup returned NULL and the
+  --           clone was skipped — the supplemental held only the amending
+  --           PPMP's items, every other office's lines gone; and
+  --       (2) approve_app supersedes only versions NOT IN
+  --           ('approved','superseded') (20240603_app_rpc.sql:531-536), so a
+  --           previously approved version stays 'approved' forever. With v1
+  --           'approved' and v2 'final' the ORDER BY picked the STALE v1 and
+  --           silently dropped everything added in v2.
+  --     Both were reproduced on a throwaway cluster before the fix and shown
+  --     absent after it.
+  --
+  --     ANCHORED TO THE PREDICATE, NOT A SUBSTRING. A bare '%''final''%' check
+  --     would be COMPLETELY VACUOUS here: 'final' and 'approved' each appear
+  --     several times elsewhere in this same body — the editable lookup
+  --     (NOT IN ('final','approved','superseded')), the apps status reset
+  --     (IN ('approved','final','posted')) and the PPMP-side join
+  --     (pv.status = 'approved') — all of which survive this predicate's total
+  --     removal.
+  --
+  --     `status\s+IN` (not `status.*IN`) is what keeps the editable lookup from
+  --     satisfying this: in `status NOT IN (...)` the token after the
+  --     whitespace is NOT, so the match cannot start there. And requiring
+  --     `'final'\s*,\s*'approved'\s*\)` — closing paren, exactly two values —
+  --     is what keeps the three-value apps reset from satisfying it.
+  --
+  --     NEGATIVE-TESTED BY MUTATION on a throwaway cluster, not by deletion
+  --     alone. This assertion fires for all of: reverted to
+  --     `status = 'approved'`; narrowed to `status = 'final'`;
+  --     `status IN ('final')`; `status IN ('approved')`;
+  --     `status NOT IN ('final', 'approved')`; and the predicate deleted
+  --     outright. It ALSO fires on `status IN ('approved', 'final')` — a
+  --     semantically identical reordering. That is deliberate, same as 3c: fail
+  --     loud, then restore the canonical form. It does not fire on the shipped
+  --     body.
+  --
+  --     ON v_src RATHER THAN v_def, MEASURED RATHER THAN ASSUMED. With the
+  --     comments EXACTLY as they ship today, deleting the predicate is caught
+  --     against v_def too — the body's prose currently writes the set as
+  --     "i.e. IN ('final','approved')", without the leading `status` token the
+  --     regex needs. That is luck, not safety, and it was tested: rewording
+  --     that one comment to "i.e. status IN ('final', 'approved')" — the most
+  --     natural way anyone would phrase it — and deleting the predicate makes
+  --     the v_def form PASS VACUOUSLY while this v_src form still fires.
+  --     Verified both ways on a throwaway cluster. The body's comments now
+  --     name both values several times over, so v_src is mandatory here.
+  IF v_src !~ 'status\s+IN\s*\(\s*''final''\s*,\s*''approved''\s*\)' THEN
+    RAISE EXCEPTION
+      'ASSERTION FAILED: auto_populate_app_from_ppmp no longer sources the supplemental carry-forward clone from status IN (''final'', ''approved'') — the clone will be skipped during the ''final'' window (empty supplemental) or will clone a stale previously-approved version (silent loss of everything added since)';
+  END IF;
+
+  -- 3e. Clone fidelity. The supplemental carry-forward clone dropped four
   --     app_items columns added by later migrations, and neither INSERT wrote
   --     source_ppmp_version_id. Guard against the same omissions recurring.
   --     Dropping source_ppmp_lot_item_ids is the worst of them: NULL MEANS
@@ -327,7 +388,7 @@ BEGIN
       'ASSERTION FAILED: auto_populate_app_from_ppmp does not carry forward budget_adjusted_at';
   END IF;
 
-  -- 3e. The CSE / schedule propagation this function's live definition
+  -- 3f. The CSE / schedule propagation this function's live definition
   --     introduced (20260516). It is the thing most likely to be silently
   --     reverted by a copy-paste of the older 20260405 / 20240604 / 20240505
   --     bodies, all three of which are still on disk and still contain a
