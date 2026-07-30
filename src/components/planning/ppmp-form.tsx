@@ -17,12 +17,16 @@ import { createClient } from "@/lib/supabase/client"
 import type { FiscalYear, Office } from "@/types/database"
 import { BuildingIcon, CalendarIcon, ArrowRightIcon } from "lucide-react"
 
+/** An office + fiscal year pair that already has a non-cancelled PPMP. */
+type TakenSlot = { office_id: string; fiscal_year_id: string; status: string }
+
 export function PpmpForm() {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([])
   const [offices, setOffices] = useState<Office[]>([])
+  const [taken, setTaken] = useState<TakenSlot[]>([])
 
   const {
     handleSubmit, setValue, watch,
@@ -30,6 +34,9 @@ export function PpmpForm() {
   } = useForm<PpmpHeaderInput>({
     resolver: zodResolver(ppmpHeaderSchema),
   })
+
+  const selectedOfficeId = watch("office_id")
+  const selectedFiscalYearId = watch("fiscal_year_id")
 
   const officeItems = useMemo(
     () => Object.fromEntries(offices.map((o) => [o.id, `${o.name} (${o.code})`])),
@@ -41,15 +48,34 @@ export function PpmpForm() {
     [fiscalYears]
   )
 
+  // Offices that already have a PPMP for the selected fiscal year — only one
+  // PPMP may exist per office per year, so these cannot be chosen.
+  const takenOfficeIds = useMemo(
+    () => new Set(
+      taken
+        .filter((t) => t.fiscal_year_id === selectedFiscalYearId)
+        .map((t) => t.office_id)
+    ),
+    [taken, selectedFiscalYearId]
+  )
+
+  const selectedYear = fiscalYears.find((fy) => fy.id === selectedFiscalYearId)?.year
+  const selectedOfficeTaken = !!selectedOfficeId && takenOfficeIds.has(selectedOfficeId)
+  const allOfficesTaken = offices.length > 0 && offices.every((o) => takenOfficeIds.has(o.id))
+
   useEffect(() => {
     const supabase = createClient()
     Promise.all([
       supabase.schema("procurements").from("fiscal_years").select("*").order("year", { ascending: false }),
       supabase.schema("procurements").from("offices").select("id, name, code, office_type").is("deleted_at", null).order("name"),
-    ]).then(([fy, off]) => {
+      // RLS scopes this to the current division. Unlike the PPMP list views it is
+      // not filtered by creator or status, so it also covers other users' drafts.
+      supabase.schema("procurements").from("ppmps").select("office_id, fiscal_year_id, status").neq("status", "cancelled"),
+    ]).then(([fy, off, existing]) => {
       const years = (fy.data ?? []) as FiscalYear[]
       setFiscalYears(years)
       setOffices((off.data ?? []) as Office[])
+      setTaken((existing.data ?? []) as TakenSlot[])
       // Auto-select the active fiscal year
       const activeFy = years.find((y) => y.is_active)
       if (activeFy) setValue("fiscal_year_id", activeFy.id)
@@ -103,18 +129,37 @@ export function PpmpForm() {
             <SelectValue placeholder="Select the requesting office…" />
           </SelectTrigger>
           <SelectContent>
-            {offices.map((o) => (
-              <SelectItem key={o.id} value={o.id}>
-                <span className="font-medium">{o.name}</span>
-                <span className="ml-1.5 text-muted-foreground text-xs">({o.code})</span>
-              </SelectItem>
-            ))}
+            {offices.map((o) => {
+              const isTaken = takenOfficeIds.has(o.id)
+              return (
+                <SelectItem key={o.id} value={o.id} disabled={isTaken}>
+                  <span className="font-medium">{o.name}</span>
+                  <span className="ml-1.5 text-muted-foreground text-xs">({o.code})</span>
+                  {isTaken && (
+                    <span className="ml-1.5 text-muted-foreground text-xs">
+                      — PPMP already exists
+                    </span>
+                  )}
+                </SelectItem>
+              )
+            })}
           </SelectContent>
         </Select>
-        {errors.office_id
-          ? <p className="text-xs text-destructive">{errors.office_id.message}</p>
-          : <p className="text-xs text-muted-foreground">The office submitting this PPMP.</p>
-        }
+        {errors.office_id ? (
+          <p className="text-xs text-destructive">{errors.office_id.message}</p>
+        ) : selectedOfficeTaken ? (
+          <p className="text-xs text-destructive">
+            This office already has a{selectedYear ? ` FY ${selectedYear}` : ""} PPMP.
+            Open the existing one to edit or amend it.
+          </p>
+        ) : allOfficesTaken ? (
+          <p className="text-xs text-destructive">
+            Every office already has a{selectedYear ? ` FY ${selectedYear}` : ""} PPMP.
+            Choose a different fiscal year.
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">The office submitting this PPMP.</p>
+        )}
       </div>
 
       {/* Fiscal Year */}
@@ -156,7 +201,7 @@ export function PpmpForm() {
 
       {/* Actions */}
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={saving} className="gap-1.5">
+        <Button type="submit" disabled={saving || selectedOfficeTaken} className="gap-1.5">
           {saving ? "Creating…" : (
             <>
               Continue to Projects

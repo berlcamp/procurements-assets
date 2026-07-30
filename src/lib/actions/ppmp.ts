@@ -11,6 +11,7 @@ import type {
   PpmpProjectInput,
   PpmpReturnInput,
 } from "@/lib/schemas/ppmp";
+import { PPMP_STATUS_LABELS } from "@/lib/schemas/ppmp";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type {
@@ -590,6 +591,25 @@ export async function cancelPpmp(
   return { error: null };
 }
 
+/**
+ * Builds the user-facing message for the one-PPMP-per-office-per-fiscal-year rule
+ * (unique index `ppmps_office_fiscal_year_active_unique`).
+ */
+function duplicatePpmpMessage(
+  officeName: string | null,
+  year: number | string | null,
+  status: string | null,
+): string {
+  const office = officeName ?? "This office";
+  const fy = year ? `FY ${year}` : "this fiscal year";
+  const state = status ? PPMP_STATUS_LABELS[status] ?? status : null;
+  const suffix =
+    status === "approved" || status === "locked"
+      ? " Open it and create an amendment instead."
+      : " Open the existing PPMP to continue working on it.";
+  return `${office} already has a ${fy} PPMP${state ? ` (${state})` : ""}.${suffix}`;
+}
+
 export async function createPpmp(
   input: PpmpHeaderInput,
 ): Promise<{ id: string | null; error: string | null }> {
@@ -609,6 +629,33 @@ export async function createPpmp(
 
   if (!profile?.division_id) return { id: null, error: "No division assigned" };
 
+  // Only one non-cancelled PPMP may exist per office per fiscal year. Check up
+  // front so the user gets an actionable message instead of a raw unique-violation.
+  // Uses the admin client because the existing PPMP may be outside what this
+  // user is allowed to read (another creator's draft, no `ppmp.view_all`), yet
+  // it still blocks the insert.
+  const admin = createAdminClient();
+  const { data: existing } = await admin
+    .schema("procurements")
+    .from("ppmps")
+    .select("id, status, office:offices(name), fiscal_year:fiscal_years(year)")
+    .eq("division_id", profile.division_id)
+    .eq("office_id", input.office_id)
+    .eq("fiscal_year_id", input.fiscal_year_id)
+    .neq("status", "cancelled")
+    .maybeSingle();
+
+  if (existing) {
+    const office = Array.isArray(existing.office) ? existing.office[0] : existing.office;
+    const fy = Array.isArray(existing.fiscal_year)
+      ? existing.fiscal_year[0]
+      : existing.fiscal_year;
+    return {
+      id: null,
+      error: duplicatePpmpMessage(office?.name ?? null, fy?.year ?? null, existing.status),
+    };
+  }
+
   const { data: ppmp, error: ppmpError } = await supabase
     .schema("procurements")
     .from("ppmps")
@@ -624,6 +671,12 @@ export async function createPpmp(
     .select("id")
     .single();
 
+  // Backstop for the race between the check above and this insert, and for any
+  // row the check could not see (e.g. a soft-deleted PPMP, which the unique
+  // index still counts).
+  if (ppmpError?.code === "23505") {
+    return { id: null, error: duplicatePpmpMessage(null, null, null) };
+  }
   if (ppmpError) return { id: null, error: ppmpError.message };
   if (!ppmp?.id) return { id: null, error: "Failed to create PPMP" };
 
@@ -641,7 +694,34 @@ export async function createPpmp(
       created_by: user.id,
     });
 
-  if (versionError) return { id: null, error: versionError.message };
+  if (versionError) {
+    // The ppmps row is already committed. Left in place it would be a PPMP with
+    // no version — unusable, yet still occupying the office's slot in
+    // `ppmps_office_fiscal_year_active_unique` and blocking every retry. Roll it
+    // back. Uses the admin client because RLS grants end users no DELETE on
+    // ppmps (only `division_admin_manage_ppmps`, which needs `ppmp.approve`).
+    // Scoped to the row just created, and only while it is still an empty draft.
+    // ppmp_versions cascades on delete.
+    const { error: rollbackError } = await admin
+      .schema("procurements")
+      .from("ppmps")
+      .delete()
+      .eq("id", ppmp.id)
+      .eq("created_by", user.id)
+      .eq("status", "draft");
+
+    if (rollbackError) {
+      console.error("createPpmp rollback failed:", rollbackError, "ppmp_id:", ppmp.id);
+      return {
+        id: null,
+        error:
+          "Could not finish creating the PPMP, and cleaning up the partial record failed. " +
+          "Contact your division administrator before trying again.",
+      };
+    }
+
+    return { id: null, error: versionError.message };
+  }
 
   revalidatePath("/dashboard/planning/ppmp");
   return { id: ppmp.id, error: null };
