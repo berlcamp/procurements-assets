@@ -721,7 +721,17 @@ export type AppVersionType = 'original' | 'amendment' | 'supplemental'
 
 export type HopeReviewStatus = 'pending' | 'approved' | 'remarked'
 
-export type AppLotStatus = 'draft' | 'finalized' | 'in_procurement'
+/**
+ * procurements.app_lots.status.
+ *
+ * 20260810 split the old 'finalized' into two distinct gates:
+ *   composed — packaging is locked; required before the APP can be finalized.
+ *   released — ABC is fixed and the lot is biddable. Only reachable on an
+ *              approved Final APP, or under an authorized EPA.
+ * 'finalized' is RETIRED — it is no longer in the CHECK constraint and no row
+ * carries it. Do not reintroduce it.
+ */
+export type AppLotStatus = 'draft' | 'composed' | 'released' | 'in_procurement'
 
 export interface App {
   id: string
@@ -816,8 +826,25 @@ export interface AppLot {
   procurement_method: string
   total_estimated_cost: string
   status: AppLotStatus
+  /**
+   * Who/when locked COMPOSITION (draft -> composed). The column names are
+   * retained from before the 20260810 split; their meaning is composition, not
+   * release. Release is recorded in released_by/released_at.
+   */
   finalized_by: string | null
   finalized_at: string | null
+  /**
+   * Early Procurement Activity. When true the lot may be bid and awarded on an
+   * indicative APP; contract signing still requires an enacted appropriation.
+   * Added by 20260810_lot_two_gate_model.sql.
+   */
+  is_early_procurement: boolean
+  epa_authorized_by: string | null
+  epa_authorized_at: string | null
+  epa_justification: string | null
+  /** Who/when made the lot biddable (composed -> released). */
+  released_by: string | null
+  released_at: string | null
   division_id: string
   deleted_at: string | null
   created_at: string

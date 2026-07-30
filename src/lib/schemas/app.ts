@@ -60,8 +60,14 @@ export const HOPE_REVIEW_STATUS_LABELS: Record<string, string> = {
   remarked: "Remarked",
 }
 
+// Two-gate lot model (20260810). 'finalized' is retired: it split into
+// 'composed' (packaging locked) and 'released' (biddable). The key is kept for
+// one release so a lot row read from a pre-migration snapshot still renders a
+// label instead of falling through to a blank cell.
 export const APP_LOT_STATUS_LABELS: Record<string, string> = {
   draft:           "Draft",
-  finalized:       "Finalized",
+  composed:        "Composed",
+  released:        "Released",
   in_procurement:  "In Procurement",
+  finalized:       "Finalized (retired)",
 }
