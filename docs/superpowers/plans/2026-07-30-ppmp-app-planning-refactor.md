@@ -1073,9 +1073,14 @@ BEGIN
     RAISE EXCEPTION 'Insufficient permissions to finalize APP';
   END IF;
 
-  IF v_app.status NOT IN ('indicative','under_review','bac_finalization') THEN
-    RAISE EXCEPTION 'APP cannot be finalized from status %', v_app.status;
-  END IF;
+  -- AMENDED 2026-07-30: an app-status precheck was originally specified here
+  -- and has been REMOVED. It exists in neither the live source
+  -- (20260519_indicative_final_budget_tracking.sql) nor the superseded
+  -- 20240603_app_rpc.sql, so adding it in this task would have been an
+  -- unreviewed behaviour change to an approval path. Task 4 removes stage
+  -- writes and nothing else. (An explicit precheck is a reasonable hardening
+  -- — today the guard is only indirect, via "no active version" — but it
+  -- belongs in its own task.)
 
   SELECT id INTO v_version_id
     FROM procurements.app_versions
@@ -1109,14 +1114,22 @@ BEGIN
     RAISE EXCEPTION 'Cannot finalize APP: % approved items are not assigned to lots', v_unlotted;
   END IF;
 
+  -- AMENDED 2026-07-30: this block originally read `status = 'draft'` with the
+  -- message "lots are still in draft", contradicting the comment above that
+  -- claimed to keep the existing check. The live source
+  -- (20260519_indicative_final_budget_tracking.sql:65-74) uses
+  -- `status <> 'finalized'`, which is stricter — it requires EVERY lot to be
+  -- finalized, whereas `= 'draft'` would let an in_procurement lot through.
+  -- Keep the live logic verbatim. Task 11 is what converts this to the
+  -- composed/released model; Task 4 must not pre-empt it.
   SELECT COUNT(*) INTO v_unfinal_lot
     FROM procurements.app_lots
    WHERE app_version_id = v_version_id
      AND deleted_at IS NULL
-     AND status = 'draft';
+     AND status <> 'finalized';
 
   IF v_unfinal_lot > 0 THEN
-    RAISE EXCEPTION 'Cannot finalize APP: % lots are still in draft', v_unfinal_lot;
+    RAISE EXCEPTION 'Cannot finalize APP: % lots are not yet finalized', v_unfinal_lot;
   END IF;
 
   UPDATE procurements.app_items
