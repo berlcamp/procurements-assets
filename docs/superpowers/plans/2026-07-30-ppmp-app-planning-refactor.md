@@ -1988,8 +1988,27 @@ ALTER TABLE procurements.app_items
 COMMENT ON COLUMN procurements.app_items.source_ppmp_version_id IS
   'Immutable provenance: the approved PPMP version this APP item was consolidated from.';
 
-CREATE INDEX idx_app_items_source_version
+CREATE INDEX IF NOT EXISTS idx_app_items_source_version
   ON procurements.app_items(source_ppmp_version_id);
+
+-- ADDED 2026-07-30 — third occurrence of this defect class in this plan.
+-- Task 7 installed trg_app_items_immutable_when_locked, which raises on ANY
+-- write to an app_item whose owning version is outside
+-- ('draft','under_review','bac_finalization'). That trigger is now APPLIED on
+-- the live database. All three backfills below touch items under final,
+-- approved, and superseded versions, so without this suspension they abort with
+-- "Cannot modify APP items on a version with status ...".
+--
+-- These backfills write only derived provenance and a display sequence number
+-- — source_ppmp_version_id, which this migration introduces, and item_number,
+-- which is a label rather than plan content. No money, quantity, description,
+-- or review state is touched.
+--
+-- ALTER TABLE ... DISABLE TRIGGER is transactional, so a failure restores the
+-- guard. Do NOT use SET session_replication_role — it would also disable the
+-- audit trigger, and these writes must be audit-logged.
+ALTER TABLE procurements.app_items
+  DISABLE TRIGGER trg_app_items_immutable_when_locked;
 
 -- Backfill via the lot -> project -> version chain.
 UPDATE procurements.app_items ai
@@ -2034,7 +2053,13 @@ UPDATE procurements.app_items ai
  WHERE r.id = ai.id
    AND ai.item_number <> r.new_number;
 
-CREATE UNIQUE INDEX idx_app_items_unique_item_number
+-- Restore the guard immediately, before the index is built. This migration's
+-- verify script must assert tgenabled <> 'D' so a half-applied run cannot
+-- leave app_items writable on locked versions.
+ALTER TABLE procurements.app_items
+  ENABLE TRIGGER trg_app_items_immutable_when_locked;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_app_items_unique_item_number
   ON procurements.app_items (app_version_id, item_number)
   WHERE deleted_at IS NULL;
 
@@ -2081,7 +2106,11 @@ COMMENT ON FUNCTION procurements.remap_app_amendment_lots(UUID, UUID) IS
   'Re-assigns cloned APP items to cloned lots by PPMP provenance. Never joins on item_number, which is a display value.';
 ```
 
-Then, in the same migration, `CREATE OR REPLACE` `create_app_amendment` by copying its current body from **`20260516_app_cse_schedule_columns.sql:263` onward** (CORRECTED 2026-07-30 — *not* `20260405_ppmp_app_amendment_logic.sql`, which this plan originally cited; 20260516 redefines the function later and propagates the CSE and schedule columns, so copying the older body would drop them) and making exactly three edits:
+Then, in the same migration, `CREATE OR REPLACE` `create_app_amendment` by copying its current body from **`20260803_stop_stage_writes_from_workflow.sql`** — corrected twice now, so verify before copying with `grep -l "FUNCTION procurements.create_app_amendment(" supabase/migrations/*.sql | sort | tail -1`.
+
+This plan originally cited `20260405_ppmp_app_amendment_logic.sql`, then `20260516_app_cse_schedule_columns.sql`. Both are superseded: Task 4's `20260803` is the live definition and is already applied. It carries the CSE/schedule column propagation from 20260516 **plus** Task 4's own edits — `indicative_final` removed from the `app_versions` INSERT, and `apps.status` set to `'under_review'` rather than `'indicative'`. Copying either older body would silently revert Task 4.
+
+Make exactly three edits:
 
 1. add `source_ppmp_version_id` to both the INSERT column list and the SELECT list of the item-clone statement;
 2. replace the whole `UPDATE procurements.app_items new_ai ... old_ai.lot_id IS NOT NULL;` block (lines 320-331) with:
