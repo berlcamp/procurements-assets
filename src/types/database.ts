@@ -393,6 +393,58 @@ export interface BudgetCeiling {
 
 export type PlanningStage = "indicative" | "final" | "supplemental"
 
+// ============================================================
+// Planning rounds — 20260812_planning_rounds.sql
+//
+// A division-wide instruction for every office to revise its PPMP against a
+// newly recorded budget ceiling, with per-office compliance tracking.
+// ============================================================
+
+export type PlanningRoundStatus = "open" | "closed" | "cancelled"
+
+export type PlanningRoundOfficeStatus =
+  | "pending"
+  | "in_progress"
+  | "submitted"
+  | "approved"
+  | "skipped"
+
+export interface PlanningRound {
+  id: string
+  division_id: string
+  fiscal_year_id: string
+  budget_ceiling_id: string
+  /** Denormalised from the ceiling that triggered the round. */
+  planning_stage: PlanningStage
+  instructions: string | null
+  deadline: string | null
+  status: PlanningRoundStatus
+  opened_by: string | null
+  opened_at: string
+  closed_by: string | null
+  closed_at: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface PlanningRoundOffice {
+  id: string
+  planning_round_id: string
+  office_id: string
+  ppmp_id: string
+  /**
+   * The amendment version opened for this office. NULL when status is
+   * 'skipped' — the round could not open an amendment, and skip_reason says why.
+   */
+  ppmp_version_id: string | null
+  status: PlanningRoundOfficeStatus
+  skip_reason: string | null
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface BudgetAllocation {
   id: string
   division_id: string
