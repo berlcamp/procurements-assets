@@ -1,13 +1,19 @@
 import Link from "next/link"
-import { getMyPpmps, getPpmpsRequiringMyAction, getAllDivisionPpmps } from "@/lib/actions/ppmp"
+import {
+  getMyPpmps,
+  getPpmpsRequiringMyAction,
+  getAllDivisionPpmps,
+  getFailedConsolidationPpmps,
+} from "@/lib/actions/ppmp"
 import { getUserPermissions } from "@/lib/actions/roles"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { PlanningStageBadge } from "@/components/planning/ppmp-indicative-final-badge"
+import { ConsolidationStatusBadge } from "@/components/planning/consolidation-status-badge"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
-import { PlusIcon } from "lucide-react"
+import { PlusIcon, TriangleAlertIcon } from "lucide-react"
 import type { PpmpWithDetails } from "@/types/database"
 
 function PpmpTable({
@@ -50,7 +56,17 @@ function PpmpTable({
                 <TableCell>
                   <span className="font-mono text-sm">v{ppmp.current_version}</span>
                 </TableCell>
-                <TableCell><StatusBadge status={ppmp.status} /></TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <StatusBadge status={ppmp.status} />
+                    {/* Only the failure is surfaced here. 'pending' is the
+                        column default on every draft, so badging it would be
+                        noise; the detail page shows the full state. */}
+                    {ppmp.consolidation_status === "failed" ? (
+                      <ConsolidationStatusBadge status={ppmp.consolidation_status} />
+                    ) : null}
+                  </div>
+                </TableCell>
                 <TableCell>
                   {/* Stage of the current version. null = unknown (no qualifying
                       budget ceiling), shown as a dash rather than a guess. */}
@@ -86,11 +102,69 @@ function PpmpTable({
     </div>
   )
 }
+
+function FailedConsolidationPanel({ ppmps }: { ppmps: PpmpWithDetails[] }) {
+  return (
+    <section className="rounded-lg border border-destructive/40 bg-card overflow-hidden">
+      <div className="px-5 py-4 border-b border-destructive/40">
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-destructive">
+          <TriangleAlertIcon className="h-4 w-4" />
+          Approved, but missing from the APP
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          {ppmps.length === 1
+            ? "1 approved PPMP did not reach the Annual Procurement Plan."
+            : `${ppmps.length} approved PPMPs did not reach the Annual Procurement Plan.`}{" "}
+          Their items are absent from the plan. Recovering them requires an APP
+          amendment.
+        </p>
+      </div>
+      <ul className="divide-y">
+        {ppmps.map((ppmp) => {
+          const office = ppmp.office as { name: string } | undefined
+          const fy = ppmp.fiscal_year as { year: number } | undefined
+          return (
+            <li
+              key={ppmp.id}
+              className="flex flex-wrap items-start justify-between gap-3 px-5 py-4"
+            >
+              <div className="min-w-0 space-y-1">
+                <div className="text-sm font-medium">
+                  {office?.name ?? "—"}
+                  <span className="text-muted-foreground font-normal">
+                    {" · "}FY {fy?.year ?? "—"}
+                    {" · "}v{ppmp.current_version}
+                  </span>
+                </div>
+                {/* The reason is written by record_consolidation_failure() and
+                    is already phrased for a human. Show it verbatim rather than
+                    re-summarising it — it is the only place the cause is kept. */}
+                <p className="text-sm text-muted-foreground">
+                  {ppmp.consolidation_error ?? "No reason was recorded."}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                nativeButton={false}
+                render={<Link href={`/dashboard/planning/ppmp/${ppmp.id}`} />}
+              >
+                View
+              </Button>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
 export default async function PpmpListPage() {
-  const [myPpmps, actionPpmps, allDivisionPpmps, permissions] = await Promise.all([
+  const [myPpmps, actionPpmps, allDivisionPpmps, failedPpmps, permissions] = await Promise.all([
     getMyPpmps(),
     getPpmpsRequiringMyAction(),
     getAllDivisionPpmps(),
+    getFailedConsolidationPpmps(),
     getUserPermissions(),
   ])
 
@@ -112,6 +186,11 @@ export default async function PpmpListPage() {
           </Button>
         )}
       </div>
+
+      {/* Consolidation failures come first: an approved PPMP missing from the
+          APP is the one state on this screen where the office's belief and the
+          record disagree, and the notification that reports it may be missed. */}
+      {failedPpmps.length > 0 && <FailedConsolidationPanel ppmps={failedPpmps} />}
 
       {/* PPMP That Requires My Action */}
       <section className="rounded-lg border bg-card overflow-hidden">

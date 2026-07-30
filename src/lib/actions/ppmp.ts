@@ -437,6 +437,76 @@ export async function getPpmpsRequiringMyAction(
   return withCurrentPlanningStage(merged);
 }
 
+/**
+ * Returns PPMPs that were approved but whose items never reached the APP —
+ * `procurements.ppmps.consolidation_status = 'failed'`, written by
+ * `record_consolidation_failure()` in 20260808_consolidation_visibility.sql.
+ * This is the only consumer of `idx_ppmps_consolidation_failed`.
+ *
+ * AUDIENCE mirrors, exactly, the two audiences that migration already notifies
+ * (see its INSERT INTO procurements.notifications):
+ *   - holders of `app.bac_manage_lots` — every failure in the division. They are
+ *     the only people who can recover one, since recovery means an APP amendment.
+ *   - everyone else — failures raised by their OWN office: the office that was
+ *     harmed and still believes its plan is in the APP.
+ * The UI must not be narrower than the notification, or a user who is told
+ * something is wrong has nowhere to go and see it.
+ *
+ * RLS ALONE IS NOT ENOUGH TO SCOPE THIS. `division_read_ppmps`
+ * (20240502_ppmp_rls.sql:89) is `FOR SELECT TO authenticated` with only a
+ * division check and no permission gate, so an unscoped query here would show
+ * every office's failures to every user in the division — wider than this app's
+ * own visibility model, which gates the division-wide list behind
+ * `ppmp.view_all` (see getAllDivisionPpmps). Scope it in the action, as the
+ * sibling list actions do.
+ */
+export async function getFailedConsolidationPpmps(
+  fiscalYearId?: string,
+): Promise<PpmpWithDetails[]> {
+  const supabase = await createClient();
+  const ctx = await getUserRoleContext(supabase);
+  if (!ctx) return [];
+
+  const { data: canFix, error: permError } = await supabase
+    .schema("procurements")
+    .rpc("has_permission", { p_permission_code: "app.bac_manage_lots" });
+
+  if (permError) {
+    console.error(
+      "getFailedConsolidationPpmps permission check error:",
+      permError,
+    );
+    return [];
+  }
+
+  const officeId = ctx.profile?.office_id ?? null;
+  // Neither audience: no permission to fix, and no office to have been harmed.
+  if (!canFix && officeId === null) return [];
+
+  let query = supabase
+    .schema("procurements")
+    .from("ppmps")
+    .select(PPMP_SELECT)
+    .eq("consolidation_status", "failed")
+    .neq("status", "cancelled")
+    // The backfill marks soft-deleted PPMPs 'not_applicable', but a row marked
+    // 'failed' and soft-deleted afterwards would linger as a false alarm.
+    // division_read_ppmps filters these; division_admin_manage_ppmps does not.
+    .is("deleted_at", null)
+    .order("updated_at", { ascending: false });
+
+  if (!canFix && officeId !== null) query = query.eq("office_id", officeId);
+  if (fiscalYearId) query = query.eq("fiscal_year_id", fiscalYearId);
+
+  const { data, error } = await query;
+  if (error) {
+    console.error("getFailedConsolidationPpmps error:", error);
+    return [];
+  }
+  const rows = withCurrentPlanningStage((data ?? []) as PpmpWithDetails[]);
+  return enrichPpmpsWithCreators(supabase, rows);
+}
+
 export async function getPpmpById(id: string): Promise<PpmpWithDetails | null> {
   const supabase = await createClient();
   const { data, error } = await supabase

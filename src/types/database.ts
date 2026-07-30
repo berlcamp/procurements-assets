@@ -550,9 +550,13 @@ export interface Ppmp {
   approved_at: string | null
   approval_notes: string | null
   /**
-   * Whether this PPMP's approved items reached the APP.
-   * Added by supabase/migrations/20260808_consolidation_visibility.sql, which is
-   * written but NOT yet applied — do not read this field at runtime until it is.
+   * Whether this PPMP's approved items reached the APP. Added and backfilled by
+   * supabase/migrations/20260808_consolidation_visibility.sql, applied and
+   * verified 2026-07-31, so these are safe to read at runtime.
+   *
+   * `consolidation_error` is set only alongside status 'failed';
+   * `consolidated_at` only alongside 'consolidated' — the migration clears it on
+   * every failure, so a non-null value never describes an undone consolidation.
    */
   consolidation_status: ConsolidationStatus
   consolidation_error: string | null

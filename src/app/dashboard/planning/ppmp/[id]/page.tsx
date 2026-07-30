@@ -9,9 +9,11 @@ import { AmountDisplay } from "@/components/shared/amount-display"
 import { Separator } from "@/components/ui/separator"
 import { PpmpApprovalChain } from "@/components/planning/ppmp-approval-chain"
 import { PlanningStageBadge } from "@/components/planning/ppmp-indicative-final-badge"
+import { ConsolidationStatusBadge } from "@/components/planning/consolidation-status-badge"
 import { PpmpProjectTable } from "@/components/planning/ppmp-item-table"
 import { PpmpReviewActions } from "@/components/planning/ppmp-review-actions"
-import { EditIcon, HistoryIcon } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { EditIcon, HistoryIcon, TriangleAlertIcon } from "lucide-react"
 import { PpmpSubmitForReviewButton } from "@/components/planning/ppmp-submit-for-review-button"
 import { PpmpCancelButton } from "@/components/planning/ppmp-cancel-button"
 import { PpmpAmendmentButton } from "@/components/planning/ppmp-amendment-button"
@@ -119,6 +121,27 @@ export default async function PpmpDetailPage({ params }: Props) {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main — projects */}
         <div className="lg:col-span-2 space-y-4">
+          {/* An approved PPMP that never reached the APP. Shown above the
+              projects because the table below lists items that look planned
+              and are not in the plan. See 20260808_consolidation_visibility. */}
+          {ppmp.consolidation_status === "failed" && (
+            <Alert variant="destructive">
+              <TriangleAlertIcon />
+              <AlertTitle>This PPMP is not in the APP</AlertTitle>
+              <AlertDescription>
+                <p>
+                  {ppmp.consolidation_error ??
+                    "This PPMP was approved but its items did not reach the Annual Procurement Plan."}
+                </p>
+                <p>
+                  The projects below are approved but absent from the plan.
+                  Recovering them requires an APP amendment, which the BAC
+                  creates; the BAC and this office have both been notified.
+                </p>
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="rounded-lg border bg-card overflow-hidden">
             <div className="px-5 py-4 border-b">
               <h2 className="text-lg font-semibold">Procurement Projects</h2>
@@ -191,6 +214,20 @@ export default async function PpmpDetailPage({ params }: Props) {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Version</span>
                 <span className="font-mono font-medium">v{ppmp.current_version}</span>
+              </div>
+              {/* Full consolidation state, all four values — unlike the list,
+                  which badges only 'failed'. consolidated_at is meaningful only
+                  when it succeeded: 20260808 clears it on every failure. */}
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground">In the APP</span>
+                <span className="text-right">
+                  <ConsolidationStatusBadge status={ppmp.consolidation_status} />
+                  {ppmp.consolidation_status === "consolidated" && ppmp.consolidated_at ? (
+                    <span className="block text-xs text-muted-foreground">
+                      {new Date(ppmp.consolidated_at).toLocaleDateString("en-PH")}
+                    </span>
+                  ) : null}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Projects</span>
