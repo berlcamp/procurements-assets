@@ -172,7 +172,14 @@ BEGIN
 
   -- (ii) consolidated_at is cleared, so 'failed' never carries a timestamp
   --      asserting a success that the amendment soft-delete has since undone.
-  IF v_src NOT LIKE '%consolidated_at%NULL%' THEN
+  --
+  --      Anchored to the ASSIGNMENT, not to a loose '%consolidated_at%NULL%'.
+  --      That looser form was vacuous: the notification predicate later in this
+  --      same body contains 'up.deleted_at IS NULL' and 'ur.revoked_at IS NULL',
+  --      either of which satisfies a trailing %NULL%. Reverting the clear to
+  --      'consolidated_at = NOW()' — the most plausible regression — passed the
+  --      loose check. Proven by mutation, not assumed.
+  IF v_src !~ 'consolidated_at\s*=\s*NULL' THEN
     RAISE EXCEPTION
       'ASSERTION FAILED: record_consolidation_failure does not clear consolidated_at';
   END IF;
