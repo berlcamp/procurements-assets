@@ -2151,7 +2151,16 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 **Interfaces:**
 - Produces: columns `ppmps.consolidation_status`, `ppmps.consolidation_error`, `ppmps.consolidated_at`; function `procurements.record_consolidation_failure(p_ppmp_id UUID, p_reason TEXT)`; rewritten `auto_populate_app_from_ppmp()`.
 
-**Context:** the trigger has silent `RETURN NEW` exits when no editable APP version exists (`20260405_ppmp_app_amendment_logic.sql:161-163`, plus the earlier copies at `20240604_app_triggers.sql:156-158` and `20240505_ppmp_restructure.sql:679-681`). HOPE signs the PPMP, the office believes it is in the plan, and it is not.
+**Context:** the trigger has silent `RETURN NEW` exits when no editable APP version exists. HOPE signs the PPMP, the office believes it is in the plan, and it is not.
+
+> **CORRECTED 2026-07-30 (P3, fourth instance).** This section previously cited `20260405_ppmp_app_amendment_logic.sql:161-163` as the current definition, with `20240604_app_triggers.sql:156-158` and `20240505_ppmp_restructure.sql:679-681` as "earlier copies". All three are superseded. The **live definition is `20260516_app_cse_schedule_columns.sql:53`** (silent exits at `:79`, `:205`; the status guard is at `:68-69`). Copying the 20260405 body would revert the CSE/schedule column propagation — the same data-loss class the Task 4 pre-dispatch audit caught. Verify before copying:
+> `grep -l "FUNCTION procurements.auto_populate_app_from_ppmp()" supabase/migrations/*.sql | sort | tail -1`
+
+> **SCOPE EXPANSION 2026-07-30 (user-authorised).** This task rewrites `auto_populate_app_from_ppmp`, which is also the home of two defects found during the Task 8 review. Fix them in the same rewrite rather than rewriting this body a second time later:
+> 1. **P-2 clone drift (pre-existing production bug).** The supplemental-version item clone at `20260516:148-175` drops `indicative_budget`, `budget_adjusted_by`, `budget_adjusted_at`, and `source_ppmp_lot_item_ids`. Dropping the last one is worse than data loss: NULL *means* "covers every line of the source PPMP lot", so where a lot was split in two, both clones become NULL and both claim the full line set at half budget each — silent double-claiming.
+> 2. **I4 provenance gap.** Neither INSERT writes `source_ppmp_version_id` (added by the now-applied 20260807). `20260516:148` actively strips it on carry-forward; `20260516:218` never sets it. For the latter, `pp.ppmp_version_id` is already in scope via the `ppmp_projects pp` join.
+>
+> Both item-clone column lists must be audited INSERT-vs-SELECT positionally, exactly as Task 8's was — a same-typed swap is silent and permanent.
 
 - [ ] **Step 1: Write the failing assertion script**
 
@@ -2372,6 +2381,13 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Produces: function `procurements.ppmp_has_inflight_procurement(p_ppmp_id UUID) RETURNS TABLE(app_item_id UUID, item_number INTEGER, general_description TEXT, reason TEXT)`; permission `ppmp.amend_override`; `create_ppmp_amendment(p_ppmp_id UUID, p_justification TEXT, p_force BOOLEAN DEFAULT false)`.
 
 **Context:** amendment approval soft-deletes every `app_item` with `source_ppmp_id = NEW.id` (`20260405_ppmp_app_amendment_logic.sql:166-172`) with no check on `app_lots.status` and no check for `pr_items.app_item_id` references. Because it is a soft delete, FKs still resolve, so a live PR and an active bidding can point at an APP line that no longer exists.
+
+> **CORRECTED 2026-07-30 (P3, fifth instance).** The **live definition of `create_ppmp_amendment` is `20260803_stop_stage_writes_from_workflow.sql:316-328`**, not the 20260405 body cited above. Copying 20260405 would revert Task 4's stage-write removal, which is already applied to the live database. Verify before copying:
+> `grep -l "FUNCTION procurements.create_ppmp_amendment(" supabase/migrations/*.sql | sort | tail -1`
+
+> **SCOPE EXPANSION 2026-07-30 (user-authorised).** This task rewrites `create_ppmp_amendment`, which carries pre-existing production bug **P-1**. Fix it in the same rewrite. Its `ppmp_lots` clone (`20260803:316-328`) enumerates only 13 of the table's 22 columns, dropping all six added by `20260516_app_cse_schedule_columns.sql:25,34`: `is_cse`, `schedule_quarter`, `advertisement_date`, `bid_opening_date`, `award_date`, `contract_signing_date`. Because `is_cse` is `NOT NULL DEFAULT false`, **every PPMP amendment today silently reclassifies every CSE lot as non-CSE** and blanks all four GPPB schedule dates. It then propagates: the amended PPMP re-populates the APP via `auto_populate_app_from_ppmp`, which reads `pl.is_cse` and `pl.schedule_quarter`, so the loss lands on the APP itself.
+>
+> Reconstruct the authoritative `ppmp_lots` column list from `CREATE TABLE` plus every `ALTER TABLE ... ADD COLUMN` in filename order, then audit the clone INSERT-vs-SELECT positionally. The `ppmp_versions`, `ppmp_projects`, and `ppmp_lot_items` clones in this same function were audited during the Task 8 review and are **clean** — leave them alone. Note `ppmp_lot_items.estimated_total_cost` is `GENERATED ALWAYS ... STORED` and is correctly excluded from its clone.
 
 - [ ] **Step 1: Write the failing assertion script**
 
