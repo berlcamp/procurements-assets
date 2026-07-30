@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { AmountDisplay } from "@/components/shared/amount-display"
-import { PpmpIndicativeFinalBadge } from "@/components/planning/ppmp-indicative-final-badge"
+import { PlanningStageBadge } from "@/components/planning/ppmp-indicative-final-badge"
 import { PpmpVersionDiff } from "@/components/planning/ppmp-version-diff"
 import { PPMP_VERSION_TYPE_LABELS } from "@/lib/schemas/ppmp"
 
@@ -69,7 +69,7 @@ export default async function PpmpVersionsPage({ params }: Props) {
                   </Badge>
                 </TableCell>
                 <TableCell><StatusBadge status={v.status} /></TableCell>
-                <TableCell><PpmpIndicativeFinalBadge value={v.indicative_final} /></TableCell>
+                <TableCell><PlanningStageBadge value={v.planning_stage} /></TableCell>
                 <TableCell className="text-right">
                   <AmountDisplay amount={v.total_estimated_budget} />
                 </TableCell>

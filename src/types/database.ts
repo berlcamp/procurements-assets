@@ -649,6 +649,8 @@ export interface PpmpVersionHistoryRow {
   version_type: PpmpVersionType
   status: PpmpVersionStatus
   indicative_final: IndicativeFinal
+  planning_stage: "indicative" | "final" | "supplemental" | null
+  budget_ceiling_id: string | null
   total_estimated_budget: string
   amendment_justification: string | null
   approved_by: string | null
