@@ -6,7 +6,7 @@ import {
 import { createClient } from "@/lib/supabase/server"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
-import { PpmpIndicativeFinalBadge } from "@/components/planning/ppmp-indicative-final-badge"
+import { PlanningStageBadge } from "@/components/planning/ppmp-indicative-final-badge"
 import { AppLotManager } from "@/components/planning/app-lot-manager"
 import { ArrowLeft } from "lucide-react"
 
@@ -56,7 +56,7 @@ export default async function AppLotsPage({ params }: Props) {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">BAC Lots — FY {fy?.year ?? "—"}</h1>
-            <PpmpIndicativeFinalBadge value={app.indicative_final} />
+            <PlanningStageBadge value={version?.planning_stage ?? null} />
           </div>
           <p className="text-base text-muted-foreground">
             Create lots and assign individual HOPE-approved line items for procurement grouping · <StatusBadge status={app.status} />

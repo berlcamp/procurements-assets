@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/shared/status-badge"
 import { AmountDisplay } from "@/components/shared/amount-display"
 import { Separator } from "@/components/ui/separator"
 import { PpmpApprovalChain } from "@/components/planning/ppmp-approval-chain"
-import { PpmpIndicativeFinalBadge } from "@/components/planning/ppmp-indicative-final-badge"
+import { PlanningStageBadge } from "@/components/planning/ppmp-indicative-final-badge"
 import { PpmpProjectTable } from "@/components/planning/ppmp-item-table"
 import { PpmpReviewActions } from "@/components/planning/ppmp-review-actions"
 import { EditIcon, HistoryIcon } from "lucide-react"
@@ -83,7 +83,7 @@ export default async function PpmpDetailPage({ params }: Props) {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">{office?.name ?? "PPMP"}</h1>
-            <PpmpIndicativeFinalBadge value={ppmp.indicative_final} />
+            <PlanningStageBadge value={version?.planning_stage ?? null} />
           </div>
           <p className="text-base text-muted-foreground">
             FY {fy?.year} · Version {ppmp.current_version} · <StatusBadge status={ppmp.status} />

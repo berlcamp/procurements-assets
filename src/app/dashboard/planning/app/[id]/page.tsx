@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { AmountDisplay } from "@/components/shared/amount-display"
-import { PpmpIndicativeFinalBadge } from "@/components/planning/ppmp-indicative-final-badge"
+import { PlanningStageBadge } from "@/components/planning/ppmp-indicative-final-badge"
 import { AppItemsTable } from "@/components/planning/app-items-table"
 import { AppStatusDashboard } from "@/components/planning/app-status-dashboard"
 import { AppWorkflowActions } from "@/components/planning/app-workflow-actions"
@@ -64,7 +64,7 @@ export default async function AppDetailPage({ params }: Props) {
             <h1 className="text-2xl font-bold">
               Annual Procurement Plan — FY {fy?.year ?? "—"}
             </h1>
-            <PpmpIndicativeFinalBadge value={app.indicative_final} />
+            <PlanningStageBadge value={version?.planning_stage ?? null} />
           </div>
           <p className="text-base text-muted-foreground">
             Version {app.current_version} · <StatusBadge status={app.status} />

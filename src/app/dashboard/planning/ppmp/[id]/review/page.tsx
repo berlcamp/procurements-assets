@@ -7,7 +7,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { PpmpApprovalChain } from "@/components/planning/ppmp-approval-chain"
-import { PpmpIndicativeFinalBadge } from "@/components/planning/ppmp-indicative-final-badge"
+import { PlanningStageBadge } from "@/components/planning/ppmp-indicative-final-badge"
 import { PpmpProjectTable } from "@/components/planning/ppmp-item-table"
 import { PpmpReviewActions } from "@/components/planning/ppmp-review-actions"
 import { PpmpRemarks } from "@/components/planning/ppmp-remarks"
@@ -44,7 +44,7 @@ export default async function PpmpReviewPage({ params }: Props) {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">PPMP Review — {office?.name}</h1>
-            <PpmpIndicativeFinalBadge value={ppmp.indicative_final} />
+            <PlanningStageBadge value={version?.planning_stage ?? null} />
           </div>
           <p className="text-sm text-muted-foreground">
             FY {fy?.year} · <StatusBadge status={ppmp.status} />

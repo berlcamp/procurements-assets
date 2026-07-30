@@ -4,6 +4,7 @@ import { getAppById, getAppVersionHistory } from "@/lib/actions/app"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { StatusBadge } from "@/components/shared/status-badge"
+import { PlanningStageBadge } from "@/components/planning/ppmp-indicative-final-badge"
 import { AmountDisplay } from "@/components/shared/amount-display"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -68,9 +69,7 @@ export default async function AppVersionsPage({ params }: Props) {
                   </TableCell>
                   <TableCell><StatusBadge status={v.status} /></TableCell>
                   <TableCell>
-                    <Badge variant={v.indicative_final === "final" ? "default" : "outline"}>
-                      {v.indicative_final.toUpperCase()}
-                    </Badge>
+                    <PlanningStageBadge value={v.planning_stage} />
                   </TableCell>
                   <TableCell className="text-right">
                     <AmountDisplay amount={v.total_estimated_cost} className="text-sm" />

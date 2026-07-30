@@ -3,7 +3,7 @@ import Link from "next/link"
 import { getAppById, getCurrentAppVersion, getAppItems } from "@/lib/actions/app"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/shared/status-badge"
-import { PpmpIndicativeFinalBadge } from "@/components/planning/ppmp-indicative-final-badge"
+import { PlanningStageBadge } from "@/components/planning/ppmp-indicative-final-badge"
 import { AppHopeReview } from "@/components/planning/app-hope-review"
 import { ArrowLeft } from "lucide-react"
 
@@ -28,7 +28,7 @@ export default async function AppReviewPage({ params }: Props) {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">HOPE Review — FY {fy?.year ?? "—"}</h1>
-            <PpmpIndicativeFinalBadge value={app.indicative_final} />
+            <PlanningStageBadge value={version?.planning_stage ?? null} />
           </div>
           <p className="text-base text-muted-foreground">
             Review each PPMP row: approve or add remarks · <StatusBadge status={app.status} />

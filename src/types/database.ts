@@ -548,6 +548,8 @@ export interface PpmpVersion {
   snapshot_data: Record<string, unknown> | null
   status: PpmpVersionStatus
   indicative_final: IndicativeFinal
+  planning_stage: "indicative" | "final" | "supplemental" | null
+  budget_ceiling_id: string | null
   approved_by: string | null
   approved_at: string | null
   office_id: string
@@ -708,6 +710,8 @@ export interface AppVersion {
   snapshot_data: Record<string, unknown> | null
   status: AppVersionStatus
   indicative_final: IndicativeFinal
+  planning_stage: "indicative" | "final" | "supplemental" | null
+  budget_ceiling_id: string | null
   approved_by: string | null
   approved_at: string | null
   created_at: string
