@@ -613,10 +613,45 @@ export interface Ppmp {
   consolidation_status: ConsolidationStatus
   consolidation_error: string | null
   consolidated_at: string | null
+  /**
+   * True while a draft amendment version exists. Added by
+   * 20260813_version_authoritative_status.sql, which also stopped
+   * create_ppmp_amendment resetting `status` to 'draft' — so during a revision
+   * `status` keeps describing the last APPROVED version (still operative, and
+   * still the basis for procurement) while this flag carries "a revision is in
+   * progress". Read both; neither alone tells you the state.
+   */
+  has_open_amendment: boolean
   deleted_at: string | null
   created_at: string
   updated_at: string
   created_by: string | null
+}
+
+/**
+ * procurements.v_ppmp_current_state — the authoritative read model.
+ *
+ * The operative approved version and any in-progress version side by side, so a
+ * caller never has to infer state from the parent's status alone. The view is
+ * security_invoker, so the caller's RLS applies.
+ */
+export interface PpmpCurrentState {
+  ppmp_id: string
+  division_id: string
+  office_id: string
+  fiscal_year_id: string
+  document_status: PpmpStatus
+  consolidation_status: ConsolidationStatus
+  has_open_amendment: boolean
+  approved_version_id: string | null
+  approved_version_number: number | null
+  approved_planning_stage: PlanningStage | null
+  approved_total: string | null
+  approved_at: string | null
+  draft_version_id: string | null
+  draft_version_number: number | null
+  draft_planning_stage: PlanningStage | null
+  draft_total: string | null
 }
 
 export interface PpmpVersion {
