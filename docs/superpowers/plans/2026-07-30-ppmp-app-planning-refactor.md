@@ -76,25 +76,38 @@
 
 | File | Responsibility |
 |---|---|
+> **Numbering corrected 2026-07-30.** Two migrations were added during execution
+> that this table originally omitted (`20260801a`, `20260804`), so everything
+> from `ppmp_content_immutability` onward shifted **+1** from the numbers
+> originally written here. The table below is now authoritative. Separately, the
+> original table and the Task 19/20 bodies disagreed with each other on
+> `schema_hygiene_dates` and `schema_hygiene_fund_source` — both are now
+> reconciled. Verified: 19 distinct numbers, zero collisions, and every applied
+> file on disk matches this table.
+
+| File | Responsibility |
+|---|---|
 | `20260801_budget_ceilings.sql` | Ceiling entity, RLS, permissions, stage-resolution helper |
+| `20260801a_ceiling_rpc_wrapper.sql` | `public` wrapper so `fiscal_year_planning_stage` is reachable via `supabase.rpc()` (added during Task 2) |
 | `20260802_planning_stage_columns.sql` | `planning_stage` + `budget_ceiling_id` on both version tables, set-on-insert trigger |
 | `20260803_stop_stage_writes_from_workflow.sql` | Rewrite 5 RPCs/triggers to stop writing `indicative_final` |
-| `20260804_ppmp_content_immutability.sql` | Triggers + RLS predicates locking approved PPMP content |
-| `20260805_app_content_immutability.sql` | Same for `app_items` / `app_versions` |
-| `20260806_app_item_provenance.sql` | `source_ppmp_version_id`, partial unique on `item_number`, amendment re-map fix |
-| `20260807_consolidation_visibility.sql` | Loud failures + `consolidation_status` on `ppmps` |
-| `20260808_amendment_guards.sql` | Block PPMP amendment when derived APP items are in flight |
-| `20260809_lot_two_gate_model.sql` | `composed`/`released` states, EPA flags, `release_app_lot()` |
-| `20260810_epa_procurement_gates.sql` | Procurement/PR gates moved to lot state + contract-signing ceiling gate |
-| `20260811_planning_rounds.sql` | Round tables + `open_planning_round()` |
-| `20260812_version_authoritative_status.sql` | Stop resetting `ppmps.status` on amendment |
-| `20260813_lot_abc_reconciliation.sql` | Derive lot ABC from line items |
-| `20260814_app_total_definitions.sql` | Split `total_estimated_cost` / `total_approved_cost` |
-| `20260815_obligation_adjust_on_award.sql` | Release excess obligation at contract amount |
-| `20260816_secretariat_review_step.sql` | BAC Secretariat conformity review; HOPE → document-level |
-| `20260817_schema_hygiene_dates.sql` | TEXT dates → `DATE` columns + backfill |
-| `20260818_schema_hygiene_fund_source.sql` | `source_of_funds` TEXT → `fund_source_id` FK |
-| `20260819_orphan_permission_cleanup.sql` | Remove 4 never-checked permission codes |
+| `20260804_version_history_planning_stage.sql` | `get_ppmp_version_history()` returns `planning_stage` (added during Task 5 — the version-history page was still surfacing the inverted flag) |
+| `20260805_ppmp_content_immutability.sql` | Triggers + RLS predicates locking approved PPMP content |
+| `20260806_app_content_immutability.sql` | Same for `app_items` / `app_versions` |
+| `20260807_app_item_provenance.sql` | `source_ppmp_version_id`, partial unique on `item_number`, amendment re-map fix |
+| `20260808_consolidation_visibility.sql` | Loud failures + `consolidation_status` on `ppmps` |
+| `20260809_amendment_guards.sql` | Block PPMP amendment when derived APP items are in flight |
+| `20260810_lot_two_gate_model.sql` | `composed`/`released` states, EPA flags, `release_app_lot()` |
+| `20260811_epa_procurement_gates.sql` | Procurement/PR gates moved to lot state + contract-signing ceiling gate |
+| `20260812_planning_rounds.sql` | Round tables + `open_planning_round()` |
+| `20260813_version_authoritative_status.sql` | Stop resetting `ppmps.status` on amendment |
+| `20260814_lot_abc_reconciliation.sql` | Derive lot ABC from line items |
+| `20260815_app_total_definitions.sql` | Split `total_estimated_cost` / `total_approved_cost` |
+| `20260816_obligation_adjust_on_award.sql` | Release excess obligation at contract amount |
+| `20260817_secretariat_review_step.sql` | BAC Secretariat conformity review; HOPE → document-level |
+| `20260818_schema_hygiene_dates.sql` | TEXT dates → `DATE` columns + backfill |
+| `20260819_schema_hygiene_fund_source.sql` | `source_of_funds` TEXT → `fund_source_id` FK |
+| `20260820_orphan_permission_cleanup.sql` | Remove 4 never-checked permission codes |
 
 **New verify scripts:** `supabase/verify/<same-basename>.sql` — one per migration.
 
@@ -1321,15 +1334,15 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 6: Lock approved PPMP content
 
 **Files:**
-- Create: `supabase/migrations/20260804_ppmp_content_immutability.sql`
-- Create: `supabase/verify/20260804_ppmp_content_immutability.sql`
+- Create: `supabase/migrations/20260805_ppmp_content_immutability.sql`
+- Create: `supabase/verify/20260805_ppmp_content_immutability.sql`
 
 **Interfaces:**
 - Produces: function `procurements.ppmp_version_is_editable(p_ppmp_version_id UUID) RETURNS BOOLEAN`; trigger function `procurements.prevent_locked_ppmp_content_change()`; triggers on `ppmp_projects`, `ppmp_lots`, `ppmp_lot_items`; tightened RLS policies on the same three tables.
 
 - [ ] **Step 1: Write the failing assertion script**
 
-Create `supabase/verify/20260804_ppmp_content_immutability.sql`:
+Create `supabase/verify/20260805_ppmp_content_immutability.sql`:
 
 ```sql
 DO $$
@@ -1357,7 +1370,7 @@ BEGIN
   END LOOP;
 END $$;
 
-SELECT 'PASS: 20260804_ppmp_content_immutability' AS result;
+SELECT 'PASS: 20260805_ppmp_content_immutability' AS result;
 ```
 
 - [ ] **Step 2: Ask the user to run it and confirm it fails**
@@ -1366,7 +1379,7 @@ Expected: `ERROR: ASSERTION FAILED: ppmp_version_is_editable() missing`
 
 - [ ] **Step 3: Write the migration**
 
-Create `supabase/migrations/20260804_ppmp_content_immutability.sql`:
+Create `supabase/migrations/20260805_ppmp_content_immutability.sql`:
 
 ```sql
 -- ============================================================
@@ -1520,7 +1533,7 @@ CREATE POLICY "end_user_manage_ppmp_lot_items" ON procurements.ppmp_lot_items
 
 - [ ] **Step 4: Ask the user to apply and re-run the assertion script**
 
-Expected: `PASS: 20260804_ppmp_content_immutability`
+Expected: `PASS: 20260805_ppmp_content_immutability`
 
 - [ ] **Step 5: Ask the user to run the negative test**
 
@@ -1562,7 +1575,7 @@ Expected: `NOTICE: PASS: blocked with -> Cannot modify ppmp_lots on a PPMP versi
 - [ ] **Step 6: Commit**
 
 ```bash
-git add supabase/migrations/20260804_ppmp_content_immutability.sql supabase/verify/20260804_ppmp_content_immutability.sql
+git add supabase/migrations/20260805_ppmp_content_immutability.sql supabase/verify/20260805_ppmp_content_immutability.sql
 git commit -m "fix(app): lock PPMP projects, lots, and items once out of draft
 
 Adds ppmp_version_is_editable() plus BEFORE INSERT/UPDATE/DELETE
@@ -1578,8 +1591,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 7: Lock approved APP content
 
 **Files:**
-- Create: `supabase/migrations/20260805_app_content_immutability.sql`
-- Create: `supabase/verify/20260805_app_content_immutability.sql`
+- Create: `supabase/migrations/20260806_app_content_immutability.sql`
+- Create: `supabase/verify/20260806_app_content_immutability.sql`
 
 **Interfaces:**
 - Produces: function `procurements.app_version_is_editable(p_app_version_id UUID) RETURNS BOOLEAN`; trigger functions `procurements.prevent_locked_app_item_change()` and `procurements.prevent_approved_app_version_update()`; tightened `division_admin_manage_app_items` policy.
@@ -1588,7 +1601,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing assertion script**
 
-Create `supabase/verify/20260805_app_content_immutability.sql`:
+Create `supabase/verify/20260806_app_content_immutability.sql`:
 
 ```sql
 DO $$
@@ -1613,7 +1626,7 @@ BEGIN
   END IF;
 END $$;
 
-SELECT 'PASS: 20260805_app_content_immutability' AS result;
+SELECT 'PASS: 20260806_app_content_immutability' AS result;
 ```
 
 - [ ] **Step 2: Ask the user to run it and confirm it fails**
@@ -1622,7 +1635,7 @@ Expected: `ERROR: ASSERTION FAILED: app_version_is_editable() missing`
 
 - [ ] **Step 3: Write the migration**
 
-Create `supabase/migrations/20260805_app_content_immutability.sql`:
+Create `supabase/migrations/20260806_app_content_immutability.sql`:
 
 ```sql
 -- ============================================================
@@ -1749,7 +1762,7 @@ CREATE POLICY "division_admin_manage_app_items" ON procurements.app_items
 
 - [ ] **Step 4: Ask the user to apply and re-run the assertion script**
 
-Expected: `PASS: 20260805_app_content_immutability`
+Expected: `PASS: 20260806_app_content_immutability`
 
 - [ ] **Step 5: Ask the user to confirm approval still works end to end**
 
@@ -1771,7 +1784,7 @@ Then, in the dev environment, take a test APP through `finalize_app` → `approv
 - [ ] **Step 6: Commit**
 
 ```bash
-git add supabase/migrations/20260805_app_content_immutability.sql supabase/verify/20260805_app_content_immutability.sql
+git add supabase/migrations/20260806_app_content_immutability.sql supabase/verify/20260806_app_content_immutability.sql
 git commit -m "fix(app): lock APP items and approved APP versions
 
 Adds app_version_is_editable() with triggers on app_items and
@@ -1788,8 +1801,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 8: Immutable provenance + unique item numbers
 
 **Files:**
-- Create: `supabase/migrations/20260806_app_item_provenance.sql`
-- Create: `supabase/verify/20260806_app_item_provenance.sql`
+- Create: `supabase/migrations/20260807_app_item_provenance.sql`
+- Create: `supabase/verify/20260807_app_item_provenance.sql`
 
 **Interfaces:**
 - Consumes: PPMP content immutability (Task 6).
@@ -1799,7 +1812,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing assertion script**
 
-Create `supabase/verify/20260806_app_item_provenance.sql`:
+Create `supabase/verify/20260807_app_item_provenance.sql`:
 
 ```sql
 DO $$
@@ -1844,7 +1857,7 @@ BEGIN
   END IF;
 END $$;
 
-SELECT 'PASS: 20260806_app_item_provenance' AS result;
+SELECT 'PASS: 20260807_app_item_provenance' AS result;
 ```
 
 - [ ] **Step 2: Ask the user to run it and confirm it fails**
@@ -1868,7 +1881,7 @@ If rows come back, tell the user plainly: the renumber in Step 4 will make the i
 
 - [ ] **Step 4: Write the migration**
 
-Create `supabase/migrations/20260806_app_item_provenance.sql`:
+Create `supabase/migrations/20260807_app_item_provenance.sql`:
 
 ```sql
 -- ============================================================
@@ -1994,12 +2007,12 @@ Then, in the same migration, `CREATE OR REPLACE` `create_app_amendment` by copyi
 
 - [ ] **Step 5: Ask the user to apply and re-run the assertion script**
 
-Expected: `PASS: 20260806_app_item_provenance`
+Expected: `PASS: 20260807_app_item_provenance`
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add supabase/migrations/20260806_app_item_provenance.sql supabase/verify/20260806_app_item_provenance.sql
+git add supabase/migrations/20260807_app_item_provenance.sql supabase/verify/20260807_app_item_provenance.sql
 git commit -m "fix(app): anchor APP item provenance and enforce unique item numbers
 
 Adds source_ppmp_version_id so provenance points at an immutable
@@ -2016,8 +2029,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 9: Make consolidation failures visible
 
 **Files:**
-- Create: `supabase/migrations/20260807_consolidation_visibility.sql`
-- Create: `supabase/verify/20260807_consolidation_visibility.sql`
+- Create: `supabase/migrations/20260808_consolidation_visibility.sql`
+- Create: `supabase/verify/20260808_consolidation_visibility.sql`
 
 **Interfaces:**
 - Produces: columns `ppmps.consolidation_status`, `ppmps.consolidation_error`, `ppmps.consolidated_at`; function `procurements.record_consolidation_failure(p_ppmp_id UUID, p_reason TEXT)`; rewritten `auto_populate_app_from_ppmp()`.
@@ -2026,7 +2039,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing assertion script**
 
-Create `supabase/verify/20260807_consolidation_visibility.sql`:
+Create `supabase/verify/20260808_consolidation_visibility.sql`:
 
 ```sql
 DO $$
@@ -2062,7 +2075,7 @@ BEGIN
   END IF;
 END $$;
 
-SELECT 'PASS: 20260807_consolidation_visibility' AS result;
+SELECT 'PASS: 20260808_consolidation_visibility' AS result;
 ```
 
 - [ ] **Step 2: Ask the user to run it and confirm it fails**
@@ -2071,7 +2084,7 @@ Expected: `ERROR: ASSERTION FAILED: ppmps.consolidation_status missing`
 
 - [ ] **Step 3: Write the migration**
 
-Create `supabase/migrations/20260807_consolidation_visibility.sql`:
+Create `supabase/migrations/20260808_consolidation_visibility.sql`:
 
 ```sql
 -- ============================================================
@@ -2202,7 +2215,7 @@ Also add `source_ppmp_version_id` to the `INSERT INTO procurements.app_items` co
 
 - [ ] **Step 4: Ask the user to apply and re-run the assertion script**
 
-Expected: `PASS: 20260807_consolidation_visibility`
+Expected: `PASS: 20260808_consolidation_visibility`
 
 - [ ] **Step 5: Report the backfill outcome to the user**
 
@@ -2218,7 +2231,7 @@ Any `failed` count is pre-existing data loss the old silent path caused. State t
 - [ ] **Step 6: Commit**
 
 ```bash
-git add supabase/migrations/20260807_consolidation_visibility.sql supabase/verify/20260807_consolidation_visibility.sql
+git add supabase/migrations/20260808_consolidation_visibility.sql supabase/verify/20260808_consolidation_visibility.sql
 git commit -m "fix(app): surface PPMP consolidation failures instead of swallowing them
 
 auto_populate_app_from_ppmp now records consolidation_status, writes an
@@ -2234,8 +2247,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 10: Guard PPMP amendment against in-flight procurement
 
 **Files:**
-- Create: `supabase/migrations/20260808_amendment_guards.sql`
-- Create: `supabase/verify/20260808_amendment_guards.sql`
+- Create: `supabase/migrations/20260809_amendment_guards.sql`
+- Create: `supabase/verify/20260809_amendment_guards.sql`
 - Modify: `src/lib/actions/ppmp.ts`
 
 **Interfaces:**
@@ -2246,7 +2259,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing assertion script**
 
-Create `supabase/verify/20260808_amendment_guards.sql`:
+Create `supabase/verify/20260809_amendment_guards.sql`:
 
 ```sql
 DO $$
@@ -2286,7 +2299,7 @@ BEGIN
   END IF;
 END $$;
 
-SELECT 'PASS: 20260808_amendment_guards' AS result;
+SELECT 'PASS: 20260809_amendment_guards' AS result;
 ```
 
 - [ ] **Step 2: Ask the user to run it and confirm it fails**
@@ -2295,7 +2308,7 @@ Expected: `ERROR: ASSERTION FAILED: ppmp_has_inflight_procurement() missing`
 
 - [ ] **Step 3: Write the migration**
 
-Create `supabase/migrations/20260808_amendment_guards.sql`:
+Create `supabase/migrations/20260809_amendment_guards.sql`:
 
 ```sql
 -- ============================================================
@@ -2402,7 +2415,7 @@ Then in the same migration create the 3-argument `create_ppmp_amendment`. Copy t
 
 - [ ] **Step 4: Ask the user to apply and re-run the assertion script**
 
-Expected: `PASS: 20260808_amendment_guards`
+Expected: `PASS: 20260809_amendment_guards`
 
 - [ ] **Step 5: Ask the user to check for damage the old code already did**
 
@@ -2463,7 +2476,7 @@ Expected: both pass.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add supabase/migrations/20260808_amendment_guards.sql supabase/verify/20260808_amendment_guards.sql src/lib/actions/ppmp.ts
+git add supabase/migrations/20260809_amendment_guards.sql supabase/verify/20260809_amendment_guards.sql src/lib/actions/ppmp.ts
 git commit -m "fix(app): block PPMP amendment that would orphan live procurement
 
 Adds ppmp_has_inflight_procurement() and makes create_ppmp_amendment
@@ -2497,8 +2510,8 @@ Both statements become true once the two jobs are separated:
 ### Task 11: Split lot status into composed and released
 
 **Files:**
-- Create: `supabase/migrations/20260809_lot_two_gate_model.sql`
-- Create: `supabase/verify/20260809_lot_two_gate_model.sql`
+- Create: `supabase/migrations/20260810_lot_two_gate_model.sql`
+- Create: `supabase/verify/20260810_lot_two_gate_model.sql`
 
 **Interfaces:**
 - Consumes: `planning_stage` on `app_versions` (Task 3).
@@ -2508,7 +2521,7 @@ Both statements become true once the two jobs are separated:
 
 - [ ] **Step 1: Write the failing assertion script**
 
-Create `supabase/verify/20260809_lot_two_gate_model.sql`:
+Create `supabase/verify/20260810_lot_two_gate_model.sql`:
 
 ```sql
 DO $$
@@ -2569,7 +2582,7 @@ BEGIN
   END IF;
 END $$;
 
-SELECT 'PASS: 20260809_lot_two_gate_model' AS result;
+SELECT 'PASS: 20260810_lot_two_gate_model' AS result;
 ```
 
 - [ ] **Step 2: Ask the user to run it and confirm it fails**
@@ -2594,7 +2607,7 @@ SELECT al.status,
 
 - [ ] **Step 4: Write the migration**
 
-Create `supabase/migrations/20260809_lot_two_gate_model.sql`:
+Create `supabase/migrations/20260810_lot_two_gate_model.sql`:
 
 ```sql
 -- ============================================================
@@ -2972,7 +2985,7 @@ Then, in the same migration, `CREATE OR REPLACE` `finalize_app` one more time �
 
 - [ ] **Step 5: Ask the user to apply and re-run the assertion script**
 
-Expected: `PASS: 20260809_lot_two_gate_model`
+Expected: `PASS: 20260810_lot_two_gate_model`
 
 - [ ] **Step 6: Ask the user to run the gate behaviour test**
 
@@ -3015,7 +3028,7 @@ Expected: a `NOTICE` beginning `PASS: blocked with -> Lot ... cannot be released
 - [ ] **Step 7: Commit**
 
 ```bash
-git add supabase/migrations/20260809_lot_two_gate_model.sql supabase/verify/20260809_lot_two_gate_model.sql
+git add supabase/migrations/20260810_lot_two_gate_model.sql supabase/verify/20260810_lot_two_gate_model.sql
 git commit -m "feat(app): split lot finalization into composed and released
 
 finalize_lot now locks composition (draft -> composed), which is what
@@ -3032,8 +3045,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 12: Move procurement gates onto lot state and add the contract-signing ceiling gate
 
 **Files:**
-- Create: `supabase/migrations/20260810_epa_procurement_gates.sql`
-- Create: `supabase/verify/20260810_epa_procurement_gates.sql`
+- Create: `supabase/migrations/20260811_epa_procurement_gates.sql`
+- Create: `supabase/verify/20260811_epa_procurement_gates.sql`
 
 **Interfaces:**
 - Consumes: `release_app_lot`, `is_early_procurement` (Task 11); `fiscal_year_planning_stage` (Task 1).
@@ -3043,7 +3056,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing assertion script**
 
-Create `supabase/verify/20260810_epa_procurement_gates.sql`:
+Create `supabase/verify/20260811_epa_procurement_gates.sql`:
 
 ```sql
 DO $$
@@ -3076,7 +3089,7 @@ BEGIN
   END IF;
 END $$;
 
-SELECT 'PASS: 20260810_epa_procurement_gates' AS result;
+SELECT 'PASS: 20260811_epa_procurement_gates' AS result;
 ```
 
 - [ ] **Step 2: Ask the user to run it and confirm it fails**
@@ -3085,7 +3098,7 @@ Expected: `ERROR: ASSERTION FAILED: appropriation_exists() missing`
 
 - [ ] **Step 3: Write the migration**
 
-Create `supabase/migrations/20260810_epa_procurement_gates.sql`:
+Create `supabase/migrations/20260811_epa_procurement_gates.sql`:
 
 ```sql
 -- ============================================================
@@ -3171,7 +3184,7 @@ Copy that body and insert this check where the target stage is `contract_signing
 
 - [ ] **Step 4: Ask the user to apply and re-run the assertion script**
 
-Expected: `PASS: 20260810_epa_procurement_gates`
+Expected: `PASS: 20260811_epa_procurement_gates`
 
 - [ ] **Step 5: Ask the user to confirm the EPA path works end to end in dev**
 
@@ -3190,7 +3203,7 @@ Step 6 failing then succeeding is the whole point of this task. If step 6 succee
 - [ ] **Step 6: Commit**
 
 ```bash
-git add supabase/migrations/20260810_epa_procurement_gates.sql supabase/verify/20260810_epa_procurement_gates.sql
+git add supabase/migrations/20260811_epa_procurement_gates.sql supabase/verify/20260811_epa_procurement_gates.sql
 git commit -m "feat(procurement): gate PRs on lot release and block pre-GAA contracts
 
 PR creation now requires the APP item's lot to be released rather than
@@ -3364,8 +3377,8 @@ Step 6 of the real process — *"offices revise PPMPs"* — is a division-wide e
 ### Task 14: Planning round tables and bulk revision opening
 
 **Files:**
-- Create: `supabase/migrations/20260811_planning_rounds.sql`
-- Create: `supabase/verify/20260811_planning_rounds.sql`
+- Create: `supabase/migrations/20260812_planning_rounds.sql`
+- Create: `supabase/verify/20260812_planning_rounds.sql`
 
 **Interfaces:**
 - Consumes: `budget_ceilings` (Task 1); `create_ppmp_amendment(UUID, TEXT, BOOLEAN)` (Task 10).
@@ -3373,7 +3386,7 @@ Step 6 of the real process — *"offices revise PPMPs"* — is a division-wide e
 
 - [ ] **Step 1: Write the failing assertion script**
 
-Create `supabase/verify/20260811_planning_rounds.sql`:
+Create `supabase/verify/20260812_planning_rounds.sql`:
 
 ```sql
 DO $$
@@ -3425,7 +3438,7 @@ BEGIN
   END IF;
 END $$;
 
-SELECT 'PASS: 20260811_planning_rounds' AS result;
+SELECT 'PASS: 20260812_planning_rounds' AS result;
 ```
 
 - [ ] **Step 2: Ask the user to run it and confirm it fails**
@@ -3434,7 +3447,7 @@ Expected: `ERROR: ASSERTION FAILED: procurements.planning_rounds missing`
 
 - [ ] **Step 3: Write the migration**
 
-Create `supabase/migrations/20260811_planning_rounds.sql`:
+Create `supabase/migrations/20260812_planning_rounds.sql`:
 
 ```sql
 -- ============================================================
@@ -3807,7 +3820,7 @@ CREATE TRIGGER trg_sync_planning_round_office_status
 
 - [ ] **Step 4: Ask the user to apply and re-run the assertion script**
 
-Expected: `PASS: 20260811_planning_rounds`
+Expected: `PASS: 20260812_planning_rounds`
 
 - [ ] **Step 5: Ask the user to dry-run a round in dev**
 
@@ -3843,7 +3856,7 @@ Confirm: new PPMP versions exist with `planning_stage = 'final'` (proving Task 3
 - [ ] **Step 6: Commit**
 
 ```bash
-git add supabase/migrations/20260811_planning_rounds.sql supabase/verify/20260811_planning_rounds.sql
+git add supabase/migrations/20260812_planning_rounds.sql supabase/verify/20260812_planning_rounds.sql
 git commit -m "feat(planning): add planning rounds for division-wide PPMP revision
 
 open_planning_round records the triggering ceiling, opens a stage-tagged
@@ -3859,8 +3872,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 15: Make the version authoritative for PPMP status
 
 **Files:**
-- Create: `supabase/migrations/20260812_version_authoritative_status.sql`
-- Create: `supabase/verify/20260812_version_authoritative_status.sql`
+- Create: `supabase/migrations/20260813_version_authoritative_status.sql`
+- Create: `supabase/verify/20260813_version_authoritative_status.sql`
 
 **Interfaces:**
 - Produces: view `procurements.v_ppmp_current_state`; rewritten `create_ppmp_amendment` that no longer resets `ppmps.status` to `'draft'`; column `ppmps.has_open_amendment`.
@@ -3869,7 +3882,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing assertion script**
 
-Create `supabase/verify/20260812_version_authoritative_status.sql`:
+Create `supabase/verify/20260813_version_authoritative_status.sql`:
 
 ```sql
 DO $$
@@ -3902,7 +3915,7 @@ BEGIN
   END IF;
 END $$;
 
-SELECT 'PASS: 20260812_version_authoritative_status' AS result;
+SELECT 'PASS: 20260813_version_authoritative_status' AS result;
 ```
 
 - [ ] **Step 2: Ask the user to run it and confirm it fails**
@@ -3911,7 +3924,7 @@ Expected: `ERROR: ASSERTION FAILED: view v_ppmp_current_state missing`
 
 - [ ] **Step 3: Write the migration**
 
-Create `supabase/migrations/20260812_version_authoritative_status.sql`:
+Create `supabase/migrations/20260813_version_authoritative_status.sql`:
 
 ```sql
 -- ============================================================
@@ -4065,7 +4078,7 @@ Then `CREATE OR REPLACE` the 3-argument `create_ppmp_amendment` from Task 10 wit
 
 - [ ] **Step 4: Ask the user to apply and re-run the assertion script**
 
-Expected: `PASS: 20260812_version_authoritative_status`
+Expected: `PASS: 20260813_version_authoritative_status`
 
 - [ ] **Step 5: Ask the user to walk an amendment through end to end in dev**
 
@@ -4084,7 +4097,7 @@ Expected: `document_status = 'approved'` while `draft_version_number` is populat
 - [ ] **Step 6: Commit**
 
 ```bash
-git add supabase/migrations/20260812_version_authoritative_status.sql supabase/verify/20260812_version_authoritative_status.sql
+git add supabase/migrations/20260813_version_authoritative_status.sql supabase/verify/20260813_version_authoritative_status.sql
 git commit -m "fix(app): keep the approved PPMP operative while an amendment is open
 
 create_ppmp_amendment no longer resets ppmps.status to draft, which had
@@ -4103,8 +4116,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 16: Reconcile lot ABC to its line items
 
 **Files:**
-- Create: `supabase/migrations/20260813_lot_abc_reconciliation.sql`
-- Create: `supabase/verify/20260813_lot_abc_reconciliation.sql`
+- Create: `supabase/migrations/20260814_lot_abc_reconciliation.sql`
+- Create: `supabase/verify/20260814_lot_abc_reconciliation.sql`
 
 **Interfaces:**
 - Produces: column `ppmp_lots.abc_is_manual`, `ppmp_lots.abc_manual_justification`; trigger function `procurements.recalc_ppmp_lot_abc()`; a submit-time reconciliation check in `submit_ppmp`.
@@ -4113,7 +4126,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing assertion script**
 
-Create `supabase/verify/20260813_lot_abc_reconciliation.sql`:
+Create `supabase/verify/20260814_lot_abc_reconciliation.sql`:
 
 ```sql
 DO $$
@@ -4151,7 +4164,7 @@ BEGIN
   END IF;
 END $$;
 
-SELECT 'PASS: 20260813_lot_abc_reconciliation' AS result;
+SELECT 'PASS: 20260814_lot_abc_reconciliation' AS result;
 ```
 
 - [ ] **Step 2: Ask the user to run it and confirm it fails**
@@ -4178,7 +4191,7 @@ Report the figures plainly. If `total_absolute_drift` is material, the backfill 
 
 - [ ] **Step 4: Write the migration**
 
-Create `supabase/migrations/20260813_lot_abc_reconciliation.sql`:
+Create `supabase/migrations/20260814_lot_abc_reconciliation.sql`:
 
 ```sql
 -- ============================================================
@@ -4331,7 +4344,7 @@ Then `CREATE OR REPLACE` `submit_ppmp` in the same migration — start from the 
 
 - [ ] **Step 5: Ask the user to apply and re-run the assertion script**
 
-Expected: `PASS: 20260813_lot_abc_reconciliation`
+Expected: `PASS: 20260814_lot_abc_reconciliation`
 
 - [ ] **Step 6: Report how many lots were flagged manual**
 
@@ -4346,7 +4359,7 @@ Each flagged lot is a pre-existing ABC that its own line items do not support. T
 - [ ] **Step 7: Commit**
 
 ```bash
-git add supabase/migrations/20260813_lot_abc_reconciliation.sql supabase/verify/20260813_lot_abc_reconciliation.sql
+git add supabase/migrations/20260814_lot_abc_reconciliation.sql supabase/verify/20260814_lot_abc_reconciliation.sql
 git commit -m "fix(app): derive lot ABC from line items with a justified manual override
 
 ppmp_lots.estimated_budget is now trigger-maintained from
@@ -4363,8 +4376,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 17: Give the two APP totals distinct names
 
 **Files:**
-- Create: `supabase/migrations/20260814_app_total_definitions.sql`
-- Create: `supabase/verify/20260814_app_total_definitions.sql`
+- Create: `supabase/migrations/20260815_app_total_definitions.sql`
+- Create: `supabase/verify/20260815_app_total_definitions.sql`
 
 **Interfaces:**
 - Produces: column `app_versions.total_approved_cost`; rewritten `recalc_app_version_total()` and `finalize_app()` with explicit, separate definitions.
@@ -4373,7 +4386,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing assertion script**
 
-Create `supabase/verify/20260814_app_total_definitions.sql`:
+Create `supabase/verify/20260815_app_total_definitions.sql`:
 
 ```sql
 DO $$
@@ -4418,7 +4431,7 @@ BEGIN
   END IF;
 END $$;
 
-SELECT 'PASS: 20260814_app_total_definitions' AS result;
+SELECT 'PASS: 20260815_app_total_definitions' AS result;
 ```
 
 - [ ] **Step 2: Ask the user to run it and confirm it fails**
@@ -4427,7 +4440,7 @@ Expected: `ERROR: ASSERTION FAILED: app_versions.total_approved_cost missing`
 
 - [ ] **Step 3: Write the migration**
 
-Create `supabase/migrations/20260814_app_total_definitions.sql`:
+Create `supabase/migrations/20260815_app_total_definitions.sql`:
 
 ```sql
 -- ============================================================
@@ -4549,7 +4562,7 @@ Delete the local `v_total` variable and its `SELECT ... INTO` from the function.
 
 - [ ] **Step 4: Ask the user to apply and re-run the assertion script**
 
-Expected: `PASS: 20260814_app_total_definitions`
+Expected: `PASS: 20260815_app_total_definitions`
 
 - [ ] **Step 5: Update the UI to show both figures**
 
@@ -4563,7 +4576,7 @@ Expected: both pass.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add supabase/migrations/20260814_app_total_definitions.sql supabase/verify/20260814_app_total_definitions.sql src/types/database.ts src/components/planning/app-status-dashboard.tsx
+git add supabase/migrations/20260815_app_total_definitions.sql supabase/verify/20260815_app_total_definitions.sql src/types/database.ts src/components/planning/app-status-dashboard.tsx
 git commit -m "fix(app): separate submitted and approved APP totals
 
 total_estimated_cost now always means all items; the new
@@ -4579,8 +4592,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 18: Release excess obligation at the contract amount
 
 **Files:**
-- Create: `supabase/migrations/20260815_obligation_adjust_on_award.sql`
-- Create: `supabase/verify/20260815_obligation_adjust_on_award.sql`
+- Create: `supabase/migrations/20260816_obligation_adjust_on_award.sql`
+- Create: `supabase/verify/20260816_obligation_adjust_on_award.sql`
 
 **Interfaces:**
 - Produces: column `obligation_requests.adjusted_amount`, `obligation_requests.adjustment_reason`; function `procurements.adjust_obligation_to_contract(p_procurement_id UUID) RETURNS NUMERIC`; a trigger on `procurement_activities` firing when the contract amount is set.
@@ -4589,7 +4602,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing assertion script**
 
-Create `supabase/verify/20260815_obligation_adjust_on_award.sql`:
+Create `supabase/verify/20260816_obligation_adjust_on_award.sql`:
 
 ```sql
 DO $$
@@ -4617,7 +4630,7 @@ BEGIN
   END IF;
 END $$;
 
-SELECT 'PASS: 20260815_obligation_adjust_on_award' AS result;
+SELECT 'PASS: 20260816_obligation_adjust_on_award' AS result;
 ```
 
 - [ ] **Step 2: Ask the user to run it and confirm it fails**
@@ -4634,7 +4647,7 @@ Use whichever column the award RPCs actually write. The SQL below assumes `contr
 
 - [ ] **Step 4: Write the migration**
 
-Create `supabase/migrations/20260815_obligation_adjust_on_award.sql`:
+Create `supabase/migrations/20260816_obligation_adjust_on_award.sql`:
 
 ```sql
 -- ============================================================
@@ -4752,7 +4765,7 @@ CREATE TRIGGER trg_adjust_obligation_on_award
 
 - [ ] **Step 5: Ask the user to apply and re-run the assertion script**
 
-Expected: `PASS: 20260815_obligation_adjust_on_award`
+Expected: `PASS: 20260816_obligation_adjust_on_award`
 
 - [ ] **Step 6: Ask the user to quantify the historic over-obligation**
 
@@ -4773,7 +4786,7 @@ Report `unreleased_obligation` to the user — that is budget currently shown as
 - [ ] **Step 7: Commit**
 
 ```bash
-git add supabase/migrations/20260815_obligation_adjust_on_award.sql supabase/verify/20260815_obligation_adjust_on_award.sql
+git add supabase/migrations/20260816_obligation_adjust_on_award.sql supabase/verify/20260816_obligation_adjust_on_award.sql
 git commit -m "feat(budget): release excess obligation when the contract amount is set
 
 Adds adjust_obligation_to_contract() plus a trigger on
@@ -4791,8 +4804,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 19: Convert TEXT schedule fields to DATE
 
 **Files:**
-- Create: `supabase/migrations/20260816_schema_hygiene_dates.sql`
-- Create: `supabase/verify/20260816_schema_hygiene_dates.sql`
+- Create: `supabase/migrations/20260818_schema_hygiene_dates.sql`
+- Create: `supabase/verify/20260818_schema_hygiene_dates.sql`
 
 **Interfaces:**
 - Produces: `DATE` columns on `ppmp_lots` and `app_items` — `procurement_start_date`, `procurement_end_date`, `advertisement_date_d`, `bid_opening_date_d`, `award_date_d`, `contract_signing_date_d`; function `procurements.parse_mm_yyyy(p_text TEXT) RETURNS DATE`.
@@ -4803,7 +4816,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing assertion script**
 
-Create `supabase/verify/20260816_schema_hygiene_dates.sql`:
+Create `supabase/verify/20260818_schema_hygiene_dates.sql`:
 
 ```sql
 DO $$
@@ -4844,7 +4857,7 @@ BEGIN
   END IF;
 END $$;
 
-SELECT 'PASS: 20260816_schema_hygiene_dates' AS result;
+SELECT 'PASS: 20260818_schema_hygiene_dates' AS result;
 ```
 
 - [ ] **Step 2: Ask the user to run it and confirm it fails**
@@ -4869,7 +4882,7 @@ If formats other than `MM/YYYY` appear (e.g. `Jan 2027`, `Q1 2027`, `1st Quarter
 
 - [ ] **Step 4: Write the migration**
 
-Create `supabase/migrations/20260816_schema_hygiene_dates.sql`:
+Create `supabase/migrations/20260818_schema_hygiene_dates.sql`:
 
 ```sql
 -- ============================================================
@@ -4980,7 +4993,7 @@ CREATE INDEX idx_app_items_proc_start ON procurements.app_items(procurement_star
 
 - [ ] **Step 5: Ask the user to apply and re-run the assertion script**
 
-Expected: `PASS: 20260816_schema_hygiene_dates`
+Expected: `PASS: 20260818_schema_hygiene_dates`
 
 - [ ] **Step 6: Report unconverted rows**
 
@@ -5004,7 +5017,7 @@ Report every distinct unparsed value to the user. These need either a parser ext
 - [ ] **Step 7: Commit**
 
 ```bash
-git add supabase/migrations/20260816_schema_hygiene_dates.sql supabase/verify/20260816_schema_hygiene_dates.sql
+git add supabase/migrations/20260818_schema_hygiene_dates.sql supabase/verify/20260818_schema_hygiene_dates.sql
 git commit -m "feat(app): add DATE schedule columns alongside the legacy TEXT fields
 
 Adds parse_mm_yyyy() and real DATE columns on ppmp_lots and app_items,
@@ -5019,8 +5032,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 20: Replace free-text fund source with an FK, and remove orphan permissions
 
 **Files:**
-- Create: `supabase/migrations/20260817_schema_hygiene_fund_source.sql`
-- Create: `supabase/verify/20260817_schema_hygiene_fund_source.sql`
+- Create: `supabase/migrations/20260819_schema_hygiene_fund_source.sql`
+- Create: `supabase/verify/20260819_schema_hygiene_fund_source.sql`
 
 **Interfaces:**
 - Produces: columns `ppmp_lots.fund_source_id`, `app_items.fund_source_id` (both FK to `procurements.fund_sources`); removal of the four never-checked permission codes.
@@ -5029,7 +5042,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing assertion script**
 
-Create `supabase/verify/20260817_schema_hygiene_fund_source.sql`:
+Create `supabase/verify/20260819_schema_hygiene_fund_source.sql`:
 
 ```sql
 DO $$
@@ -5064,7 +5077,7 @@ BEGIN
   END IF;
 END $$;
 
-SELECT 'PASS: 20260817_schema_hygiene_fund_source' AS result;
+SELECT 'PASS: 20260819_schema_hygiene_fund_source' AS result;
 ```
 
 - [ ] **Step 2: Ask the user to run it and confirm it fails**
@@ -5094,7 +5107,7 @@ These assignments grant nothing today, so removing them changes no behaviour —
 
 - [ ] **Step 4: Write the migration**
 
-Create `supabase/migrations/20260817_schema_hygiene_fund_source.sql`:
+Create `supabase/migrations/20260819_schema_hygiene_fund_source.sql`:
 
 ```sql
 -- ============================================================
@@ -5173,7 +5186,7 @@ DELETE FROM procurements.permissions
 
 - [ ] **Step 5: Ask the user to apply and re-run the assertion script**
 
-Expected: `PASS: 20260817_schema_hygiene_fund_source`
+Expected: `PASS: 20260819_schema_hygiene_fund_source`
 
 - [ ] **Step 6: Report unmatched fund-source strings**
 
@@ -5201,7 +5214,7 @@ Expected: both pass.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add supabase/migrations/20260817_schema_hygiene_fund_source.sql supabase/verify/20260817_schema_hygiene_fund_source.sql src/lib/schemas/ppmp.ts src/components/planning/ppmp-item-form.tsx src/components/planning/ppmp-form.tsx
+git add supabase/migrations/20260819_schema_hygiene_fund_source.sql supabase/verify/20260819_schema_hygiene_fund_source.sql src/lib/schemas/ppmp.ts src/components/planning/ppmp-item-form.tsx src/components/planning/ppmp-form.tsx
 git commit -m "feat(app): add fund_source_id FK and drop orphan permission codes
 
 Replaces free-text source_of_funds with an FK to fund_sources on
