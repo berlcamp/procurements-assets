@@ -306,7 +306,7 @@ REVOKE EXECUTE ON FUNCTION procurements.record_consolidation_failure(UUID, TEXT)
 
 -- ============================================================
 -- 4. auto_populate_app_from_ppmp: copied VERBATIM from the live definition in
---    20260516_app_cse_schedule_columns.sql:53-258, with exactly four edits.
+--    20260516_app_cse_schedule_columns.sql:53-258, with exactly five edits.
 --
 --    (1) The silent bail-out at 20260516:203-206 now calls
 --        record_consolidation_failure() before returning.
@@ -321,6 +321,12 @@ REVOKE EXECUTE ON FUNCTION procurements.record_consolidation_failure(UUID, TEXT)
 --        budget_adjusted_at and source_ppmp_lot_item_ids. All four restored.
 --    (4) I4 provenance: source_ppmp_version_id (added by 20260807) is now
 --        written by BOTH INSERTs.
+--    (5) Version scoping: the fresh-populate INSERT joined ppmp_versions on
+--        status = 'approved' alone, which matches EVERY previously approved
+--        version, so each amendment approval consolidated the same cloned
+--        projects twice at full budget. Now scoped to
+--        version_number = NEW.current_version. See the long comment at the
+--        WHERE clause for the two-part root cause.
 --
 --    Everything else — including the status guard, the APP auto-create, the
 --    supplemental-version creation, the lot clone, the APP status reset, the
@@ -672,9 +678,51 @@ BEGIN
   FROM procurements.ppmp_projects pp
   JOIN procurements.ppmp_versions pv ON pv.id = pp.ppmp_version_id
   JOIN procurements.ppmp_lots pl ON pl.ppmp_project_id = pp.id
-  WHERE pv.ppmp_id    = NEW.id
-    AND pv.status     = 'approved'
-    AND pp.deleted_at IS NULL;
+  -- VERSION SCOPING. LOAD-BEARING. DO NOT "SIMPLIFY" THIS PREDICATE AWAY.
+  --
+  -- ROOT CAUSE, PART 1 — approve_ppmp leaves prior approvals 'approved'.
+  -- It supersedes only versions whose status is NOT IN ('approved','superseded')
+  -- (20260803_stop_stage_writes_from_workflow.sql:58-63), so a PREVIOUSLY
+  -- approved version keeps status = 'approved' forever. After one amendment a
+  -- PPMP has TWO rows in ppmp_versions with status = 'approved'.
+  --
+  -- ROOT CAUSE, PART 2 — this join used to trust that status alone identified
+  -- one version. It does not. Because create_ppmp_amendment clones v1's
+  -- projects and lots forward into v2 (20260803:296-341), the two approved
+  -- versions hold the SAME content, so every project was consolidated TWICE, at
+  -- FULL budget, on every amendment approval. The amendment soft-delete above
+  -- does not mask it: that clears only the OLD items, and this INSERT then
+  -- re-added both versions. 20260807 made the symptom harder to recognise, not
+  -- less real — each duplicate now carries a different source_ppmp_version_id,
+  -- so the duplication reads as two legitimate distinct sources.
+  --
+  -- WHY NEW.current_version IS THE RIGHT ANCHOR. approve_ppmp picks the version
+  -- to approve by version_number = ppmps.current_version (20260803:46-49), and
+  -- its ppmps UPDATE (20260803:65-71) does not touch current_version, so at
+  -- trigger time it still names the version just approved. approve_ppmp is the
+  -- only code path in supabase/ or src/ that sets ppmps.status = 'approved'
+  -- (return_ppmp only yields revision_required/submitted/chief_reviewed; the
+  -- client only ever writes 'cancelled'). ppmp_versions carries
+  -- UNIQUE (ppmp_id, version_number) (20240501_ppmps.sql:67), so this pair
+  -- identifies AT MOST ONE version.
+  --
+  -- pv.status = 'approved' IS RETAINED DELIBERATELY — belt-and-braces, NOT
+  -- redundancy. It asserts that the version being consolidated really is the
+  -- approved one. If a future edit ever lets ppmps.status reach 'approved'
+  -- without the matching ppmp_version being approved, this line converts a
+  -- silent wrong consolidation into the recorded zero-row failure below, which
+  -- is the outcome this migration exists to produce. KEEP BOTH PREDICATES.
+  --
+  -- NOT FIXED HERE, ON PURPOSE: making approve_ppmp supersede prior approved
+  -- versions would change what status = 'approved' means for every read path
+  -- (version history, badges, create_ppmp_amendment's clone-source lookup, and
+  -- 20260807's already-applied provenance backfill all key off it). That is a
+  -- separate, much wider decision. Existing APPs already carrying duplicates
+  -- from this bug are a separate remediation task.
+  WHERE pv.ppmp_id        = NEW.id
+    AND pv.version_number = NEW.current_version
+    AND pv.status         = 'approved'
+    AND pp.deleted_at     IS NULL;
 
   GET DIAGNOSTICS v_inserted_count = ROW_COUNT;
 

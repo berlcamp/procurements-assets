@@ -257,7 +257,46 @@ BEGIN
       'ASSERTION FAILED: auto_populate_app_from_ppmp lost the status guard (NEW.status <> ''approved'' OR OLD.status = ''approved'') — consolidation writes back onto ppmps can now recurse or cascade into the APP tables';
   END IF;
 
-  -- 3c. Clone fidelity. The supplemental carry-forward clone dropped four
+  -- 3c. VERSION SCOPING on the fresh-populate INSERT.
+  --
+  --     approve_ppmp supersedes only versions whose status is
+  --     NOT IN ('approved','superseded') (20260803:58-63), so a previously
+  --     approved ppmp_version keeps status = 'approved' forever. The
+  --     consolidation join used to trust status alone, and because
+  --     create_ppmp_amendment clones v1's content into v2, every amendment
+  --     approval inserted every project TWICE, at FULL budget. Since 20260807
+  --     the duplicates even carry different source_ppmp_version_id values, so
+  --     they read as two legitimate distinct sources. Scoping to
+  --     version_number = NEW.current_version is the whole fix; it must not
+  --     silently regress.
+  --
+  --     REGEX ANCHORED TO THE COMPARISON, NOT A SUBSTRING. A bare
+  --     '%current_version%' check would be VACUOUS — the token also appears in
+  --     `v_is_amendment := (NEW.current_version > 1)` and in the supplemental
+  --     version's amendment_justification string, both of which survive the
+  --     predicate's total removal. Verified: with the predicate deleted, a
+  --     '%current_version%' LIKE still passed. Same failure mode as the
+  --     '%consolidated_at%NULL%' check in section 2a.
+  --
+  --     \M (end-of-word) and the negative lookahead are not decoration: without
+  --     them `NEW.current_versionx` and `NEW.current_version - 1` both passed.
+  --
+  --     NEGATIVE-TESTED BY MUTATION on a throwaway cluster, not by deletion
+  --     alone. This assertion fires for all of: predicate deleted; deleted but
+  --     a comment still naming it (v_src only — the raw definition passes it
+  --     vacuously, which is why this must never be run against v_def);
+  --     `= NEW.current_version - 1`; `>= NEW.current_version`;
+  --     `pv.version_number = pv.version_number`;
+  --     `NEW.current_version = pv.version_number` (operands reversed — a
+  --     cosmetic rewrite DOES trip this, deliberately: fail loud, then restore
+  --     the canonical form); `= NEW.current_versionx`; `= 1`. It does not fire
+  --     on the shipped body.
+  IF v_src !~ 'version_number\s*=\s*NEW\.current_version\M(?!\s*[-+*/])' THEN
+    RAISE EXCEPTION
+      'ASSERTION FAILED: auto_populate_app_from_ppmp no longer scopes the fresh-populate INSERT to pv.version_number = NEW.current_version — every amendment approval will re-consolidate previously approved PPMP versions, duplicating each project at full budget';
+  END IF;
+
+  -- 3d. Clone fidelity. The supplemental carry-forward clone dropped four
   --     app_items columns added by later migrations, and neither INSERT wrote
   --     source_ppmp_version_id. Guard against the same omissions recurring.
   --     Dropping source_ppmp_lot_item_ids is the worst of them: NULL MEANS
@@ -288,7 +327,7 @@ BEGIN
       'ASSERTION FAILED: auto_populate_app_from_ppmp does not carry forward budget_adjusted_at';
   END IF;
 
-  -- 3d. The CSE / schedule propagation this function's live definition
+  -- 3e. The CSE / schedule propagation this function's live definition
   --     introduced (20260516). It is the thing most likely to be silently
   --     reverted by a copy-paste of the older 20260405 / 20240604 / 20240505
   --     bodies, all three of which are still on disk and still contain a
