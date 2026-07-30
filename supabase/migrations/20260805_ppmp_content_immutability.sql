@@ -36,42 +36,154 @@ SECURITY DEFINER
 SET search_path = procurements, platform, auth, public
 AS $$
 DECLARE
-  v_version_id UUID;
-  v_status     TEXT;
+  v_version_id_old UUID;
+  v_version_id_new UUID;
+  v_status_old     TEXT;
+  v_status_new     TEXT;
 BEGIN
-  -- Resolve the owning version for whichever table fired.
-  IF TG_TABLE_NAME = 'ppmp_projects' THEN
-    v_version_id := COALESCE(NEW.ppmp_version_id, OLD.ppmp_version_id);
+  -- For DELETE, check only the OLD row.
+  IF TG_OP = 'DELETE' THEN
+    -- Resolve the owning version for the OLD row.
+    IF TG_TABLE_NAME = 'ppmp_projects' THEN
+      v_version_id_old := OLD.ppmp_version_id;
 
-  ELSIF TG_TABLE_NAME = 'ppmp_lots' THEN
-    SELECT pp.ppmp_version_id INTO v_version_id
-      FROM procurements.ppmp_projects pp
-     WHERE pp.id = COALESCE(NEW.ppmp_project_id, OLD.ppmp_project_id);
+    ELSIF TG_TABLE_NAME = 'ppmp_lots' THEN
+      SELECT pp.ppmp_version_id INTO v_version_id_old
+        FROM procurements.ppmp_projects pp
+       WHERE pp.id = OLD.ppmp_project_id;
 
-  ELSE -- ppmp_lot_items
-    SELECT pp.ppmp_version_id INTO v_version_id
-      FROM procurements.ppmp_lots pl
-      JOIN procurements.ppmp_projects pp ON pp.id = pl.ppmp_project_id
-     WHERE pl.id = COALESCE(NEW.ppmp_lot_id, OLD.ppmp_lot_id);
+    ELSE -- ppmp_lot_items
+      SELECT pp.ppmp_version_id INTO v_version_id_old
+        FROM procurements.ppmp_lots pl
+        JOIN procurements.ppmp_projects pp ON pp.id = pl.ppmp_project_id
+       WHERE pl.id = OLD.ppmp_lot_id;
+    END IF;
+
+    IF v_version_id_old IS NULL THEN
+      RAISE EXCEPTION 'Cannot delete from %: owning PPMP version could not be resolved', TG_TABLE_NAME;
+    END IF;
+
+    SELECT status INTO v_status_old
+      FROM procurements.ppmp_versions
+     WHERE id = v_version_id_old;
+
+    IF v_status_old IS DISTINCT FROM 'draft' THEN
+      RAISE EXCEPTION
+        'Cannot delete % from a PPMP version with status "%". Create an amendment instead.',
+        TG_TABLE_NAME, v_status_old;
+    END IF;
+
+    RETURN OLD;
   END IF;
 
-  IF v_version_id IS NULL THEN
-    RETURN COALESCE(NEW, OLD);
+  -- For INSERT, check only the NEW row.
+  IF TG_OP = 'INSERT' THEN
+    -- Resolve the owning version for the NEW row.
+    IF TG_TABLE_NAME = 'ppmp_projects' THEN
+      v_version_id_new := NEW.ppmp_version_id;
+
+    ELSIF TG_TABLE_NAME = 'ppmp_lots' THEN
+      SELECT pp.ppmp_version_id INTO v_version_id_new
+        FROM procurements.ppmp_projects pp
+       WHERE pp.id = NEW.ppmp_project_id;
+
+    ELSE -- ppmp_lot_items
+      SELECT pp.ppmp_version_id INTO v_version_id_new
+        FROM procurements.ppmp_lots pl
+        JOIN procurements.ppmp_projects pp ON pp.id = pl.ppmp_project_id
+       WHERE pl.id = NEW.ppmp_lot_id;
+    END IF;
+
+    IF v_version_id_new IS NULL THEN
+      RAISE EXCEPTION 'Cannot insert into %: owning PPMP version could not be resolved', TG_TABLE_NAME;
+    END IF;
+
+    SELECT status INTO v_status_new
+      FROM procurements.ppmp_versions
+     WHERE id = v_version_id_new;
+
+    IF v_status_new IS DISTINCT FROM 'draft' THEN
+      RAISE EXCEPTION
+        'Cannot insert % into a PPMP version with status "%". Create an amendment instead.',
+        TG_TABLE_NAME, v_status_new;
+    END IF;
+
+    RETURN NEW;
   END IF;
 
-  SELECT status INTO v_status
-    FROM procurements.ppmp_versions
-   WHERE id = v_version_id;
+  -- For UPDATE, check both the OLD row (version being left) and NEW row (version being entered).
+  -- This prevents reparenting approved content into a draft version.
+  IF TG_OP = 'UPDATE' THEN
+    -- Resolve the owning version for the OLD row (source version).
+    IF TG_TABLE_NAME = 'ppmp_projects' THEN
+      v_version_id_old := OLD.ppmp_version_id;
+      v_version_id_new := NEW.ppmp_version_id;
 
-  IF v_status IS DISTINCT FROM 'draft' THEN
-    RAISE EXCEPTION
-      'Cannot modify % on a PPMP version with status "%". Create an amendment instead.',
-      TG_TABLE_NAME, v_status;
+    ELSIF TG_TABLE_NAME = 'ppmp_lots' THEN
+      SELECT pp.ppmp_version_id INTO v_version_id_old
+        FROM procurements.ppmp_projects pp
+       WHERE pp.id = OLD.ppmp_project_id;
+
+      SELECT pp.ppmp_version_id INTO v_version_id_new
+        FROM procurements.ppmp_projects pp
+       WHERE pp.id = NEW.ppmp_project_id;
+
+    ELSE -- ppmp_lot_items
+      SELECT pp.ppmp_version_id INTO v_version_id_old
+        FROM procurements.ppmp_lots pl
+        JOIN procurements.ppmp_projects pp ON pp.id = pl.ppmp_project_id
+       WHERE pl.id = OLD.ppmp_lot_id;
+
+      SELECT pp.ppmp_version_id INTO v_version_id_new
+        FROM procurements.ppmp_lots pl
+        JOIN procurements.ppmp_projects pp ON pp.id = pl.ppmp_project_id
+       WHERE pl.id = NEW.ppmp_lot_id;
+    END IF;
+
+    -- Check the OLD version (the one being moved FROM).
+    IF v_version_id_old IS NULL THEN
+      RAISE EXCEPTION 'Cannot update %: owning PPMP version (old) could not be resolved', TG_TABLE_NAME;
+    END IF;
+
+    SELECT status INTO v_status_old
+      FROM procurements.ppmp_versions
+     WHERE id = v_version_id_old;
+
+    IF v_status_old IS DISTINCT FROM 'draft' THEN
+      RAISE EXCEPTION
+        'Cannot move % out of a PPMP version with status "%". Create an amendment instead.',
+        TG_TABLE_NAME, v_status_old;
+    END IF;
+
+    -- Check the NEW version (the one being moved TO).
+    IF v_version_id_new IS NULL THEN
+      RAISE EXCEPTION 'Cannot update %: owning PPMP version (new) could not be resolved', TG_TABLE_NAME;
+    END IF;
+
+    SELECT status INTO v_status_new
+      FROM procurements.ppmp_versions
+     WHERE id = v_version_id_new;
+
+    IF v_status_new IS DISTINCT FROM 'draft' THEN
+      RAISE EXCEPTION
+        'Cannot move % into a PPMP version with status "%". Create an amendment instead.',
+        TG_TABLE_NAME, v_status_new;
+    END IF;
+
+    RETURN NEW;
   END IF;
 
-  RETURN COALESCE(NEW, OLD);
+  -- Should never reach here; any other TG_OP is unexpected.
+  RAISE EXCEPTION 'Unexpected trigger operation: %', TG_OP;
 END;
 $$;
+
+COMMENT ON FUNCTION procurements.prevent_locked_ppmp_content_change() IS
+  'Guard PPMP content tables against writes once the owning version leaves draft. '
+  'For INSERT: requires destination version to be in draft. '
+  'For UPDATE: requires both source and destination versions to be in draft, preventing reparenting of approved content into draft versions. '
+  'For DELETE: requires source version to be in draft. '
+  'This check is enforced regardless of RLS to close a potential security hole.';
 
 -- Guard UPDATE and DELETE. INSERT is allowed only into draft versions,
 -- which the same check covers via NEW.
