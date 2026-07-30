@@ -81,7 +81,7 @@ export function AppWorkflowActions({
       )}
 
       <p className="text-xs text-muted-foreground">
-        {showFinalize && "Finalization requires all items reviewed and all approved items assigned to finalized lots."}
+        {showFinalize && "Finalization requires all items reviewed and all approved items assigned to lots whose composition is locked."}
         {showApprove && "Approval enables End Users to create Purchase Requests for their PPMP items."}
       </p>
 
@@ -90,7 +90,7 @@ export function AppWorkflowActions({
           <DialogHeader>
             <DialogTitle>Finalize APP</DialogTitle>
             <DialogDescription>
-              This will mark the APP as FINAL. All items must be reviewed and all approved items assigned to finalized lots. This action cannot be undone.
+              This will mark the APP as FINAL. All items must be reviewed, and every lot must have its composition locked. Lots become biddable only after the Final APP is approved, or under an authorized EPA. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

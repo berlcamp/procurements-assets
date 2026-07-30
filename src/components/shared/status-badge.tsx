@@ -63,6 +63,14 @@ function getStatusClassName(status: string): string {
     case "info":
       return "bg-gray-100 text-gray-700 border-gray-200"
 
+    // Two-gate lot model (20260810). Without these, both new states fall to the
+    // gray default and become indistinguishable from each other and from
+    // locked/archived/inactive. Neither value is used by any other entity.
+    case "composed":
+      return "bg-indigo-100 text-indigo-800 border-indigo-200"
+    case "released":
+      return "bg-green-100 text-green-800 border-green-200"
+
     // Special procurement phases
     case "indicative":
       return "bg-violet-100 text-violet-800 border-violet-200"

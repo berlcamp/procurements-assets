@@ -12,7 +12,8 @@ import type {
   AppLotWithItems,
   AppSummary,
 } from "@/types/database"
-import type { AppLotInput, AppHopeReviewInput } from "@/lib/schemas/app"
+import type { AppLotInput, AppHopeReviewInput, AuthorizeEpaInput } from "@/lib/schemas/app"
+import { authorizeEpaSchema } from "@/lib/schemas/app"
 import { notifyRoleInDivision, notifyUser } from "@/lib/actions/helpers"
 
 // ============================================================
@@ -327,13 +328,20 @@ export async function getAppUserPermissions(appId: string): Promise<{
   canFinalizeLot: boolean
   canFinalizeApp: boolean
   canApproveApp: boolean
+  canReleaseLots: boolean
+  canAuthorizeEpa: boolean
 }> {
+  const none = {
+    canHopeReview: false, canViewLots: false, canManageLots: false,
+    canFinalizeLot: false, canFinalizeApp: false, canApproveApp: false,
+    canReleaseLots: false, canAuthorizeEpa: false,
+  }
   const supabase = await createClient()
   const [ctx, { data: app }] = await Promise.all([
     getUserRoleContext(supabase),
     supabase.schema("procurements").from("apps").select("status").eq("id", appId).single(),
   ])
-  if (!ctx) return { canHopeReview: false, canViewLots: false, canManageLots: false, canFinalizeLot: false, canFinalizeApp: false, canApproveApp: false }
+  if (!ctx) return none
 
   const { roleNames } = ctx
   const isHope = roleNames.includes("hope") || roleNames.includes("division_admin")
@@ -350,6 +358,16 @@ export async function getAppUserPermissions(appId: string): Promise<{
     canFinalizeLot: canFinalizeLotRole && !lotsLocked,
     canFinalizeApp: isHope,
     canApproveApp: isHope,
+    // Role sets mirror the grants seeded in 20260810: app.release_lots goes to
+    // bac_chair/bac_secretariat/division_admin, app.authorize_epa to
+    // hope/division_admin (EPA commits the division to bidding against money
+    // that does not legally exist yet, so it is a HOPE-level decision).
+    //
+    // NEITHER is gated on !lotsLocked, deliberately. Releasing REQUIRES the APP
+    // version to be approved, which is precisely when lotsLocked is true —
+    // adding the guard here would hide the button exactly when it is needed.
+    canReleaseLots: canFinalizeLotRole,
+    canAuthorizeEpa: isHope,
   }
 }
 
@@ -399,7 +417,7 @@ export async function getAppsRequiringMyAction(
 
   // For BAC roles, also surface APPs that have:
   // 1) HOPE-approved items not yet assigned to a lot, OR
-  // 2) Lots still in draft (not yet finalized)
+  // 2) Lots still in draft (composition not yet locked)
   if (isBac) {
     const [{ data: unassigned }, { data: draftLots }] = await Promise.all([
       supabase
@@ -697,6 +715,72 @@ export async function finalizeLot(
   const { error } = await supabase
     .schema("procurements")
     .rpc("finalize_lot", { p_lot_id: lotId })
+
+  if (error) return { error: error.message }
+
+  revalidatePath("/dashboard/planning/app")
+  return { error: null }
+}
+
+// ============================================================
+// Two-gate lot model (20260810 / 20260811)
+//
+// *** NONE of the three actions below may use isAppLotsLockedByLot. ***
+// That helper encodes the OLD model: "once the APP reaches final/approved/
+// posted, lots are frozen". Release and EPA are the exact inverse — a lot
+// becomes releasable only ONCE its APP version is approved, so
+// LOTS_LOCKED_STATUSES is true for essentially every lot that is legitimately
+// releasable. Applying the guard here would block release 100% of the time
+// while looking like ordinary defensive copying of finalizeLot above.
+//
+// Composition (finalizeLot) keeps the guard, and correctly so: composing must
+// happen BEFORE the APP is final.
+//
+// The RPCs re-check division, permission and state themselves, so nothing is
+// lost by not guarding here.
+// ============================================================
+
+export async function releaseAppLot(
+  lotId: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .schema("procurements")
+    .rpc("release_app_lot", { p_lot_id: lotId })
+
+  if (error) return { error: error.message }
+
+  revalidatePath("/dashboard/planning/app")
+  return { error: null }
+}
+
+export async function releaseAllAppLots(
+  appId: string
+): Promise<{ count: number | null; error: string | null }> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .schema("procurements")
+    .rpc("release_all_app_lots", { p_app_id: appId })
+
+  if (error) return { count: null, error: error.message }
+
+  revalidatePath("/dashboard/planning/app")
+  return { count: data as number, error: null }
+}
+
+export async function authorizeEpaLot(
+  input: AuthorizeEpaInput
+): Promise<{ error: string | null }> {
+  const parsed = authorizeEpaSchema.safeParse(input)
+  if (!parsed.success) return { error: parsed.error.issues[0].message }
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .schema("procurements")
+    .rpc("authorize_epa_lot", {
+      p_lot_id: parsed.data.lot_id,
+      p_justification: parsed.data.justification,
+    })
 
   if (error) return { error: error.message }
 

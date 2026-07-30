@@ -23,11 +23,12 @@ import { AppLotCard } from "./app-lot-card"
 import { PlusIcon, CheckCircle2, MoveRight, X } from "lucide-react"
 import {
   createAppLot, updateAppLot, assignLotItemsToLot, unassignLotItems, finalizeLot, deleteAppLot,
+  releaseAppLot, authorizeEpaLot,
 } from "@/lib/actions/app"
 import { PROCUREMENT_MODES } from "@/lib/schemas/ppmp"
 import { appItemLines, linesTotal, type AppItemLine } from "@/lib/utils/app-item-lines"
 import type { AppLotInput } from "@/lib/schemas/app"
-import type { AppItemWithOffice, AppLotWithItems } from "@/types/database"
+import type { AppItemWithOffice, AppLotWithItems, PlanningStage } from "@/types/database"
 import { cn } from "@/lib/utils"
 
 type GroupBy = "mode" | "office" | "cse" | "none"
@@ -82,11 +83,23 @@ interface AppLotManagerProps {
   lots: AppLotWithItems[]
   canManageLots: boolean
   canFinalizeLot: boolean
+  canReleaseLots?: boolean
+  canAuthorizeEpa?: boolean
+  /**
+   * Planning stage and status of the APP version these lots belong to. EPA is
+   * only offered on an approved INDICATIVE version; a null stage means unknown
+   * and must NOT be treated as indicative (the RPC fails closed on it too).
+   */
+  versionPlanningStage?: PlanningStage | null
+  versionStatus?: string | null
   creatorsByPpmpId?: Record<string, string>
 }
 
 export function AppLotManager({
-  appId, items, lots, canManageLots, canFinalizeLot, creatorsByPpmpId = {},
+  appId, items, lots, canManageLots, canFinalizeLot,
+  canReleaseLots = false, canAuthorizeEpa = false,
+  versionPlanningStage = null, versionStatus = null,
+  creatorsByPpmpId = {},
 }: AppLotManagerProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -110,6 +123,20 @@ export function AppLotManager({
   const [deleteLotId, setDeleteLotId] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const deletingLot = lots.find(l => l.id === deleteLotId)
+
+  // EPA authorization dialog — errors stay in the dialog, matching create/delete
+  const [epaLotId, setEpaLotId] = useState<string | null>(null)
+  const [epaJustification, setEpaJustification] = useState("")
+  const [epaError, setEpaError] = useState<string | null>(null)
+  const epaLot = lots.find(l => l.id === epaLotId)
+
+  // EPA exists to let an INDICATIVE APP be bid before the GAA. A null stage is
+  // unknown, not indicative — offering EPA there would invite a refusal the
+  // user cannot act on, and authorize_epa_lot fails closed on it anyway.
+  const epaApplies =
+    canAuthorizeEpa &&
+    versionStatus === "approved" &&
+    versionPlanningStage === "indicative"
 
   const procurementModeLabel = useMemo(
     () => Object.fromEntries(PROCUREMENT_MODES.map((m) => [m.value, m.label])),
@@ -274,6 +301,33 @@ export function AppLotManager({
       const result = await finalizeLot(lotId)
       if (result.error) setError(result.error)
       else router.refresh()
+    })
+  }
+
+  // The release/EPA RPC messages are written to be acted on — they name the
+  // exact next step ("authorize EPA on this lot first", "record the GAA ceiling
+  // first"). Surface them verbatim; never replace with a generic string.
+  const handleReleaseLot = (lotId: string) => {
+    setError(null)
+    startTransition(async () => {
+      const result = await releaseAppLot(lotId)
+      if (result.error) setError(result.error)
+      else router.refresh()
+    })
+  }
+
+  const handleAuthorizeEpa = () => {
+    if (!epaLotId) return
+    setEpaError(null)
+    startTransition(async () => {
+      const result = await authorizeEpaLot({
+        lot_id: epaLotId,
+        justification: epaJustification.trim(),
+      })
+      if (result.error) { setEpaError(result.error); return }
+      setEpaLotId(null)
+      setEpaJustification("")
+      router.refresh()
     })
   }
 
@@ -596,6 +650,16 @@ export function AppLotManager({
                         ? () => handleFinalizeLot(lot.id)
                         : undefined
                     }
+                    onRelease={
+                      canReleaseLots && lot.status === "composed"
+                        ? () => handleReleaseLot(lot.id)
+                        : undefined
+                    }
+                    onAuthorizeEpa={
+                      epaApplies && lot.status === "composed" && !lot.is_early_procurement
+                        ? () => { setEpaJustification(""); setEpaError(null); setEpaLotId(lot.id) }
+                        : undefined
+                    }
                     onQuickAdd={
                       canManageLots && lot.status === "draft"
                         ? () => handleAssignItems(lot.id)
@@ -799,6 +863,54 @@ export function AppLotManager({
             </Button>
             <Button variant="destructive" onClick={handleDeleteLot} disabled={isPending}>
               Delete lot
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* EPA authorization */}
+      <Dialog
+        open={!!epaLotId}
+        onOpenChange={(open) => { if (!open && !isPending) { setEpaLotId(null); setEpaError(null) } }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Authorize Early Procurement{epaLot ? ` — Lot ${epaLot.lot_number}` : ""}
+            </DialogTitle>
+            <DialogDescription>
+              This lot may then be bid and awarded on the indicative APP, before the
+              GAA takes effect. Contract signing and the NTP stay blocked until an
+              appropriation is recorded. The justification is written to the approval log.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Justification</Label>
+            <Textarea
+              value={epaJustification}
+              onChange={(e) => setEpaJustification(e.target.value)}
+              placeholder="Why is early procurement warranted for this lot? (min 20 characters)"
+              rows={4}
+              disabled={isPending}
+            />
+            <p className="text-xs text-muted-foreground">
+              {epaJustification.trim().length}/20 characters minimum
+            </p>
+          </div>
+          {epaError && (
+            <div className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400">
+              {epaError}
+            </div>
+          )}
+          <DialogFooter className="mx-0 mb-0 gap-2 rounded-b-xl border-t border-border/60 bg-muted/25 sm:gap-3">
+            <Button variant="outline" onClick={() => setEpaLotId(null)} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAuthorizeEpa}
+              disabled={isPending || epaJustification.trim().length < 20}
+            >
+              {isPending ? "Authorizing..." : "Authorize EPA"}
             </Button>
           </DialogFooter>
         </DialogContent>

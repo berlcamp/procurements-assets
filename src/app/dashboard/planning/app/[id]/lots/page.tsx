@@ -74,6 +74,10 @@ export default async function AppLotsPage({ params }: Props) {
         lots={lots}
         canManageLots={permissions.canManageLots}
         canFinalizeLot={permissions.canFinalizeLot}
+        canReleaseLots={permissions.canReleaseLots}
+        canAuthorizeEpa={permissions.canAuthorizeEpa}
+        versionPlanningStage={version?.planning_stage ?? null}
+        versionStatus={version?.status ?? null}
         creatorsByPpmpId={creatorsByPpmpId}
       />
     </div>

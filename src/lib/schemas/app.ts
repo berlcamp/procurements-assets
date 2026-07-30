@@ -71,3 +71,26 @@ export const APP_LOT_STATUS_LABELS: Record<string, string> = {
   in_procurement:  "In Procurement",
   finalized:       "Finalized (retired)",
 }
+
+// ============================================================
+// Two-gate lot actions (20260810 / 20260811)
+// ============================================================
+
+export const releaseLotSchema = z.object({
+  lot_id: z.string().uuid(),
+})
+export type ReleaseLotInput = z.infer<typeof releaseLotSchema>
+
+/**
+ * The 20-character minimum mirrors the identical check inside
+ * procurements.authorize_epa_lot(). Validating here only buys a better error
+ * message — the database is the authority, and it re-checks.
+ */
+export const authorizeEpaSchema = z.object({
+  lot_id: z.string().uuid(),
+  justification: z
+    .string()
+    .trim()
+    .min(20, "Provide at least 20 characters explaining why EPA is warranted"),
+})
+export type AuthorizeEpaInput = z.infer<typeof authorizeEpaSchema>

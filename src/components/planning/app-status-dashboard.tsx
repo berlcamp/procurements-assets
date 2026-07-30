@@ -36,7 +36,10 @@ export function AppStatusDashboard({ summary }: AppStatusDashboardProps) {
         </CardHeader>
         <CardContent className="space-y-1.5">
           <StatItem label="Total Lots" value={summary.total_lots} />
-          <StatItem label="Finalized" value={summary.finalized_lots} color="text-green-600" />
+          {/* finalized_lots counts lots past composition, i.e. composed or released
+              (20260810 redefined it; the RPC column name was kept so the
+              return type and src/types/database.ts did not have to change). */}
+          <StatItem label="Composed" value={summary.finalized_lots} color="text-green-600" />
           <StatItem label="Draft" value={summary.draft_lots} color="text-yellow-600" />
           <StatItem label="Unlotted Items" value={summary.unlotted_items} color="text-orange-600" />
         </CardContent>

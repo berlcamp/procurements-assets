@@ -10,14 +10,19 @@ import {
 } from "@/components/ui/select"
 import { AmountDisplay } from "@/components/shared/amount-display"
 import { StatusBadge } from "@/components/shared/status-badge"
-import { Lock, PlusCircle, Trash2, Check, X, Pencil } from "lucide-react"
+import { Lock, PlusCircle, Trash2, Check, X, Pencil, Send, Zap } from "lucide-react"
 import { PROCUREMENT_MODES } from "@/lib/schemas/ppmp"
 import type { AppLotWithItems } from "@/types/database"
 
 interface AppLotCardProps {
   lot: AppLotWithItems
   onDelete?: () => void
+  /** Gate 1a — draft -> composed. Named for the RPC it still calls. */
   onFinalize?: () => void
+  /** Gate 1c — composed -> released. */
+  onRelease?: () => void
+  /** Gate 1b — flag a composed lot on an indicative APP as EPA. */
+  onAuthorizeEpa?: () => void
   onQuickAdd?: () => void
   onUpdate?: (fields: { lot_name?: string; description?: string; procurement_method?: string }) => Promise<{ error: string | null }>
   hasSelectedItems?: boolean
@@ -28,6 +33,8 @@ export function AppLotCard({
   lot,
   onDelete,
   onFinalize,
+  onRelease,
+  onAuthorizeEpa,
   onQuickAdd,
   onUpdate,
   hasSelectedItems = false,
@@ -129,6 +136,18 @@ export function AppLotCard({
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <StatusBadge status={lot.status} />
+            {/* EPA is the reason a lot may be biddable on an indicative APP, so
+                it has to be visible wherever the status is. The justification
+                is the recorded authorization — surface it on hover. */}
+            {lot.is_early_procurement && (
+              <Badge
+                variant="outline"
+                className="border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                title={lot.epa_justification ?? "Early Procurement Activity authorized"}
+              >
+                EPA
+              </Badge>
+            )}
             {onDelete && lot.status === "draft" && (
               <Button
                 size="icon"
@@ -220,7 +239,7 @@ export function AppLotCard({
           <AmountDisplay amount={lot.total_estimated_cost} className="font-semibold" />
         </div>
 
-        {/* Quick-add and finalize actions, only for draft lots */}
+        {/* Gate 1a — composition. Draft lots only. */}
         {lot.status === "draft" && (onQuickAdd || onFinalize) && (
           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50">
             {onQuickAdd && (
@@ -243,9 +262,42 @@ export function AppLotCard({
                 className="h-7 gap-1.5 text-xs"
                 onClick={onFinalize}
                 disabled={isPending}
+                title="Lock which items sit in this lot. Required before the APP can be finalized. Does not make the lot biddable."
               >
                 <Lock className="h-3 w-3" />
-                Finalize lot
+                Lock composition
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* Gates 1b and 1c — EPA and release. Composed lots only. */}
+        {lot.status === "composed" && (onRelease || onAuthorizeEpa) && (
+          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50">
+            {onRelease && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 text-xs"
+                onClick={onRelease}
+                disabled={isPending}
+                title="Fix the ABC and make this lot biddable. Requires an approved Final APP, or an EPA authorization."
+              >
+                <Send className="h-3 w-3" />
+                Release for bidding
+              </Button>
+            )}
+            {onAuthorizeEpa && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 text-xs"
+                onClick={onAuthorizeEpa}
+                disabled={isPending}
+                title="Authorize Early Procurement Activity so this lot can be bid before the GAA. Contract signing stays blocked."
+              >
+                <Zap className="h-3 w-3" />
+                Authorize EPA
               </Button>
             )}
           </div>
