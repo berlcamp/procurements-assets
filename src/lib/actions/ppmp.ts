@@ -1338,6 +1338,12 @@ export async function returnPpmp(
  * override permission, and it renders in a toast. So the raw text is logged
  * server-side and returned in `details` for callers that can use it, while
  * `error` carries a sentence a planning officer can act on.
+ *
+ * `blockedByInflight` exists so the UI can tell THIS refusal — the only one an
+ * override can get past — from every other failure, without re-matching the
+ * message text. The regex below is already the single place that parsing
+ * happens; a client re-deriving it from the humanised `error` string would be a
+ * second copy that drifts.
  */
 export async function createPpmpAmendment(
   ppmpId: string,
@@ -1347,6 +1353,17 @@ export async function createPpmpAmendment(
   versionId: string | null;
   error: string | null;
   details?: string;
+  /** True only for the in-flight-procurement guard, which `force` can override. */
+  blockedByInflight?: boolean;
+  /** Distinct APP items in procurement, as counted by the RPC. */
+  inflightCount?: number;
+  /**
+   * Whether this caller holds `ppmp.amend_override`. Set only alongside
+   * `blockedByInflight`. This gates the UI affordance only — the RPC re-checks
+   * the permission itself (20260809_amendment_guards.sql:425), so it is not the
+   * security boundary and a stale `true` cannot grant anything.
+   */
+  canOverride?: boolean;
 }> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -1369,6 +1386,21 @@ export async function createPpmpAmendment(
     if (inflight) {
       console.error("createPpmpAmendment blocked by in-flight procurement:", error.message);
       const n = Number(inflight[1]);
+
+      // Resolved here, on the refusal path, rather than passed down from the
+      // page: the remedy sentence below is only correct if it knows which of
+      // the two audiences is reading it, and a value read at page-render time
+      // could be stale by the time the guard actually fires.
+      const { data: canOverride } = await supabase
+        .schema("procurements")
+        .rpc("has_permission", { p_permission_code: "ppmp.amend_override" });
+
+      const remedy = canOverride
+        ? `You hold the override permission, so you can proceed anyway — the override and ` +
+          `your justification are recorded in the approval log.`
+        : `Ask the BAC to cancel or complete the affected activities first, or ask a division ` +
+          `administrator or BAC chair — who hold the override permission — to proceed.`;
+
       return {
         versionId: null,
         error:
@@ -1376,8 +1408,31 @@ export async function createPpmpAmendment(
           `already in procurement — grouped into a finalized APP lot or requested on a live ` +
           `purchase request. Amending now would remove ${n === 1 ? "that line" : "those lines"} ` +
           `from the APP while procurement continues against ${n === 1 ? "it" : "them"}. ` +
-          `Ask the BAC to cancel or complete the affected activities first, or ask a division ` +
-          `administrator or BAC chair — who hold the override permission — to proceed.`,
+          remedy,
+        details: error.message,
+        blockedByInflight: true,
+        inflightCount: n,
+        canOverride: canOverride === true,
+      };
+    }
+
+    // force = true from someone who does not hold the permission
+    // (20260809_amendment_guards.sql:425-427). Reachable when the permission is
+    // revoked between the refusal and the override click, and the raw sentence
+    // names a permission code at a user. Humanise it rather than leaking that.
+    //
+    // Anchored on "Forcing an amendment", NOT on the permission code: the
+    // NON-force refusal above also ends "(requires the ppmp.amend_override
+    // permission)." — matching on the code alone would classify that message as
+    // this one whenever the in-flight regex missed, telling a user they lack a
+    // permission when what they actually need is to cancel the activities.
+    if (error.message.includes("Forcing an amendment past in-flight procurement")) {
+      console.error("createPpmpAmendment override denied:", error.message);
+      return {
+        versionId: null,
+        error:
+          `You do not have permission to amend this PPMP past items that are already in ` +
+          `procurement. Ask a division administrator or the BAC chair to do it.`,
         details: error.message,
       };
     }
