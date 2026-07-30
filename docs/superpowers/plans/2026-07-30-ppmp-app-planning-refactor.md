@@ -1674,6 +1674,30 @@ $$;
 COMMENT ON FUNCTION procurements.app_version_is_editable(UUID) IS
   'APP item content is editable only while the version is draft/under_review/bac_finalization.';
 
+-- AMENDED 2026-07-30. The version originally written here had the same defect
+-- that Task 6 shipped and had to fix twice:
+--
+--   WHERE id = COALESCE(NEW.app_version_id, OLD.app_version_id)
+--
+-- On UPDATE that always resolves to NEW, so the guard only ever checked the
+-- version a row was moving TO. app_items.app_version_id is a plain updatable
+-- FK, so this single statement laundered locked content into a draft version
+-- while rewriting its budget:
+--
+--   UPDATE procurements.app_items
+--      SET app_version_id = <a draft version>, estimated_budget = 999999
+--    WHERE id = <item in an approved version>;
+--
+-- It also failed OPEN when the version could not be resolved.
+--
+-- Requirements, mirroring the corrected Task 6 guard:
+--   * branch explicitly on TG_OP — never COALESCE(NEW.x, OLD.x)
+--   * INSERT  -> NEW's version must be editable
+--   * DELETE  -> OLD's version must be editable
+--   * UPDATE  -> BOTH OLD's and NEW's versions must be editable
+--   * fail CLOSED (RAISE) when a version cannot be resolved
+--   * distinguish the refusals: same version = a frozen-content edit;
+--     different versions = a move out of, or into, a locked version
 CREATE OR REPLACE FUNCTION procurements.prevent_locked_app_item_change()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -1681,25 +1705,88 @@ SECURITY DEFINER
 SET search_path = procurements, platform, auth, public
 AS $$
 DECLARE
-  v_status TEXT;
+  v_status_old TEXT;
+  v_status_new TEXT;
 BEGIN
-  SELECT status INTO v_status
-    FROM procurements.app_versions
-   WHERE id = COALESCE(NEW.app_version_id, OLD.app_version_id);
+  IF TG_OP = 'DELETE' THEN
+    SELECT status INTO v_status_old
+      FROM procurements.app_versions WHERE id = OLD.app_version_id;
 
-  IF v_status IS NULL THEN
-    RETURN COALESCE(NEW, OLD);
+    IF v_status_old IS NULL THEN
+      RAISE EXCEPTION
+        'Cannot delete APP item: owning APP version could not be resolved';
+    END IF;
+
+    IF v_status_old NOT IN ('draft','under_review','bac_finalization') THEN
+      RAISE EXCEPTION
+        'Cannot delete APP items on a version with status "%". Create an APP amendment instead.',
+        v_status_old;
+    END IF;
+
+    RETURN OLD;
   END IF;
 
-  IF v_status NOT IN ('draft','under_review','bac_finalization') THEN
-    RAISE EXCEPTION
-      'Cannot modify APP items on a version with status "%". Create an APP amendment instead.',
-      v_status;
+  IF TG_OP = 'INSERT' THEN
+    SELECT status INTO v_status_new
+      FROM procurements.app_versions WHERE id = NEW.app_version_id;
+
+    IF v_status_new IS NULL THEN
+      RAISE EXCEPTION
+        'Cannot insert APP item: owning APP version could not be resolved';
+    END IF;
+
+    IF v_status_new NOT IN ('draft','under_review','bac_finalization') THEN
+      RAISE EXCEPTION
+        'Cannot add APP items to a version with status "%". Create an APP amendment instead.',
+        v_status_new;
+    END IF;
+
+    RETURN NEW;
   END IF;
 
-  RETURN COALESCE(NEW, OLD);
+  IF TG_OP = 'UPDATE' THEN
+    SELECT status INTO v_status_old
+      FROM procurements.app_versions WHERE id = OLD.app_version_id;
+    SELECT status INTO v_status_new
+      FROM procurements.app_versions WHERE id = NEW.app_version_id;
+
+    IF v_status_old IS NULL THEN
+      RAISE EXCEPTION
+        'Cannot update APP item: owning APP version (old) could not be resolved';
+    END IF;
+    IF v_status_new IS NULL THEN
+      RAISE EXCEPTION
+        'Cannot update APP item: owning APP version (new) could not be resolved';
+    END IF;
+
+    IF OLD.app_version_id = NEW.app_version_id THEN
+      IF v_status_old NOT IN ('draft','under_review','bac_finalization') THEN
+        RAISE EXCEPTION
+          'Cannot modify APP items on a version with status "%". Create an APP amendment instead.',
+          v_status_old;
+      END IF;
+    ELSE
+      IF v_status_old NOT IN ('draft','under_review','bac_finalization') THEN
+        RAISE EXCEPTION
+          'Cannot move APP items out of a version with status "%". Create an APP amendment instead.',
+          v_status_old;
+      END IF;
+      IF v_status_new NOT IN ('draft','under_review','bac_finalization') THEN
+        RAISE EXCEPTION
+          'Cannot move APP items into a version with status "%". Create an APP amendment instead.',
+          v_status_new;
+      END IF;
+    END IF;
+
+    RETURN NEW;
+  END IF;
+
+  RAISE EXCEPTION 'Unexpected trigger operation: %', TG_OP;
 END;
 $$;
+
+COMMENT ON FUNCTION procurements.prevent_locked_app_item_change() IS
+  'Guards app_items once the owning version leaves the editable window. Branches on TG_OP and checks both sides of an UPDATE, so a reparenting move cannot launder locked content into a draft version.';
 
 CREATE TRIGGER trg_app_items_immutable_when_locked
   BEFORE INSERT OR UPDATE OR DELETE ON procurements.app_items
