@@ -4252,6 +4252,20 @@ CREATE TRIGGER trg_recalc_ppmp_lot_abc
 -- ABC that an approved APP already published would change a bid ceiling.
 -- ============================================================
 
+-- ADDED 2026-07-30 after the same defect broke Task 3 at apply time.
+-- Task 6 installs trg_ppmp_lots_immutable_when_locked, which raises on ANY
+-- write to a lot whose parent PPMP version is not 'draft'. Both backfills
+-- below touch lots under approved versions, so without this they abort with
+-- "Cannot modify ppmp_lots on a PPMP version with status approved".
+-- The backfill writes only derived metadata columns (abc_is_manual,
+-- abc_manual_justification, and a recomputed estimated_budget that is by
+-- definition already implied by the line items) — not new plan content.
+-- ALTER TABLE ... DISABLE TRIGGER is transactional, so a failure restores it.
+-- Do NOT use SET session_replication_role: it would disable the audit
+-- triggers too, and this backfill must be audit-logged.
+ALTER TABLE procurements.ppmp_lots
+  DISABLE TRIGGER trg_ppmp_lots_immutable_when_locked;
+
 UPDATE procurements.ppmp_lots pl
    SET abc_is_manual = true,
        abc_manual_justification =
@@ -4285,6 +4299,11 @@ UPDATE procurements.ppmp_lots pl
            FROM procurements.ppmp_lot_items pli
           WHERE pli.ppmp_lot_id = pl.id
        ), 0);
+
+-- Restore the guard immediately. The verify script for this migration must
+-- assert tgenabled <> 'D' so a half-applied run cannot leave it off.
+ALTER TABLE procurements.ppmp_lots
+  ENABLE TRIGGER trg_ppmp_lots_immutable_when_locked;
 ```
 
 Then `CREATE OR REPLACE` `submit_ppmp` in the same migration — start from the Task 15 version and add a reconciliation check after the existing `estimated_budget <= 0` check at `:81-90`:
@@ -4487,6 +4506,17 @@ CREATE TRIGGER trg_recalc_app_totals_on_review
   WHEN (OLD.hope_review_status IS DISTINCT FROM NEW.hope_review_status)
   EXECUTE FUNCTION procurements.recalc_app_totals_on_review();
 
+-- ADDED 2026-07-30 after the same defect broke Task 3 at apply time.
+-- Task 7 installs trg_prevent_approved_app_version_update, which raises when
+-- OLD.status = 'approved' AND NEW.status = 'approved'. This backfill updates
+-- every version including approved ones and does not change status, so both
+-- sides are 'approved' and it aborts with "Cannot modify an approved APP
+-- version". The backfill writes only derived totals recomputed from
+-- app_items — no plan content — so the guard is suspended for these two
+-- statements and restored immediately. Transactional: a failure restores it.
+ALTER TABLE procurements.app_versions
+  DISABLE TRIGGER trg_prevent_approved_app_version_update;
+
 -- Backfill both columns for every existing version.
 UPDATE procurements.app_versions av
    SET total_estimated_cost = COALESCE((
@@ -4499,6 +4529,11 @@ UPDATE procurements.app_versions av
             AND ai.deleted_at IS NULL
             AND ai.hope_review_status = 'approved'
        ), 0);
+
+-- Restore the guard immediately. This migration's verify script must assert
+-- tgenabled <> 'D' so a half-applied run cannot leave it off.
+ALTER TABLE procurements.app_versions
+  ENABLE TRIGGER trg_prevent_approved_app_version_update;
 ```
 
 Then `CREATE OR REPLACE` `finalize_app` one last time — start from the Task 11 version and change its total write to set both columns explicitly:
