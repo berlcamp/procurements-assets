@@ -105,7 +105,12 @@ UPDATE procurements.ppmps p
    );
 
 -- ============================================================
--- 3. Record a failure and tell the people who can fix it.
+-- 3. Record a failure, tell the people who can fix it, and tell the office
+--    that was harmed.
+--
+-- The ppmps UPDATE is unconditional and outside the exception block; the
+-- approval_logs and notifications writes are best-effort inside it. See the
+-- long comments in the body for why that split is the whole design.
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION procurements.record_consolidation_failure(
@@ -131,6 +136,29 @@ BEGIN
     RETURN;
   END IF;
 
+  -- notifications.message is TEXT NOT NULL (20240310_notifications.sql:6), and
+  -- 'literal ' || NULL evaluates to NULL, so a NULL p_reason would raise a
+  -- not-null violation on the notification INSERT — a raise on the failure
+  -- path, inside a trigger, which is the one thing this function must never
+  -- do. Unreachable today (both call sites pass string literals and EXECUTE is
+  -- revoked from PUBLIC) but the guard costs nothing and the raise was live.
+  -- p_reason is an IN parameter, which in plpgsql is an ordinary assignable
+  -- local variable.
+  p_reason := COALESCE(p_reason, 'Unknown consolidation failure.');
+
+  -- THE LOAD-BEARING RECORD. Deliberately OUTSIDE the exception block below.
+  -- A plpgsql EXCEPTION handler opens a subtransaction, so everything inside it
+  -- is rolled back on a catch; this UPDATE is the very thing this function
+  -- exists to write, so it must survive with the approval no matter what the
+  -- best-effort side-writes do. DO NOT move it inside the block.
+  --
+  -- consolidated_at is cleared. On the zero-row branch of
+  -- auto_populate_app_from_ppmp() an amendment has just soft-deleted this
+  -- PPMP's previous APP items, so a surviving timestamp would assert a success
+  -- that has since been undone. After this, consolidation_status = 'failed'
+  -- always implies consolidated_at IS NULL. Nothing else in supabase/ or src/
+  -- reads consolidated_at, so nothing depends on it surviving a failure.
+  --
   -- Writes ONLY consolidation_* columns. See the trigger-safety note above:
   -- this re-fires trg_auto_populate_app_from_ppmp on the same row, and the
   -- status guard short-circuits it because OLD.status = NEW.status. Touching
@@ -138,60 +166,128 @@ BEGIN
   UPDATE procurements.ppmps
      SET consolidation_status = 'failed',
          consolidation_error  = p_reason,
+         consolidated_at      = NULL,
          updated_at           = NOW()
    WHERE id = p_ppmp_id;
 
-  -- approval_logs.acted_by is NOT NULL (20240311_approval_logs.sql:9), and
-  -- both ppmps.approved_by and ppmps.created_by are nullable. Falling through
-  -- to a NULL here would raise a not-null violation from inside a trigger and
-  -- roll back the HOPE approval. Skip the log entry instead — the PPMP row
-  -- itself already carries the failure, which is the load-bearing record.
-  v_actor := COALESCE(v_ppmp.approved_by, v_ppmp.created_by, auth.uid());
-
-  IF v_actor IS NOT NULL THEN
-    INSERT INTO procurements.approval_logs (
-      reference_type, reference_id, step_name, step_order,
-      action, acted_by, remarks, office_id
-    ) VALUES (
-      'ppmp', p_ppmp_id, 'APP Consolidation', 5,
-      'noted', v_actor,
-      'Consolidation failed: ' || p_reason, v_ppmp.office_id
-    );
-  END IF;
-
-  -- Notify every active holder of app.bac_manage_lots in the division.
+  -- ------------------------------------------------------------------
+  -- BEST-EFFORT SIDE-WRITES. Nothing below may escape as an exception.
   --
-  -- NOTE: procurements.user_profiles has NO user_id column — its primary key
-  -- IS the auth.users id (20240302_user_profiles.sql:3). Joining on
-  -- up.user_id creates cleanly (plpgsql does not resolve column names at
-  -- CREATE time) and then fails at runtime inside the trigger, rolling back
-  -- the approval. Join on up.id.
-  INSERT INTO procurements.notifications (
-    user_id, title, message, type, reference_type, reference_id, office_id
-  )
-  SELECT DISTINCT up.id,
-         'PPMP not consolidated into APP',
-         'An approved PPMP could not be added to the APP: ' || p_reason,
-         'warning',
-         'ppmp',
-         p_ppmp_id,
-         v_ppmp.office_id
-    FROM procurements.user_profiles up
-    JOIN procurements.user_roles ur       ON ur.user_id = up.id
-    JOIN procurements.role_permissions rp ON rp.role_id = ur.role_id
-    JOIN procurements.permissions perm    ON perm.id = rp.permission_id
-   WHERE up.division_id = v_ppmp.division_id
-     AND up.deleted_at  IS NULL
-     AND up.is_active
-     AND ur.division_id = v_ppmp.division_id
-     AND ur.is_active
-     AND ur.revoked_at  IS NULL
-     AND perm.code = 'app.bac_manage_lots';
+  -- WHY THIS IS STRUCTURAL AND NOT ANALYTICAL. This function is called from
+  -- auto_populate_app_from_ppmp(), an AFTER UPDATE trigger on
+  -- procurements.ppmps that fires inside the HOPE approval's own transaction.
+  -- ANY exception that escapes rolls back the approval itself — a valid
+  -- approval destroyed by the bookkeeping meant to report a problem. This body
+  -- has twice shipped a raise that statement-by-statement review did not catch,
+  -- because both were invisible until runtime and only DDL cross-checking could
+  -- see them: a join on up.user_id against a table with no such column, and a
+  -- nullable COALESCE chain into approval_logs.acted_by NOT NULL. Neither
+  -- failed at CREATE time; both would have surfaced in production, on the error
+  -- path. The guarantee must not depend on the next editor repeating that
+  -- cross-check correctly.
+  --
+  -- THE TRADE-OFF, STATED PLAINLY. A plpgsql EXCEPTION block opens a
+  -- subtransaction, so on a catch BOTH side-writes are rolled back — including
+  -- a notification INSERT that had already partly succeeded — and only the
+  -- RAISE WARNING breadcrumb in the server log survives. What does survive is
+  -- the HOPE approval and the 'failed' mark written above. That is exactly the
+  -- stated preference: degraded reporting beats a rolled-back approval.
+  -- ------------------------------------------------------------------
+  BEGIN
+    -- approval_logs.acted_by is NOT NULL (20240311_approval_logs.sql:9), and
+    -- both ppmps.approved_by and ppmps.created_by are nullable. Falling
+    -- through to a NULL here would raise a not-null violation. Skip the log
+    -- entry instead — the PPMP row itself already carries the failure, which is
+    -- the load-bearing record.
+    v_actor := COALESCE(v_ppmp.approved_by, v_ppmp.created_by, auth.uid());
+
+    IF v_actor IS NOT NULL THEN
+      INSERT INTO procurements.approval_logs (
+        reference_type, reference_id, step_name, step_order,
+        action, acted_by, remarks, office_id
+      ) VALUES (
+        'ppmp', p_ppmp_id, 'APP Consolidation', 5,
+        'noted', v_actor,
+        'Consolidation failed: ' || p_reason, v_ppmp.office_id
+      );
+    END IF;
+
+    -- TWO audiences, ONE query, at most ONE notification per person.
+    --
+    --   (1) THE PEOPLE WHO CAN FIX IT — every active holder of
+    --       app.bac_manage_lots in the division: bac_chair, bac_member,
+    --       bac_secretariat and division_admin
+    --       (20240602_app_rls.sql:50-91), plus bac_vice_chair, which copies
+    --       bac_chair's grants (20260520_bac_vice_chair_role.sql:12-15).
+    --       Recovery requires an APP amendment, which is theirs to create.
+    --   (2) THE OFFICE THAT WAS HARMED — every active member of the
+    --       originating office. This migration's opening premise is that the
+    --       office believes its plan is in the APP when it is not; notifying
+    --       only the BAC leaves that belief intact. `hope`, who signed it,
+    --       does not hold app.bac_manage_lots either. ppmps.office_id is
+    --       NOT NULL (20240501_ppmps.sql:13).
+    --
+    -- DEDUPE IS STRUCTURAL. A bac_member sitting in the originating office is
+    -- in both audiences and must receive exactly one notification. This is ONE
+    -- scan of user_profiles with the two audiences as an OR, so up.id — the
+    -- table's PRIMARY KEY (20240302_user_profiles.sql:3) — can appear at most
+    -- once. The permission chain is an EXISTS subquery rather than a join, so a
+    -- user holding app.bac_manage_lots through several roles still yields one
+    -- row (the DISTINCT is now belt-and-braces). A UNION of two SELECTs would
+    -- also dedupe, but ONLY while both branches emit byte-identical rows —
+    -- tailor one message and it silently becomes two notifications. DO NOT
+    -- restructure this into a UNION.
+    --
+    -- NOTE: procurements.user_profiles has NO user_id column — its primary key
+    -- IS the auth.users id (20240302_user_profiles.sql:3). Joining on
+    -- up.user_id creates cleanly (plpgsql does not resolve column names at
+    -- CREATE time) and then fails at runtime. Join on up.id.
+    --
+    -- type = 'warning' is in the notifications CHECK set
+    -- (20240310_notifications.sql:8); office_id is v_ppmp.office_id, a live
+    -- procurements.offices FK (20240310_notifications.sql:13).
+    INSERT INTO procurements.notifications (
+      user_id, title, message, type, reference_type, reference_id, office_id
+    )
+    SELECT DISTINCT up.id,
+           'PPMP not consolidated into APP',
+           'An approved PPMP did NOT reach the APP, so its items are missing '
+           || 'from the plan: ' || p_reason
+           || ' The BAC has been notified; recovering it requires an APP amendment.',
+           'warning',
+           'ppmp',
+           p_ppmp_id,
+           v_ppmp.office_id
+      FROM procurements.user_profiles up
+     WHERE up.division_id = v_ppmp.division_id
+       AND up.deleted_at  IS NULL
+       AND up.is_active
+       AND (
+         -- (2) the office that was harmed
+         up.office_id = v_ppmp.office_id
+         -- (1) the people who can fix it
+         OR EXISTS (
+           SELECT 1
+             FROM procurements.user_roles ur
+             JOIN procurements.role_permissions rp ON rp.role_id = ur.role_id
+             JOIN procurements.permissions perm    ON perm.id = rp.permission_id
+            WHERE ur.user_id     = up.id
+              AND ur.division_id = v_ppmp.division_id
+              AND ur.is_active
+              AND ur.revoked_at  IS NULL
+              AND perm.code      = 'app.bac_manage_lots'
+         )
+       );
+  EXCEPTION WHEN OTHERS THEN
+    -- Swallow deliberately. Propagating rolls back the HOPE approval.
+    RAISE WARNING 'record_consolidation_failure: side-writes failed for PPMP %: %',
+      p_ppmp_id, SQLERRM;
+  END;
 END;
 $$;
 
 COMMENT ON FUNCTION procurements.record_consolidation_failure(UUID, TEXT) IS
-  'Marks a PPMP as failed-to-consolidate, logs it, and notifies app.bac_manage_lots holders. INTERNAL: called only by auto_populate_app_from_ppmp(); EXECUTE is revoked from PUBLIC.';
+  'Marks a PPMP as failed-to-consolidate (clearing consolidated_at), logs it, and notifies both app.bac_manage_lots holders (who can fix it) and the originating office (who was harmed), one notification each. The ppmps UPDATE is unconditional; the log and notification writes are best-effort inside an exception block, because this runs in an AFTER UPDATE trigger and any escaping exception would roll back the HOPE approval. INTERNAL: called only by auto_populate_app_from_ppmp(); EXECUTE is revoked from PUBLIC.';
 
 -- INTERNAL HELPER, not an API. Postgres grants EXECUTE TO PUBLIC on every new
 -- function by default and the procurements schema is exposed over PostgREST,

@@ -1,9 +1,11 @@
 DO $$
 DECLARE
-  v_def       TEXT;
-  v_src       TEXT;
-  v_acl       aclitem[];
-  v_orphaned  INTEGER;
+  v_def        TEXT;
+  v_src        TEXT;
+  v_acl        aclitem[];
+  v_orphaned   INTEGER;
+  v_secdef     BOOLEAN;
+  v_chk_values TEXT[];
 BEGIN
   -- ----------------------------------------------------------------
   -- 1. Schema. This is the first assertion deliberately: it is the one that
@@ -45,6 +47,42 @@ BEGIN
     RAISE EXCEPTION 'ASSERTION FAILED: idx_ppmps_consolidation_failed missing';
   END IF;
 
+  -- The consolidation_status CHECK is the only thing stopping a typo'd status
+  -- ('FAILED', 'error', '') from being written by a future edit or a manual
+  -- remediation UPDATE, which would then sit invisible to
+  -- idx_ppmps_consolidation_failed and to every dashboard filter. Assert both
+  -- that it exists and that it admits EXACTLY the four intended values —
+  -- a substring check for 'failed' alone would pass a constraint that had
+  -- quietly grown a fifth escape-hatch value.
+  --
+  -- Aggregated, never SELECT ... INTO: several CHECKs could name the column and
+  -- plpgsql INTO would keep an arbitrary one. pg_get_constraintdef() renders
+  -- the IN-list as = ANY (ARRAY['pending'::text, ...]), so the single-quoted
+  -- tokens are exactly the admissible values.
+  SELECT array_agg(DISTINCT m[1] ORDER BY m[1])
+    INTO v_chk_values
+    FROM pg_constraint c
+    JOIN pg_class     t ON t.oid = c.conrelid
+    JOIN pg_namespace n ON n.oid = t.relnamespace
+    CROSS JOIN LATERAL regexp_matches(
+      pg_get_constraintdef(c.oid), '''([a-z_]+)''', 'g'
+    ) AS m
+   WHERE n.nspname  = 'procurements'
+     AND t.relname  = 'ppmps'
+     AND c.contype  = 'c'
+     AND pg_get_constraintdef(c.oid) LIKE '%consolidation_status%';
+
+  IF v_chk_values IS NULL THEN
+    RAISE EXCEPTION
+      'ASSERTION FAILED: no CHECK constraint on procurements.ppmps.consolidation_status';
+  END IF;
+
+  IF v_chk_values <> ARRAY['consolidated','failed','not_applicable','pending'] THEN
+    RAISE EXCEPTION
+      'ASSERTION FAILED: ppmps.consolidation_status CHECK admits % — expected exactly {consolidated,failed,not_applicable,pending}',
+      v_chk_values;
+  END IF;
+
   -- ----------------------------------------------------------------
   -- 2. record_consolidation_failure(UUID, TEXT)
   --
@@ -61,12 +99,38 @@ BEGIN
     RAISE EXCEPTION 'ASSERTION FAILED: record_consolidation_failure(UUID, TEXT) missing';
   END IF;
 
+  -- SECURITY DEFINER is load-bearing, not incidental. Its only caller is an
+  -- AFTER UPDATE trigger running as whichever role approved the PPMP, and the
+  -- function writes procurements.ppmps, approval_logs and notifications rows
+  -- for OTHER users under RLS. Dropped to SECURITY INVOKER it would start
+  -- failing — inside a trigger, on the error path — and roll back the very
+  -- approval this whole migration exists to protect.
+  SELECT p.prosecdef INTO v_secdef
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname  = 'procurements'
+     AND p.proname  = 'record_consolidation_failure'
+     AND p.pronargs = 2;
+
+  IF v_secdef IS NOT TRUE THEN
+    RAISE EXCEPTION
+      'ASSERTION FAILED: record_consolidation_failure is not SECURITY DEFINER';
+  END IF;
+
   -- It is SECURITY DEFINER with no division check and no permission check, and
   -- the procurements schema is exposed over PostgREST. Left EXECUTE-able by
   -- PUBLIC it is a live endpoint any authenticated user can call to mark an
   -- arbitrary PPMP in any division as failed and fan out notifications.
   -- proacl IS NULL means "default ACL", which grants EXECUTE to PUBLIC — so a
   -- NULL acl fails this assertion rather than passing it vacuously.
+  --
+  -- SCOPE LIMIT, READ BEFORE TRUSTING: this tests grantee = 0 (PUBLIC) ONLY.
+  -- It says nothing about grants to named roles, and in a Supabase project
+  -- `authenticated` and `anon` are named roles. A blanket
+  --   GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA procurements TO authenticated;
+  -- added later would re-open exactly the endpoint described above while this
+  -- assertion still passes, because PUBLIC would remain unprivileged. If such
+  -- a grant is ever introduced, this check goes vacuous and must be widened to
+  -- enumerate every grantee.
   SELECT p.proacl INTO v_acl
     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
    WHERE n.nspname  = 'procurements'
@@ -81,6 +145,44 @@ BEGIN
   THEN
     RAISE EXCEPTION
       'ASSERTION FAILED: record_consolidation_failure is EXECUTE-able by PUBLIC — REVOKE is missing';
+  END IF;
+
+  -- 2a. The three properties of record_consolidation_failure's BODY that this
+  --     fix round installed. Matched against comment-stripped source for the
+  --     same reason as section 3 below: the body's own comments name every one
+  --     of these tokens (they explain why each must not be removed), so a check
+  --     against the raw definition would pass on comment text alone.
+  SELECT pg_get_functiondef(p.oid) INTO v_def
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname  = 'procurements'
+     AND p.proname  = 'record_consolidation_failure'
+     AND p.pronargs = 2;
+
+  v_src := regexp_replace(v_def, '--[^' || chr(10) || ']*', '', 'g');
+
+  -- (i) The never-raise wrapper. This function runs inside an AFTER UPDATE
+  --     trigger in the HOPE approval's transaction; any escaping exception
+  --     rolls back the approval. Two full statement-by-statement reviews of
+  --     this body each missed a live raise, so the guarantee is structural.
+  IF v_src NOT LIKE '%EXCEPTION WHEN OTHERS THEN%'
+     OR v_src NOT LIKE '%RAISE WARNING%' THEN
+    RAISE EXCEPTION
+      'ASSERTION FAILED: record_consolidation_failure lost its EXCEPTION WHEN OTHERS wrapper — a side-write failure can now roll back the HOPE approval';
+  END IF;
+
+  -- (ii) consolidated_at is cleared, so 'failed' never carries a timestamp
+  --      asserting a success that the amendment soft-delete has since undone.
+  IF v_src NOT LIKE '%consolidated_at%NULL%' THEN
+    RAISE EXCEPTION
+      'ASSERTION FAILED: record_consolidation_failure does not clear consolidated_at';
+  END IF;
+
+  -- (iii) The originating office is notified, not only the BAC. Without this
+  --       the office still believes its approved plan is in the APP, which is
+  --       the exact harm this migration opens by describing.
+  IF v_src NOT LIKE '%office_id = v_ppmp.office_id%' THEN
+    RAISE EXCEPTION
+      'ASSERTION FAILED: record_consolidation_failure no longer notifies the originating office';
   END IF;
 
   -- ----------------------------------------------------------------
