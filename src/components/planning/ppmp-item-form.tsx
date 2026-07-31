@@ -2,7 +2,7 @@
 
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useRef, useState } from "react"
+import { useRef, useState, useEffect } from "react"
 import { toast } from "sonner"
 import {
   ppmpProjectSchema, ppmpLotSchema, ppmpLotItemSchema,
@@ -10,6 +10,8 @@ import {
   PPMP_PROJECT_TYPE_LABELS, PROCUREMENT_MODES, SCHEDULE_QUARTERS,
 } from "@/lib/schemas/ppmp"
 import { addPpmpProject, addPpmpLot, addPpmpLotItem } from "@/lib/actions/ppmp"
+import { getFundSources } from "@/lib/actions/fund-sources"
+import type { FundSource } from "@/types/database"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -168,6 +170,18 @@ export function PpmpLotForm({
   projectId, open, onClose, onSaved,
 }: PpmpLotFormProps) {
   const [saving, setSaving] = useState(false)
+
+  // Fund sources for the FK select (20260819). Fetched once on mount via the
+  // existing server action rather than threaded through as a prop, because this
+  // dialog is opened from several places that do not all have it to hand.
+  const [fundSources, setFundSources] = useState<FundSource[]>([])
+  useEffect(() => {
+    let cancelled = false
+    getFundSources()
+      .then((rows) => { if (!cancelled) setFundSources(rows) })
+      .catch(() => { if (!cancelled) setFundSources([]) })
+    return () => { cancelled = true }
+  }, [])
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { divisionId } = useDivision()
@@ -408,12 +422,31 @@ export function PpmpLotForm({
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2 sm:col-span-2">
                     <Label htmlFor="ppmp-funds">Source of funds</Label>
-                    <Input
-                      id="ppmp-funds"
-                      {...register("source_of_funds")}
-                      placeholder="e.g. GAA 2026 — Current appropriation"
-                      className="h-11"
-                    />
+                    {/* 20260819 replaced the free-text field with the FK. The
+                        selected fund source's NAME is still written to the
+                        deprecated source_of_funds for one release so existing
+                        reports and exports keep rendering. */}
+                    <Select
+                      onValueChange={(v) => {
+                        if (!v) return
+                        setValue("fund_source_id", v)
+                        setValue("source_of_funds", fundSources.find((f) => f.id === v)?.name ?? null)
+                      }}
+                      value={watch("fund_source_id") ?? ""}
+                    >
+                      <SelectTrigger id="ppmp-funds" className="h-11 w-full">
+                        <SelectValue placeholder={
+                          fundSources.length === 0 ? "Loading fund sources..." : "Select fund source"
+                        } />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {fundSources.map((fs) => (
+                          <SelectItem key={fs.id} value={fs.id}>
+                            {fs.code ? `${fs.code} — ${fs.name}` : fs.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2 sm:col-span-2">
                     <Label htmlFor="ppmp-abc">Estimated budget / ABC *</Label>

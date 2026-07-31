@@ -46,6 +46,12 @@ export const ppmpLotSchema = z.object({
   bid_opening_date: z.string().nullable().optional(),
   award_date: z.string().nullable().optional(),
   contract_signing_date: z.string().nullable().optional(),
+  /**
+   * FK to procurements.fund_sources (20260819). source_of_funds is kept
+   * alongside it, written with the selected name, for one release so existing
+   * reports and exports keep rendering.
+   */
+  fund_source_id: z.string().uuid().nullable().optional(),
   source_of_funds: z.string().nullable().optional(),
   estimated_budget: z
     .string()

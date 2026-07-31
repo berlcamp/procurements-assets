@@ -699,7 +699,10 @@ export interface PpmpLot {
   procurement_start: string | null
   procurement_end: string | null
   delivery_period: string | null
+  /** DEPRECATED free text (20260819). Prefer fund_source_id. */
   source_of_funds: string | null
+  /** FK to procurements.fund_sources. Added by 20260819. */
+  fund_source_id: string | null
   estimated_budget: string
   supporting_documents: string | null
   remarks: string | null
@@ -896,7 +899,10 @@ export interface AppItem {
   project_type: string | null
   procurement_mode: string | null
   estimated_budget: string
+  /** DEPRECATED free text (20260819). Prefer fund_source_id. */
   source_of_funds: string | null
+  /** FK to procurements.fund_sources. Added by 20260819. */
+  fund_source_id: string | null
   procurement_start: string | null
   procurement_end: string | null
   delivery_period: string | null
