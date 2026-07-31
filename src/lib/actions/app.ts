@@ -366,7 +366,11 @@ export async function getAppUserPermissions(appId: string): Promise<{
     // NEITHER is gated on !lotsLocked, deliberately. Releasing REQUIRES the APP
     // version to be approved, which is precisely when lotsLocked is true —
     // adding the guard here would hide the button exactly when it is needed.
-    canReleaseLots: canFinalizeLotRole,
+    // NOT canFinalizeLotRole: that set includes bac_vice_chair, which
+    // 20260810 does NOT grant app.release_lots. Showing the button to a role
+    // the RPC will refuse is a dead-end affordance. If bac_vice_chair should be
+    // able to release, add the grant to the migration — do not widen it here.
+    canReleaseLots: roleNames.some(r => ["bac_chair", "bac_secretariat", "division_admin"].includes(r)),
     canAuthorizeEpa: isHope,
   }
 }

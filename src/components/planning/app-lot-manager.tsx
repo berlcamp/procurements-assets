@@ -28,7 +28,7 @@ import {
 import { PROCUREMENT_MODES } from "@/lib/schemas/ppmp"
 import { appItemLines, linesTotal, type AppItemLine } from "@/lib/utils/app-item-lines"
 import type { AppLotInput } from "@/lib/schemas/app"
-import type { AppItemWithOffice, AppLotWithItems, PlanningStage } from "@/types/database"
+import type { AppItemWithOffice, AppLotWithItems, PlanningStage, AppVersionStatus } from "@/types/database"
 import { cn } from "@/lib/utils"
 
 type GroupBy = "mode" | "office" | "cse" | "none"
@@ -91,7 +91,7 @@ interface AppLotManagerProps {
    * and must NOT be treated as indicative (the RPC fails closed on it too).
    */
   versionPlanningStage?: PlanningStage | null
-  versionStatus?: string | null
+  versionStatus?: AppVersionStatus | null
   creatorsByPpmpId?: Record<string, string>
 }
 
@@ -885,8 +885,9 @@ export function AppLotManager({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label>Justification</Label>
+            <Label htmlFor="epa-justification">Justification</Label>
             <Textarea
+              id="epa-justification"
               value={epaJustification}
               onChange={(e) => setEpaJustification(e.target.value)}
               placeholder="Why is early procurement warranted for this lot? (min 20 characters)"

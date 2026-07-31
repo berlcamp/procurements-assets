@@ -714,6 +714,19 @@ export interface PpmpLot {
   award_date: string | null
   contract_signing_date: string | null
   /**
+   * DATE equivalents of the legacy TEXT schedule fields, added and backfilled by
+   * 20260818_schema_hygiene_dates.sql. The four *_date columns already existed
+   * as TEXT, hence the _d suffix; a later cleanup migration drops the TEXT
+   * originals and renames these. Nothing reads them yet — schedule slippage and
+   * quarterly roll-ups are follow-up work.
+   */
+  procurement_start_date: string | null
+  procurement_end_date: string | null
+  advertisement_date_d: string | null
+  bid_opening_date_d: string | null
+  award_date_d: string | null
+  contract_signing_date_d: string | null
+  /**
    * When false (default) estimated_budget is DERIVED from the line items by
    * trigger (20260814_lot_abc_reconciliation.sql) and cannot drift. When true it
    * is entered manually and abc_manual_justification is required — for genuine
@@ -901,6 +914,19 @@ export interface AppItem {
   estimated_budget: string
   /** DEPRECATED free text (20260819). Prefer fund_source_id. */
   source_of_funds: string | null
+  /**
+   * DATE equivalents of the legacy TEXT schedule fields, added and backfilled by
+   * 20260818_schema_hygiene_dates.sql. The four *_date columns already existed
+   * as TEXT, hence the _d suffix; a later cleanup migration drops the TEXT
+   * originals and renames these. Nothing reads them yet — schedule slippage and
+   * quarterly roll-ups are follow-up work.
+   */
+  procurement_start_date: string | null
+  procurement_end_date: string | null
+  advertisement_date_d: string | null
+  bid_opening_date_d: string | null
+  award_date_d: string | null
+  contract_signing_date_d: string | null
   /** FK to procurements.fund_sources. Added by 20260819. */
   fund_source_id: string | null
   procurement_start: string | null

@@ -433,6 +433,9 @@ export function PpmpLotForm({
                         setValue("source_of_funds", fundSources.find((f) => f.id === v)?.name ?? null)
                       }}
                       value={watch("fund_source_id") ?? ""}
+                      items={Object.fromEntries(
+                        fundSources.map((fs) => [fs.id, fs.code ? `${fs.code} — ${fs.name}` : fs.name])
+                      )}
                     >
                       <SelectTrigger id="ppmp-funds" className="h-11 w-full">
                         <SelectValue placeholder={
