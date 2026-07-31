@@ -710,6 +710,17 @@ export interface PpmpLot {
   bid_opening_date: string | null
   award_date: string | null
   contract_signing_date: string | null
+  /**
+   * When false (default) estimated_budget is DERIVED from the line items by
+   * trigger (20260814_lot_abc_reconciliation.sql) and cannot drift. When true it
+   * is entered manually and abc_manual_justification is required — for genuine
+   * lump-sum cases such as an infrastructure ABC from a programme of works,
+   * where the line items are indicative quantities only. A CHECK constraint
+   * enforces the justification, and submit_ppmp refuses a PPMP whose derived
+   * ABCs do not reconcile.
+   */
+  abc_is_manual: boolean
+  abc_manual_justification: string | null
   created_at: string
   updated_at: string
 }
