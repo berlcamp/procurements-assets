@@ -50,9 +50,13 @@ export default async function AppVersionsPage({ params }: Props) {
                 <TableHead>Version</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>INDICATIVE / FINAL</TableHead>
-                <TableHead className="text-right">Total Est. Cost</TableHead>
-                <TableHead>Approved</TableHead>
+                <TableHead>PLANNING STAGE</TableHead>
+                {/* Two distinct figures since 20260815: everything submitted vs
+                    only what HOPE approved. Showing one alone invites reading it
+                    as the plan total. */}
+                <TableHead className="text-right">Submitted</TableHead>
+                <TableHead className="text-right">Approved</TableHead>
+                <TableHead>Approved On</TableHead>
                 <TableHead>Created</TableHead>
               </TableRow>
             </TableHeader>
@@ -72,7 +76,10 @@ export default async function AppVersionsPage({ params }: Props) {
                     <PlanningStageBadge value={v.planning_stage} />
                   </TableCell>
                   <TableCell className="text-right">
-                    <AmountDisplay amount={v.total_estimated_cost} className="text-sm" />
+                    <AmountDisplay amount={v.total_estimated_cost} className="text-sm text-muted-foreground" />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <AmountDisplay amount={v.total_approved_cost} className="text-sm font-semibold" />
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {v.approved_at

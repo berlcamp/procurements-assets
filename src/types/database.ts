@@ -853,7 +853,17 @@ export interface AppVersion {
   version_number: number
   version_type: AppVersionType
   amendment_justification: string | null
+  /**
+   * Sum of ALL non-deleted APP items, whatever HOPE decided — what the offices
+   * asked for. Trigger-maintained (20260815).
+   */
   total_estimated_cost: string
+  /**
+   * Sum of HOPE-APPROVED items only — the figure that goes on the APP document.
+   * Before 20260815 both meanings shared total_estimated_cost, and which one you
+   * got depended on whether finalize_app had written last.
+   */
+  total_approved_cost: string
   snapshot_data: Record<string, unknown> | null
   status: AppVersionStatus
   indicative_final: IndicativeFinal
