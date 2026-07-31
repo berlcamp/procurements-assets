@@ -1100,7 +1100,20 @@ export interface ObligationRequest {
   procurement_id: string | null
   budget_allocation_id: string | null
   office_id: string | null
+  /** The amount originally certified. See adjusted_amount before using this. */
   amount: string
+  /**
+   * Obligation restated to the actual awarded contract amount
+   * (20260816_obligation_adjust_on_award.sql). NULL means never adjusted and
+   * `amount` still applies.
+   *
+   * ANYTHING computing the effective obligation must use
+   * COALESCE(adjusted_amount, amount) — `amount` alone overstates it for every
+   * award that came in below ABC.
+   */
+  adjusted_amount: string | null
+  adjustment_reason: string | null
+  adjusted_at: string | null
   status: ObrStatus
   certified_by: string | null
   certified_at: string | null
