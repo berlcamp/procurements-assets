@@ -6,7 +6,69 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+/**
+ * Walk the JSX tree and collect every `<SelectItem>`'s value and label.
+ *
+ * This traverses the UNRENDERED element tree, not the DOM. That matters: the
+ * popup is portalled and stays unmounted until it is first opened, so anything
+ * that reads mounted items cannot label a value that was already selected on
+ * first paint — which is the common case for an edit form.
+ *
+ * Only descends into `props.children`, so items produced inside a custom
+ * wrapper component (rather than mapped inline) are invisible here. Every call
+ * site in this codebase maps inline; a wrapper would need to pass `items`
+ * itself, which still takes precedence below.
+ */
+function collectSelectItems(
+  node: React.ReactNode,
+  out: Array<{ value: unknown; label: React.ReactNode }>
+): void {
+  React.Children.forEach(node, (child) => {
+    if (!React.isValidElement(child)) return
+
+    if (child.type === SelectItem) {
+      const { value, children } = child.props as SelectPrimitive.Item.Props
+      out.push({ value, label: children })
+      return
+    }
+
+    const { children } = child.props as { children?: React.ReactNode }
+    if (children != null) collectSelectItems(children, out)
+  })
+}
+
+/**
+ * Base UI's `<Select.Value>` renders the RAW VALUE unless the root is given an
+ * `items` map — unlike Radix, where it renders the selected item's own text.
+ * With id-keyed options (`<SelectItem value={office.id}>{office.name}</…>`)
+ * that surfaces a UUID in the trigger once a value is picked.
+ *
+ * Rather than make all ~80 call sites remember to pass `items`, derive it from
+ * the `<SelectItem>` children. An explicit `items` prop still wins, so the call
+ * sites that already pass one (including grouped and "— none —" variants that
+ * carry labels absent from the item list) keep their exact behaviour.
+ */
+function Select<Value, Multiple extends boolean | undefined = false>({
+  items,
+  children,
+  ...props
+}: SelectPrimitive.Root.Props<Value, Multiple>) {
+  const derivedItems = React.useMemo(() => {
+    if (items !== undefined) return items
+    const collected: Array<{ value: unknown; label: React.ReactNode }> = []
+    collectSelectItems(children, collected)
+    return collected.length > 0 ? collected : undefined
+  }, [items, children])
+
+  return (
+    <SelectPrimitive.Root
+      items={derivedItems as SelectPrimitive.Root.Props<Value, Multiple>["items"]}
+      {...props}
+    >
+      {children}
+    </SelectPrimitive.Root>
+  )
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
